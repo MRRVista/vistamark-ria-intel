@@ -42,14 +42,19 @@ export async function downloadAndDecompress(url: string): Promise<string> {
 export async function upsertFirms(
   records: FirmInsert[],
   feedDate: string
-): Promise<{ inserted: number; updated: number }> {
+): Promise<{ inserted: number; updated: number; historyRows: number }> {
   if (!db) throw new Error("Database not configured");
   let inserted = 0;
   let updated = 0;
+  let historyRows = 0;
   const BATCH = 500;
 
   for (let i = 0; i < records.length; i += BATCH) {
     const chunk = records.slice(i, i + BATCH);
+
+    // Skip if chunk is somehow empty (shouldn't happen, but defensive)
+    if (chunk.length === 0) continue;
+
     const result = await db
       .insert(firms)
       .values(chunk)
@@ -109,25 +114,27 @@ export async function upsertFirms(
       else updated++;
     }
 
-    await db
-      .insert(firmHistory)
-      .values(
-        chunk
-          .filter((c) => c.totalAum != null)
-          .map((c) => ({
-            crdNumber: c.crdNumber,
-            filingDate: feedDate,
-            totalAum: c.totalAum,
-            discretionaryAum: c.discretionaryAum,
-            totalAccounts: c.totalAccounts,
-            totalEmployees: c.totalEmployees,
-            registeredIarCount: c.registeredIarCount,
-          }))
-      )
-      .onConflictDoNothing();
+    // History snapshot — only firms reporting AUM in this filing.
+    // Drizzle's .values() throws on empty arrays, so guard explicitly.
+    const historyChunk = chunk
+      .filter((c) => c.totalAum != null)
+      .map((c) => ({
+        crdNumber: c.crdNumber,
+        filingDate: feedDate,
+        totalAum: c.totalAum,
+        discretionaryAum: c.discretionaryAum,
+        totalAccounts: c.totalAccounts,
+        totalEmployees: c.totalEmployees,
+        registeredIarCount: c.registeredIarCount,
+      }));
+
+    if (historyChunk.length > 0) {
+      await db.insert(firmHistory).values(historyChunk).onConflictDoNothing();
+      historyRows += historyChunk.length;
+    }
   }
 
-  return { inserted, updated };
+  return { inserted, updated, historyRows };
 }
 
 export async function runFullIngest(): Promise<{
@@ -135,6 +142,7 @@ export async function runFullIngest(): Promise<{
   firmsProcessed: number;
   inserted: number;
   updated: number;
+  historyRows: number;
   durationMs: number;
 }> {
   const startedAt = Date.now();
@@ -151,7 +159,7 @@ export async function runFullIngest(): Promise<{
     if (!feed) throw new Error("Could not locate a recent SEC feed file");
     const xml = await downloadAndDecompress(feed.url);
     const records = parseAdvXml(xml);
-    const { inserted, updated } = await upsertFirms(records, feed.date);
+    const { inserted, updated, historyRows } = await upsertFirms(records, feed.date);
 
     await db
       .update(ingestRuns)
@@ -170,6 +178,7 @@ export async function runFullIngest(): Promise<{
       firmsProcessed: records.length,
       inserted,
       updated,
+      historyRows,
       durationMs: Date.now() - startedAt,
     };
   } catch (err) {
