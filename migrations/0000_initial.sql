@@ -12,7 +12,7 @@ DO $$ BEGIN
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS firms (
   crd_number              INTEGER PRIMARY KEY,
   sec_number              VARCHAR(32),
@@ -96,7 +96,6 @@ CREATE INDEX IF NOT EXISTS firms_city_state_idx ON firms (main_office_city, main
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firms_status_idx ON firms (registration_status);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS firm_history (
   id                    SERIAL PRIMARY KEY,
   crd_number            INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -113,7 +112,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS firm_history_crd_filing_idx ON firm_history (c
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firm_history_crd_idx ON firm_history (crd_number);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS advisors (
   crd_number        INTEGER PRIMARY KEY,
   first_name        VARCHAR(128),
@@ -135,7 +133,6 @@ CREATE INDEX IF NOT EXISTS advisors_current_firm_idx ON advisors (current_firm_c
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS advisors_full_name_idx ON advisors (full_name);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS advisor_history (
   id            SERIAL PRIMARY KEY,
   advisor_crd   INTEGER NOT NULL REFERENCES advisors(crd_number) ON DELETE CASCADE,
@@ -152,7 +149,6 @@ CREATE INDEX IF NOT EXISTS advisor_history_firm_idx ON advisor_history (firm_crd
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS advisor_history_active_idx ON advisor_history (firm_crd, end_date);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS firm_custodians (
   id                    SERIAL PRIMARY KEY,
   firm_crd              INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -168,7 +164,6 @@ CREATE INDEX IF NOT EXISTS firm_custodians_firm_idx ON firm_custodians (firm_crd
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firm_custodians_name_idx ON firm_custodians (custodian_name);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS private_funds (
   id                  SERIAL PRIMARY KEY,
   firm_crd            INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -185,7 +180,6 @@ CREATE INDEX IF NOT EXISTS private_funds_firm_idx ON private_funds (firm_crd);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS private_funds_fund_id_idx ON private_funds (fund_id);
 --> statement-breakpoint
-
 CREATE TABLE IF NOT EXISTS ingest_runs (
   id                SERIAL PRIMARY KEY,
   started_at        TIMESTAMP NOT NULL DEFAULT now(),
