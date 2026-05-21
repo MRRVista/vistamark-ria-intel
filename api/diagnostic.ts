@@ -11,8 +11,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // ?raw=<crd_number> — dump the stored raw_json for one firm so we can see
+  // the actual XML structure fast-xml-parser produced.
+  const rawCrd = typeof req.query.raw === "string" ? Number(req.query.raw) : null;
+
   try {
     const sql = neon(process.env.DATABASE_URL);
+
+    if (rawCrd && Number.isFinite(rawCrd)) {
+      const rows = await sql(
+        `SELECT crd_number, legal_name, raw_json FROM firms WHERE crd_number = $1`,
+        [rawCrd]
+      );
+      if (rows.length === 0) {
+        res.status(404).json({ error: `No firm with CRD ${rawCrd}` });
+        return;
+      }
+      const row = rows[0];
+      let parsedRaw: any = null;
+      try {
+        parsedRaw = JSON.parse(row.raw_json);
+      } catch {
+        parsedRaw = { error: "raw_json was not valid JSON", text: String(row.raw_json).slice(0, 5000) };
+      }
+      res.status(200).json({
+        crd_number: row.crd_number,
+        legal_name: row.legal_name,
+        rawStructure: parsedRaw,
+      });
+      return;
+    }
+
     const [
       counts,
       topAum,
@@ -20,7 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fiducient,
       historyCount,
       stateBreakdown,
-      sampleFirm,
     ] = await Promise.all([
       sql(`
         SELECT
@@ -63,7 +91,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ORDER BY firm_count DESC
         LIMIT 10
       `),
-      sql(`SELECT * FROM firms WHERE total_aum IS NOT NULL ORDER BY total_aum DESC LIMIT 1`),
     ]);
 
     res.status(200).json({
@@ -75,21 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       vistamarkMatches: vistamark,
       fiducientMatches: fiducient,
       topStates: stateBreakdown,
-      sampleFirmColumns: sampleFirm[0] ? Object.keys(sampleFirm[0]) : [],
-      sampleFirmAumFields: sampleFirm[0]
-        ? {
-            total_aum: sampleFirm[0].total_aum,
-            discretionary_aum: sampleFirm[0].discretionary_aum,
-            non_discretionary_aum: sampleFirm[0].non_discretionary_aum,
-            total_accounts: sampleFirm[0].total_accounts,
-            total_employees: sampleFirm[0].total_employees,
-            registered_iar_count: sampleFirm[0].registered_iar_count,
-            pct_individual_hnw: sampleFirm[0].pct_individual_hnw,
-            pct_pension_plans: sampleFirm[0].pct_pension_plans,
-            comp_aum_pct: sampleFirm[0].comp_aum_pct,
-            svc_financial_planning: sampleFirm[0].svc_financial_planning,
-          }
-        : null,
+      hint: "Pass ?raw=<crd_number> to dump that firm's raw parsed-XML structure",
     });
   } catch (err) {
     res.status(500).json({
