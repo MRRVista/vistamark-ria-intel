@@ -6,7 +6,7 @@ const parser = new XMLParser({
   attributeNamePrefix: "@_",
   parseAttributeValue: true,
   trimValues: true,
-  isArray: (name) => ["Firm", "Custodian", "PrivateFund"].includes(name),
+  isArray: (name) => ["Firm", "Custodian", "PrivateFund", "State"].includes(name),
 });
 
 type RawAdv = any;
@@ -19,51 +19,89 @@ export function parseAdvXml(xml: string): FirmInsert[] {
 }
 
 function normalizeFirm(raw: RawAdv): FirmInsert | null {
-  const info = raw.Info ?? raw["@_Info"] ?? {};
-  const crd = num(info["@_FirmCrdNb"] ?? info.FirmCrdNb ?? raw["@_FirmCrdNb"]);
+  const info = raw.Info ?? {};
+  const crd = num(info["@_FirmCrdNb"]);
   if (!crd) return null;
+
   const addr = raw.MainAddr ?? {};
   const rgstn = raw.Rgstn ?? {};
+  const filing = raw.Filing ?? {};
   const p1a = raw.FormInfo?.Part1A ?? {};
+
+  // Item5* and Item9* are DIRECT children of Part1A — no Item5/Item9 wrapper.
   const item1 = p1a.Item1 ?? {};
-  const item5 = p1a.Item5 ?? {};
-  const item9 = p1a.Item9 ?? {};
+  const item2a = p1a.Item2A ?? {};
+  const item5a = p1a.Item5A ?? {};
+  const item5b = p1a.Item5B ?? {};
+  const item5d = p1a.Item5D ?? {};
+  const item5e = p1a.Item5E ?? {};
+  const item5f = p1a.Item5F ?? {};
+  const item5g = p1a.Item5G ?? {};
+  const item9a = p1a.Item9A ?? {};
   const item11 = p1a.Item11 ?? {};
-  const item5f = item5.Item5F ?? {};
-  const regAum = num(item5f["@_Q5F2c"] ?? item5f.Q5F2c);
-  const discAum = num(item5f["@_Q5F2a"] ?? item5f.Q5F2a);
-  const nonDiscAum = num(item5f["@_Q5F2b"] ?? item5f.Q5F2b);
-  const discAccts = num(item5f["@_Q5F2d"] ?? item5f.Q5F2d);
-  const nonDiscAccts = num(item5f["@_Q5F2e"] ?? item5f.Q5F2e);
-  const totalAccts = num(item5f["@_Q5F2f"] ?? item5f.Q5F2f);
-  const item5d = item5.Item5D ?? {};
-  const clientPct = (key: string) => num(item5d[`@_${key}`] ?? item5d[key]);
-  const item5e = item5.Item5E ?? {};
-  const bool5e = (key: string) => yn(item5e[`@_${key}`] ?? item5e[key]);
-  const item5g = item5.Item5G ?? {};
-  const bool5g = (key: string) => yn(item5g[`@_${key}`] ?? item5g[key]);
-  const custAum = num(item9["@_Q9A2a"] ?? item9.Q9A2a);
-  const custAccts = num(item9["@_Q9A2b"] ?? item9.Q9A2b);
-  const hasCustody = yn(item9["@_Q9A"] ?? item9.Q9A) ?? (custAum != null && custAum > 0);
-  const hasDrp = yn(item11["@_Q11"] ?? item11.Q11);
-  const item5a = item5.Item5A ?? {};
-  const item5b = item5.Item5B ?? {};
-  const totalEmployees = num(item5a["@_TotalEmp"] ?? item5a.TotalEmp);
-  const iarCount = num(item5b["@_Q5B1"] ?? item5b.Q5B1);
+
+  // Website (from Item1.WebAddrs.WebAddr — may be string or array)
+  const webAddrs = item1.WebAddrs ?? {};
+  const webRaw = webAddrs.WebAddr;
+  const webAddr = Array.isArray(webRaw) ? webRaw[0] : webRaw;
+
+  // Item5F — Regulatory AUM and account counts (uppercase letter codes).
+  const discAum = num(item5f["@_Q5F2A"]);
+  const nonDiscAum = num(item5f["@_Q5F2B"]);
+  const regAum = num(item5f["@_Q5F2C"]);
+  const discAccts = num(item5f["@_Q5F2D"]);
+  const nonDiscAccts = num(item5f["@_Q5F2E"]);
+  const totalAccts = num(item5f["@_Q5F2F"]);
+
+  // Item5A — employees; Item5B — IAR count
+  const totalEmployees = num(item5a["@_TtlEmp"]);
+  const iarCount = num(item5b["@_Q5B1"]);
+
+  // Item5D — client breakdown. Format Q5D{LETTER}{1=count, 3=assets}.
+  //   A=Individuals (other than HNW), B=HNW individuals,
+  //   C=Banking/thrift, D=Inv companies (RICs), E=BDCs,
+  //   F=Pooled investment vehicles, G=Pension plans, H=Charitable orgs,
+  //   I=State/municipal entities, J=Other investment advisers,
+  //   K=Insurance cos, L=Sovereign wealth funds, M=Corporations, N=Other
+  const clientAssets = (letter: string) => num(item5d[`@_Q5D${letter}3`]);
+  const sumNullable = (...vals: (number | null)[]): number | null => {
+    const ok = vals.filter((v): v is number => v != null);
+    return ok.length === 0 ? null : ok.reduce((a, b) => a + b, 0);
+  };
+  const pctOf = (amt: number | null): string | null => {
+    if (amt == null || regAum == null || regAum === 0) return null;
+    return pct((amt / regAum) * 100);
+  };
+
+  // Item9A — custody flags
+  const custodyOfCash = yn(item9a["@_Q9A1A"]);
+  const custodyOfSecurities = yn(item9a["@_Q9A1B"]);
+  const hasCustody = custodyOfCash === true || custodyOfSecurities === true;
+
+  // Item11 — disclosure flag
+  const hasDrp = yn(item11["@_Q11"]);
+
+  // Registration status — use Q2A1 (federally registered) + Rgstn.@_St
+  const q2a1 = yn(item2a["@_Q2A1"]);
+  const status = registrationStatus(rgstn, q2a1);
+
+  // Large adviser flag: $100M+ RAUM is the SEC threshold
+  const isLargeAdv = regAum != null && regAum >= 100_000_000;
 
   return {
     crdNumber: crd,
-    secNumber: str(info["@_SECNb"] ?? info.SECNb),
-    legalName: str(info["@_LegalNm"] ?? info.LegalNm ?? info["@_BusNm"] ?? info.BusNm) ?? `Firm ${crd}`,
-    primaryBusinessName: str(info["@_BusNm"] ?? info.BusNm),
-    mainOfficeStreet: str(addr["@_Strt1"] ?? addr.Strt1),
-    mainOfficeCity: str(addr["@_City"] ?? addr.City),
-    mainOfficeState: str(addr["@_State"] ?? addr.State),
-    mainOfficeZip: str(addr["@_PostlCd"] ?? addr.PostlCd),
-    mainOfficeCountry: str(addr["@_Cntry"] ?? addr.Cntry),
-    website: str(item1["@_WebAddr"] ?? item1.WebAddr),
-    mainPhone: str(addr["@_Phone"] ?? addr.Phone),
-    email: str(item1["@_EmailAddr"] ?? item1.EmailAddr),
+    secNumber: str(info["@_SECNb"]),
+    legalName: str(info["@_LegalNm"]) ?? str(info["@_BusNm"]) ?? `Firm ${crd}`,
+    primaryBusinessName: str(info["@_BusNm"]),
+    mainOfficeStreet: str(addr["@_Strt1"]),
+    mainOfficeCity: str(addr["@_City"]),
+    mainOfficeState: str(addr["@_State"]),
+    mainOfficeZip: str(addr["@_PostlCd"]),
+    mainOfficeCountry: str(addr["@_Cntry"]),
+    website: str(webAddr),
+    mainPhone: str(addr["@_PhNb"]),
+    email: null,
+
     totalAum: regAum,
     discretionaryAum: discAum,
     nonDiscretionaryAum: nonDiscAum,
@@ -72,42 +110,53 @@ function normalizeFirm(raw: RawAdv): FirmInsert | null {
     nonDiscretionaryAccounts: nonDiscAccts,
     totalEmployees,
     registeredIarCount: iarCount,
-    registrationStatus: registrationStatus(rgstn),
-    secRegistrationDate: parseDate(rgstn["@_FirmDt"] ?? rgstn.FirmDt),
-    isLargeAdviser: regAum != null && regAum >= 100_000_000,
-    pctIndividualNonHnw: pct(clientPct("Q5D1a")),
-    pctIndividualHnw: pct(clientPct("Q5D1b")),
-    pctPensionPlans: pct(clientPct("Q5D1d")),
-    pctCharitableOrgs: pct(clientPct("Q5D1f")),
-    pctCorporations: pct(clientPct("Q5D1k")),
-    pctOtherInstitutional: pct(clientPct("Q5D1l")),
-    pctPooledInvestment: pct(clientPct("Q5D1c")),
-    pctGovernmentEntities: pct(clientPct("Q5D1j")),
-    pctOther: pct(clientPct("Q5D1m")),
-    compAumPct: bool5e("Q5E1") ?? false,
-    compHourly: bool5e("Q5E2") ?? false,
-    compFixedFee: bool5e("Q5E3") ?? false,
-    compCommission: bool5e("Q5E4") ?? false,
-    compPerformance: bool5e("Q5E5") ?? false,
-    compSubscription: bool5e("Q5E6") ?? false,
-    compOther: bool5e("Q5E7") ?? false,
-    svcFinancialPlanning: bool5g("Q5G1") ?? false,
-    svcPortfolioManagementIndiv: bool5g("Q5G2") ?? false,
-    svcPortfolioManagementInst: bool5g("Q5G3") ?? false,
-    svcPortfolioManagementInvCo: bool5g("Q5G4") ?? false,
-    svcPortfolioManagementPooled: bool5g("Q5G5") ?? false,
-    svcPensionConsulting: bool5g("Q5G6") ?? false,
-    svcAdvisorSelection: bool5g("Q5G7") ?? false,
-    svcPublicationSubscription: bool5g("Q5G8") ?? false,
-    svcSecurityRatings: bool5g("Q5G9") ?? false,
-    svcMarketTiming: bool5g("Q5G10") ?? false,
-    svcEducationalSeminars: bool5g("Q5G11") ?? false,
-    hasCustody: hasCustody ?? false,
-    custodyAum: custAum,
-    custodyAccounts: custAccts,
+
+    registrationStatus: status,
+    secRegistrationDate: parseDate(rgstn["@_Dt"]),
+    isLargeAdviser: isLargeAdv,
+
+    pctIndividualNonHnw: pctOf(clientAssets("A")),
+    pctIndividualHnw: pctOf(clientAssets("B")),
+    pctPensionPlans: pctOf(clientAssets("G")),
+    pctCharitableOrgs: pctOf(clientAssets("H")),
+    pctCorporations: pctOf(clientAssets("M")),
+    pctOtherInstitutional: pctOf(sumNullable(clientAssets("C"), clientAssets("K"), clientAssets("L"))),
+    pctPooledInvestment: pctOf(sumNullable(clientAssets("D"), clientAssets("E"), clientAssets("F"))),
+    pctGovernmentEntities: pctOf(clientAssets("I")),
+    pctOther: pctOf(sumNullable(clientAssets("J"), clientAssets("N"))),
+
+    compAumPct: yn(item5e["@_Q5E1"]) ?? false,
+    compHourly: yn(item5e["@_Q5E2"]) ?? false,
+    compFixedFee: yn(item5e["@_Q5E3"]) ?? false,
+    compCommission: yn(item5e["@_Q5E4"]) ?? false,
+    compPerformance: yn(item5e["@_Q5E5"]) ?? false,
+    compSubscription: yn(item5e["@_Q5E6"]) ?? false,
+    compOther: yn(item5e["@_Q5E7"]) ?? false,
+
+    // Item5G — services offered. Mapped to actual Form ADV question numbers:
+    //   Q5G1=Financial planning, Q5G2=PM for individuals, Q5G3=PM for inv cos,
+    //   Q5G4=PM for pooled vehicles, Q5G5=PM for inst clients, Q5G6=Pension consulting,
+    //   Q5G7=Adviser selection, Q5G8=Publications, Q5G9=Ratings,
+    //   Q5G10=Market timing, Q5G11=Educational seminars (Q5G12=Other not stored)
+    svcFinancialPlanning: yn(item5g["@_Q5G1"]) ?? false,
+    svcPortfolioManagementIndiv: yn(item5g["@_Q5G2"]) ?? false,
+    svcPortfolioManagementInvCo: yn(item5g["@_Q5G3"]) ?? false,
+    svcPortfolioManagementPooled: yn(item5g["@_Q5G4"]) ?? false,
+    svcPortfolioManagementInst: yn(item5g["@_Q5G5"]) ?? false,
+    svcPensionConsulting: yn(item5g["@_Q5G6"]) ?? false,
+    svcAdvisorSelection: yn(item5g["@_Q5G7"]) ?? false,
+    svcPublicationSubscription: yn(item5g["@_Q5G8"]) ?? false,
+    svcSecurityRatings: yn(item5g["@_Q5G9"]) ?? false,
+    svcMarketTiming: yn(item5g["@_Q5G10"]) ?? false,
+    svcEducationalSeminars: yn(item5g["@_Q5G11"]) ?? false,
+
+    hasCustody,
+    custodyAum: null,
+    custodyAccounts: null,
+
     hasDisclosures: hasDrp ?? false,
     disclosureCount: 0,
-    lastFilingDate: parseDate(raw["@_FilingDate"] ?? raw.FilingDate ?? info["@_FilingDate"]),
+    lastFilingDate: parseDate(filing["@_Dt"]),
     rawJson: JSON.stringify(raw),
   };
 }
@@ -145,14 +194,25 @@ function parseDate(v: any): string | null {
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   return null;
 }
-function registrationStatus(rgstn: any): "sec_registered" | "state_registered" | "exempt_reporting" | "terminated" | "pending" | "unknown" {
-  const type = String(rgstn?.["@_FirmType"] ?? rgstn?.FirmType ?? "").toUpperCase();
+function registrationStatus(
+  rgstn: any,
+  q2a1: boolean | null
+): "sec_registered" | "state_registered" | "exempt_reporting" | "terminated" | "pending" | "unknown" {
+  const type = String(rgstn?.["@_FirmType"] ?? "").toUpperCase();
   if (type.includes("EXEMPT")) return "exempt_reporting";
   if (type.includes("STATE")) return "state_registered";
   if (type.includes("SEC")) return "sec_registered";
-  const status = String(rgstn?.["@_St"] ?? rgstn?.St ?? "").toUpperCase();
-  if (status === "TERMINATED") return "terminated";
-  if (status === "PENDING") return "pending";
-  if (status === "APPROVED" || status === "ACTIVE") return "sec_registered";
+
+  const st = String(rgstn?.["@_St"] ?? "").toUpperCase();
+  if (st === "TERMINATED") return "terminated";
+  if (st === "PENDING") return "pending";
+
+  // For "Registered" firms appearing in the SEC feed: use Q2A1 (Item2A — federally registered?)
+  // and Rgstn status of APPROVED as the signal.
+  if (st === "APPROVED" || st === "ACTIVE") {
+    if (q2a1 === true) return "sec_registered";
+    return "sec_registered"; // assume SEC if approved in SEC feed; state feed would override via FirmType
+  }
+
   return "unknown";
 }
