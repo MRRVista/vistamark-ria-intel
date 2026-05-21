@@ -50,10 +50,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const file of files) {
     const path = join(dir, file);
     const content = readFileSync(path, "utf-8");
+    // Split ONLY on the explicit Drizzle statement-breakpoint marker.
+    // Splitting on raw `;` shreds PL/pgSQL DO $$ ... EXCEPTION ... END $$ blocks into invalid fragments.
     const statements = content
-      .split(/--> statement-breakpoint|;\s*$/m)
+      .split(/-->\s*statement-breakpoint/i)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith("--"));
+      .filter((s) => s.length > 0 && !s.split("\n").every((line) => line.trim().startsWith("--") || line.trim().length === 0));
 
     let ran = 0;
     let skipped = 0;
@@ -68,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         return res.status(500).json({
           error: `Migration ${file} failed`,
-          statement: stmt.slice(0, 200),
+          statement: stmt.slice(0, 300),
           message: err?.message,
         });
       }
