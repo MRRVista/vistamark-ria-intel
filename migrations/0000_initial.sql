@@ -1,9 +1,14 @@
 -- Vistamark RIA Intel — initial schema
+-- Matches lib/db/schema.ts
 
 DO $$ BEGIN
   CREATE TYPE registration_status AS ENUM (
-    'sec_registered', 'state_registered', 'exempt_reporting',
-    'terminated', 'pending', 'unknown'
+    'sec_registered',
+    'state_registered',
+    'exempt_reporting',
+    'terminated',
+    'pending',
+    'unknown'
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -21,6 +26,7 @@ CREATE TABLE IF NOT EXISTS firms (
   website                 TEXT,
   main_phone              VARCHAR(32),
   email                   TEXT,
+
   total_aum                  BIGINT,
   discretionary_aum          BIGINT,
   non_discretionary_aum      BIGINT,
@@ -29,9 +35,11 @@ CREATE TABLE IF NOT EXISTS firms (
   non_discretionary_accounts INTEGER,
   total_employees            INTEGER,
   registered_iar_count       INTEGER,
+
   registration_status     registration_status NOT NULL DEFAULT 'unknown',
   sec_registration_date   DATE,
   is_large_adviser        BOOLEAN DEFAULT FALSE,
+
   pct_individual_non_hnw   NUMERIC(5,2),
   pct_individual_hnw       NUMERIC(5,2),
   pct_pension_plans        NUMERIC(5,2),
@@ -41,6 +49,7 @@ CREATE TABLE IF NOT EXISTS firms (
   pct_pooled_investment    NUMERIC(5,2),
   pct_government_entities  NUMERIC(5,2),
   pct_other                NUMERIC(5,2),
+
   comp_aum_pct       BOOLEAN DEFAULT FALSE,
   comp_hourly        BOOLEAN DEFAULT FALSE,
   comp_fixed_fee     BOOLEAN DEFAULT FALSE,
@@ -48,6 +57,7 @@ CREATE TABLE IF NOT EXISTS firms (
   comp_performance   BOOLEAN DEFAULT FALSE,
   comp_subscription  BOOLEAN DEFAULT FALSE,
   comp_other         BOOLEAN DEFAULT FALSE,
+
   svc_financial_planning        BOOLEAN DEFAULT FALSE,
   svc_portfolio_mgmt_indiv      BOOLEAN DEFAULT FALSE,
   svc_portfolio_mgmt_inst       BOOLEAN DEFAULT FALSE,
@@ -59,11 +69,14 @@ CREATE TABLE IF NOT EXISTS firms (
   svc_security_ratings          BOOLEAN DEFAULT FALSE,
   svc_market_timing             BOOLEAN DEFAULT FALSE,
   svc_educational_seminars      BOOLEAN DEFAULT FALSE,
+
   has_custody        BOOLEAN DEFAULT FALSE,
   custody_aum        BIGINT,
   custody_accounts   INTEGER,
+
   has_disclosures    BOOLEAN DEFAULT FALSE,
   disclosure_count   INTEGER DEFAULT 0,
+
   last_filing_date   DATE,
   last_annual_update DATE,
   first_seen_at      TIMESTAMP NOT NULL DEFAULT now(),
@@ -83,6 +96,7 @@ CREATE INDEX IF NOT EXISTS firms_city_state_idx ON firms (main_office_city, main
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firms_status_idx ON firms (registration_status);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS firm_history (
   id                    SERIAL PRIMARY KEY,
   crd_number            INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -99,6 +113,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS firm_history_crd_filing_idx ON firm_history (c
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firm_history_crd_idx ON firm_history (crd_number);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS advisors (
   crd_number        INTEGER PRIMARY KEY,
   first_name        VARCHAR(128),
@@ -120,6 +135,7 @@ CREATE INDEX IF NOT EXISTS advisors_current_firm_idx ON advisors (current_firm_c
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS advisors_full_name_idx ON advisors (full_name);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS advisor_history (
   id            SERIAL PRIMARY KEY,
   advisor_crd   INTEGER NOT NULL REFERENCES advisors(crd_number) ON DELETE CASCADE,
@@ -136,6 +152,7 @@ CREATE INDEX IF NOT EXISTS advisor_history_firm_idx ON advisor_history (firm_crd
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS advisor_history_active_idx ON advisor_history (firm_crd, end_date);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS firm_custodians (
   id                    SERIAL PRIMARY KEY,
   firm_crd              INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -151,6 +168,7 @@ CREATE INDEX IF NOT EXISTS firm_custodians_firm_idx ON firm_custodians (firm_crd
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS firm_custodians_name_idx ON firm_custodians (custodian_name);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS private_funds (
   id                  SERIAL PRIMARY KEY,
   firm_crd            INTEGER NOT NULL REFERENCES firms(crd_number) ON DELETE CASCADE,
@@ -167,6 +185,7 @@ CREATE INDEX IF NOT EXISTS private_funds_firm_idx ON private_funds (firm_crd);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS private_funds_fund_id_idx ON private_funds (fund_id);
 --> statement-breakpoint
+
 CREATE TABLE IF NOT EXISTS ingest_runs (
   id                SERIAL PRIMARY KEY,
   started_at        TIMESTAMP NOT NULL DEFAULT now(),
