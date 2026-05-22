@@ -4,7 +4,7 @@ import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
 
 const SERVER_INFO = {
   name: "vistamark-ria-intel",
-  version: "0.2.0",
+  version: "0.3.0",
 };
 
 const PROTOCOL_VERSION = "2024-11-05";
@@ -37,10 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     "Content-Type, Authorization, ACCESS_TOKEN, access_token, MCP-Protocol-Version"
   );
 
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
-    return;
-  }
+  if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
   if (req.method === "GET") {
     res.status(200).json({
@@ -82,17 +79,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     switch (method) {
-      case "initialize": {
-        return res.status(200).json(
-          rpcResult(id, {
-            protocolVersion: PROTOCOL_VERSION,
-            capabilities: SERVER_CAPABILITIES,
-            serverInfo: SERVER_INFO,
-            instructions:
-              "Vistamark Intel — query SEC-registered RIAs (Form ADV) and tax-exempt organizations (IRS BMF + ProPublica 990s). RIA tools: search_rias, get_ria_profile, find_alumni, get_aum_history, firms_using_custodian, top_rias_by. Nonprofit tools: irs_eo_search and irs_eo_lookup (1.7M orgs, IRS bulk feed), propublica_org_search and propublica_org_990 (live 990 financial history). database_status reports data freshness.",
-          })
-        );
-      }
+      case "initialize":
+        return res.status(200).json(rpcResult(id, {
+          protocolVersion: PROTOCOL_VERSION,
+          capabilities: SERVER_CAPABILITIES,
+          serverInfo: SERVER_INFO,
+          instructions: "Vistamark Intel — query SEC RIAs (Form ADV), tax-exempt orgs (IRS BMF + ProPublica 990s), ERISA retirement plans (DOL Form 5500), and macro / rate data (FRED, Treasury). RIA tools: search_rias, get_ria_profile, find_alumni, get_aum_history, firms_using_custodian, top_rias_by. Nonprofit tools: irs_eo_search, irs_eo_lookup, propublica_org_search, propublica_org_990. Retirement plan tools: dol_plan_search, dol_plan_lookup. Macro tools: fred_series_search, fred_get_series, fred_yield_curve, treasury_avg_rates, treasury_debt_outstanding. database_status reports data freshness.",
+        }));
 
       case "notifications/initialized":
       case "initialized":
@@ -101,43 +94,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case "ping":
         return res.status(200).json(rpcResult(id, {}));
 
-      case "tools/list": {
-        return res.status(200).json(
-          rpcResult(id, {
-            tools: TOOLS.map((t) => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: t.inputSchema,
-            })),
-          })
-        );
-      }
+      case "tools/list":
+        return res.status(200).json(rpcResult(id, {
+          tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+        }));
 
       case "tools/call": {
         const toolName = params?.name;
         const toolArgs = params?.arguments ?? {};
         const tool = TOOL_BY_NAME[toolName];
-        if (!tool) {
-          return res.status(200).json(rpcError(id, -32602, `Unknown tool: ${toolName}`));
-        }
-
+        if (!tool) return res.status(200).json(rpcError(id, -32602, `Unknown tool: ${toolName}`));
         try {
           const result = await tool.handler(toolArgs);
-          return res.status(200).json(
-            rpcResult(id, {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              structuredContent: result,
-              isError: false,
-            })
-          );
+          return res.status(200).json(rpcResult(id, {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+            structuredContent: result,
+            isError: false,
+          }));
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          return res.status(200).json(
-            rpcResult(id, {
-              content: [{ type: "text", text: `Tool error: ${message}` }],
-              isError: true,
-            })
-          );
+          return res.status(200).json(rpcResult(id, {
+            content: [{ type: "text", text: `Tool error: ${message}` }],
+            isError: true,
+          }));
         }
       }
 
