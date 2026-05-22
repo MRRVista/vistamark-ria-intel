@@ -1,8 +1,8 @@
 {
   "name": "vistamark-ria-intel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Vistamark RIA intelligence — Form ADV ingestion, normalized RIA database, MCP server for Randall.",
+  "description": "Vistamark Intel — Form ADV + IRS EO BMF + ProPublica nonprofit data, normalized Postgres, MCP server for Randall.",
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "vercel dev",

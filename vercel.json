@@ -5,7 +5,13 @@
     "api/admin/migrate.ts": {
       "includeFiles": "migrations/**"
     },
+    "api/admin/refresh-irs-bmf.ts": {
+      "maxDuration": 300
+    },
     "api/cron/ingest-adv.ts": {
+      "maxDuration": 300
+    },
+    "api/cron/refresh-irs-bmf.ts": {
       "maxDuration": 300
     }
   },
@@ -17,6 +23,10 @@
     {
       "path": "/api/cron/refresh-13f",
       "schedule": "0 8 1 */3 *"
+    },
+    {
+      "path": "/api/cron/refresh-irs-bmf",
+      "schedule": "0 4 * * 3"
     }
   ]
 }

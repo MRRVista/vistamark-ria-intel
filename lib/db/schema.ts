@@ -208,6 +208,55 @@ export const ingestRuns = pgTable("ingest_runs", {
   errorMessage: text("error_message"),
 });
 
+// ─── Phase 1 — IRS Exempt Organizations Business Master File (EO BMF) ──────
+// One row per tax-exempt organization. Sourced from
+// https://www.irs.gov/charities-non-profits/exempt-organizations-business-master-file-extract-eo-bmf
+// Refreshed monthly via api/cron/refresh-irs-bmf. ProPublica Nonprofit Explorer
+// is a separate passthrough (no table — see lib/propublica/client.ts).
+export const nonprofits = pgTable(
+  "nonprofits",
+  {
+    ein: varchar("ein", { length: 9 }).primaryKey(),
+    name: text("name").notNull(),
+    inCareOf: text("in_care_of"),
+    street: text("street"),
+    city: varchar("city", { length: 128 }),
+    state: varchar("state", { length: 4 }),
+    zip: varchar("zip", { length: 16 }),
+    groupCode: varchar("group_code", { length: 8 }),
+    subsection: integer("subsection"),
+    affiliation: integer("affiliation"),
+    classification: varchar("classification", { length: 32 }),
+    rulingDate: varchar("ruling_date", { length: 8 }),
+    deductibility: integer("deductibility"),
+    foundation: integer("foundation"),
+    activityCodes: varchar("activity_codes", { length: 32 }),
+    organizationCode: integer("organization_code"),
+    statusCode: integer("status_code"),
+    taxPeriod: varchar("tax_period", { length: 8 }),
+    assetCode: integer("asset_code"),
+    incomeCode: integer("income_code"),
+    filingReqCode: varchar("filing_req_code", { length: 4 }),
+    pfFilingReqCode: varchar("pf_filing_req_code", { length: 4 }),
+    acctPeriod: varchar("acct_period", { length: 4 }),
+    assetAmt: bigint("asset_amt", { mode: "number" }),
+    incomeAmt: bigint("income_amt", { mode: "number" }),
+    revenueAmt: bigint("revenue_amt", { mode: "number" }),
+    nteeCode: varchar("ntee_code", { length: 8 }),
+    sortName: text("sort_name"),
+    region: varchar("region", { length: 8 }),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    nameIdx: index("nonprofits_name_idx").on(t.name),
+    stateIdx: index("nonprofits_state_idx").on(t.state),
+    subsectionIdx: index("nonprofits_subsection_idx").on(t.subsection),
+    nteeIdx: index("nonprofits_ntee_idx").on(t.nteeCode),
+    assetCdIdx: index("nonprofits_asset_cd_idx").on(t.assetCode),
+    stateSubsecIdx: index("nonprofits_state_subsec_idx").on(t.state, t.subsection),
+  })
+);
+
 export type Firm = typeof firms.$inferSelect;
 export type FirmInsert = typeof firms.$inferInsert;
 export type Advisor = typeof advisors.$inferSelect;
@@ -215,3 +264,5 @@ export type AdvisorInsert = typeof advisors.$inferInsert;
 export type FirmHistory = typeof firmHistory.$inferSelect;
 export type FirmCustodian = typeof firmCustodians.$inferSelect;
 export type PrivateFund = typeof privateFunds.$inferSelect;
+export type Nonprofit = typeof nonprofits.$inferSelect;
+export type NonprofitInsert = typeof nonprofits.$inferInsert;

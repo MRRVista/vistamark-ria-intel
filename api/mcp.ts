@@ -4,7 +4,7 @@ import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
 
 const SERVER_INFO = {
   name: "vistamark-ria-intel",
-  version: "0.1.0",
+  version: "0.2.0",
 };
 
 const PROTOCOL_VERSION = "2024-11-05";
@@ -30,7 +30,6 @@ function rpcError(id: any, code: number, message: string, data?: any) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS for browser-based MCP clients
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader(
@@ -43,7 +42,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // GET serves a basic health/info page so the URL isn't a 405 in a browser
   if (req.method === "GET") {
     res.status(200).json({
       name: SERVER_INFO.name,
@@ -91,14 +89,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             capabilities: SERVER_CAPABILITIES,
             serverInfo: SERVER_INFO,
             instructions:
-              "Vistamark RIA Intelligence — query SEC-registered investment advisers by AUM, state, services, client mix, and custodian. Track advisor moves with find_alumni. Use database_status to check freshness.",
+              "Vistamark Intel — query SEC-registered RIAs (Form ADV) and tax-exempt organizations (IRS BMF + ProPublica 990s). RIA tools: search_rias, get_ria_profile, find_alumni, get_aum_history, firms_using_custodian, top_rias_by. Nonprofit tools: irs_eo_search and irs_eo_lookup (1.7M orgs, IRS bulk feed), propublica_org_search and propublica_org_990 (live 990 financial history). database_status reports data freshness.",
           })
         );
       }
 
       case "notifications/initialized":
       case "initialized":
-        // Acknowledgment notification — no response required
         return res.status(204).end();
 
       case "ping":
