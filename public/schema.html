@@ -1,1 +1,809 @@
-PLACEHOLDER_SCHEMA
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schema Atlas · vistamark-ria-intel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0d0a;
+    --bg-2: #16140f;
+    --bg-3: #1d1a13;
+    --ink: #f0ead6;
+    --ink-dim: #8a8270;
+    --ink-faint: #4a4538;
+    --rule: #2a261c;
+    --gold: #d4a247;
+    --gold-bright: #f0c060;
+    --green: #7fb069;
+    --red: #c8553d;
+    --blue: #6d9dc5;
+    --purple: #b08cb8;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --serif: 'Fraunces', Georgia, serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(212, 162, 71, 0.04), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(109, 157, 197, 0.03), transparent 40%);
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 100;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    padding: 32px 40px 24px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 40px; flex-wrap: wrap;
+  }
+  .brand .crumb {
+    font-size: 11px; color: var(--ink-dim); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .brand .crumb a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px dashed transparent; }
+  .brand .crumb a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .brand h1 {
+    font-family: var(--serif); font-weight: 300;
+    font-size: 44px; letter-spacing: -0.02em; line-height: 1;
+  }
+  .brand h1 em { color: var(--gold); font-style: italic; font-weight: 500; }
+  .nav-tabs {
+    display: flex; gap: 24px; align-items: center;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .nav-tabs a {
+    color: var(--ink-dim); text-decoration: none;
+    padding-bottom: 4px;
+    border-bottom: 1px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-tabs a:hover { color: var(--ink); }
+  .nav-tabs a.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .meta {
+    display: flex; gap: 28px; font-size: 11px;
+    color: var(--ink-dim); letter-spacing: 0.08em; text-transform: uppercase;
+    width: 100%;
+  }
+  .meta span b { color: var(--ink); font-weight: 500; margin-right: 6px; }
+  .meta .dot.live { color: var(--green); }
+  .meta .dot.static { color: var(--ink-faint); }
+  .meta .dot.error { color: var(--red); }
+
+  .controls {
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--rule);
+    display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+    background: var(--bg-2);
+  }
+  .control-group { display: flex; align-items: center; gap: 10px; }
+  .control-group label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  input[type="search"], input[type="password"], select {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 0;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="search"] { width: 260px; }
+  input[type="password"] { width: 220px; }
+  input::placeholder { color: var(--ink-faint); }
+  input:focus, select:focus { border-color: var(--gold); }
+  select {
+    cursor: pointer; padding-right: 28px; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d4a247' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 5px 10px; border: 1px solid var(--rule); background: var(--bg);
+    color: var(--ink-dim); cursor: pointer; transition: all 0.15s;
+    font-family: var(--mono);
+  }
+  .chip:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .chip.active {
+    background: var(--gold); color: var(--bg); border-color: var(--gold);
+    font-weight: 600;
+  }
+  .btn {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 7px 14px; background: transparent;
+    border: 1px solid var(--gold); color: var(--gold);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { background: var(--gold); color: var(--bg); }
+  .btn.ghost { border-color: var(--rule); color: var(--ink-dim); }
+  .btn.ghost:hover { border-color: var(--ink); background: transparent; color: var(--ink); }
+  .spacer { flex: 1; }
+  .counter {
+    font-size: 11px; color: var(--ink-dim);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .counter b { color: var(--gold); font-weight: 600; }
+
+  main { padding: 0 40px 40px; }
+  .legend {
+    padding: 20px 0;
+    display: flex; gap: 28px; flex-wrap: wrap;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim);
+    border-bottom: 1px solid var(--rule);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; display: inline-block; border-radius: 2px; }
+  .sw-rias { background: var(--gold); }
+  .sw-nonprofits { background: var(--green); }
+  .sw-ops { background: var(--purple); }
+  .sw-passthrough { background: var(--blue); }
+
+  .health-banner {
+    margin-top: 16px;
+    padding: 14px 18px;
+    border: 1px solid var(--rule);
+    background: var(--bg-2);
+    display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+    font-size: 11px; letter-spacing: 0.04em;
+  }
+  .health-banner.idle { color: var(--ink-dim); }
+  .health-banner.live { border-color: rgba(127, 176, 105, 0.3); }
+  .health-banner.error { border-color: rgba(200, 85, 61, 0.4); color: var(--red); }
+  .health-label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim); margin-right: 8px;
+  }
+  .health-banner b { color: var(--ink); font-weight: 500; }
+
+  .tables {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+    gap: 24px; margin-top: 24px;
+  }
+  .table-card {
+    background: var(--bg-2); border: 1px solid var(--rule);
+    overflow: hidden; transition: border-color 0.2s;
+    animation: fadeIn 0.4s ease backwards;
+  }
+  .table-card:hover { border-color: var(--ink-faint); }
+  .table-card.hidden { display: none; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  .table-head {
+    padding: 16px 18px; border-bottom: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  }
+  .table-name {
+    font-family: var(--serif); font-size: 22px; font-weight: 500;
+    letter-spacing: -0.01em; line-height: 1.1;
+  }
+  .table-name a {
+    color: var(--ink); text-decoration: none;
+    border-bottom: 1px dashed transparent;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .table-name a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .table-tag {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 2px; white-space: nowrap; font-weight: 600;
+  }
+  .tag-rias { background: rgba(212, 162, 71, 0.15); color: var(--gold); }
+  .tag-nonprofits { background: rgba(127, 176, 105, 0.15); color: var(--green); }
+  .tag-ops { background: rgba(176, 140, 184, 0.15); color: var(--purple); }
+  .tag-passthrough { background: rgba(109, 157, 197, 0.15); color: var(--blue); }
+
+  .live-row {
+    padding: 10px 18px;
+    background: rgba(127, 176, 105, 0.05);
+    border-bottom: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; font-size: 11px;
+  }
+  .live-row.error { background: rgba(200, 85, 61, 0.06); }
+  .live-row .live-label {
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .live-row .live-value {
+    font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--green);
+    letter-spacing: -0.01em;
+  }
+  .live-row.error .live-value { color: var(--red); font-size: 11px; font-weight: 400; }
+  .live-row .freshness {
+    font-size: 10px; color: var(--ink-faint);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+
+  .table-desc {
+    padding: 12px 18px; font-size: 12px; color: var(--ink-dim);
+    line-height: 1.55; border-bottom: 1px solid var(--rule);
+  }
+  .table-stats {
+    padding: 10px 18px;
+    display: flex; gap: 20px; flex-wrap: wrap;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-faint); border-bottom: 1px solid var(--rule);
+  }
+  .table-stats b { color: var(--ink); font-weight: 500; margin-right: 4px; }
+  .columns { list-style: none; max-height: 320px; overflow-y: auto; }
+  .columns::-webkit-scrollbar { width: 6px; }
+  .columns::-webkit-scrollbar-track { background: var(--bg-2); }
+  .columns::-webkit-scrollbar-thumb { background: var(--rule); }
+  .columns::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+  .columns li {
+    padding: 8px 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(42, 38, 28, 0.5);
+    font-size: 12px;
+    transition: background 0.1s;
+  }
+  .columns li:last-child { border-bottom: none; }
+  .columns li:hover { background: var(--bg-3); }
+  .col-name { color: var(--ink); font-weight: 500; }
+  .col-name.pk { color: var(--gold-bright); }
+  .col-name.pk::before { content: "◆ "; font-size: 10px; }
+  .col-name.fk::before { content: "→ "; color: var(--blue); font-size: 10px; }
+  .col-meta {
+    color: var(--ink-faint); font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    text-align: right; flex-shrink: 0;
+  }
+  .col-meta .nn { color: var(--red); margin-left: 4px; font-weight: 600; }
+  .col-meta .idx { color: var(--gold); margin-left: 4px; }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    padding: 80px 20px; text-align: center; color: var(--ink-dim);
+  }
+  .empty-state h2 {
+    font-family: var(--serif); font-size: 28px; font-weight: 300;
+    color: var(--ink); margin-bottom: 8px;
+  }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 24px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); flex-wrap: wrap; gap: 12px;
+  }
+  footer a {
+    color: var(--ink-dim); text-decoration: none;
+    border-bottom: 1px dashed var(--rule);
+  }
+  footer a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+  @media (max-width: 720px) {
+    header, .controls, main, footer { padding-left: 20px; padding-right: 20px; }
+    .brand h1 { font-size: 32px; }
+    input[type="search"], input[type="password"] { width: 100%; }
+    .tables { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <div class="brand">
+    <div class="crumb"><a href="/">MRRVista</a> / vistamark-ria-intel / schema</div>
+    <h1>Schema <em>Atlas</em></h1>
+  </div>
+  <div class="nav-tabs">
+    <a href="/schema.html" class="active">Atlas</a>
+    <a href="/query.html">Console</a>
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source ↗</a>
+  </div>
+  <div class="meta">
+    <span><b>Engine</b>PostgreSQL · Neon</span>
+    <span><b>ORM</b>Drizzle</span>
+    <span><b>Tables</b>9</span>
+    <span><b>Mode</b><span id="mode-dot" class="dot static">○ static</span></span>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="control-group">
+    <label>Token</label>
+    <input type="password" id="token" placeholder="ACCESS_TOKEN (then click Connect)" autocomplete="off">
+  </div>
+  <button class="btn" id="connect-btn">Connect</button>
+  <button class="btn ghost" id="refresh-btn" style="display:none">↻ Refresh</button>
+  <div class="spacer"></div>
+  <div class="control-group">
+    <label>Find</label>
+    <input type="search" id="search" placeholder="table or column name..." autocomplete="off">
+  </div>
+  <div class="control-group">
+    <label>Domain</label>
+    <div class="chips" id="domain-chips">
+      <button class="chip active" data-domain="all">All</button>
+      <button class="chip" data-domain="rias">RIAs</button>
+      <button class="chip" data-domain="nonprofits">Nonprofits</button>
+      <button class="chip" data-domain="ops">Ops</button>
+      <button class="chip" data-domain="passthrough">Passthrough</button>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Sort</label>
+    <select id="sort">
+      <option value="domain">Domain</option>
+      <option value="name">Name (A→Z)</option>
+      <option value="rows-desc">Rows (most → least)</option>
+      <option value="cols-desc">Columns (most → least)</option>
+      <option value="cols-asc">Columns (least → most)</option>
+    </select>
+  </div>
+  <div class="counter">Showing <b id="count">9</b> of 9 tables</div>
+</div>
+
+<main>
+  <div class="legend">
+    <span class="legend-item"><span class="swatch sw-rias"></span>Form ADV / RIAs</span>
+    <span class="legend-item"><span class="swatch sw-nonprofits"></span>IRS / Nonprofits</span>
+    <span class="legend-item"><span class="swatch sw-ops"></span>Operations</span>
+    <span class="legend-item"><span class="swatch sw-passthrough"></span>Live passthrough (no table)</span>
+    <span class="legend-item" style="margin-left: auto;">◆ pk &nbsp;·&nbsp; → fk &nbsp;·&nbsp; <span style="color: var(--red); font-weight: 600;">NN</span> not null &nbsp;·&nbsp; <span style="color: var(--gold);">IDX</span> indexed</span>
+  </div>
+
+  <div class="health-banner idle" id="health-banner">
+    <span class="health-label">Status</span>
+    <span id="health-text">Static documentation mode. Enter your ACCESS_TOKEN above to fetch live row counts and ingest history.</span>
+  </div>
+
+  <div class="tables" id="tables"></div>
+</main>
+
+<footer>
+  <span>vistamark-ria-intel · v0.2.0</span>
+  <span>
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">github</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/MRRVista/vistamark-ria-intel/blob/main/lib/db/schema.ts" target="_blank">schema.ts</a>
+    &nbsp;·&nbsp;
+    <a href="https://www.irs.gov/charities-non-profits/exempt-organizations-business-master-file-extract-eo-bmf" target="_blank">irs eo bmf</a>
+    &nbsp;·&nbsp;
+    <a href="https://projects.propublica.org/nonprofits/api" target="_blank">propublica</a>
+  </span>
+</footer>
+
+<script>
+const TABLES = [
+  { name: "firms", domain: "rias",
+    desc: "Every SEC-registered RIA. AUM, client mix, services, fees, custody, disclosures. Primary table for RIA intelligence queries.",
+    source: "SEC Form ADV (weekly cron)", file: "lib/db/schema.ts",
+    columns: [
+      { n: "crd_number", t: "integer", pk: true },
+      { n: "sec_number", t: "varchar(32)", idx: "unique" },
+      { n: "legal_name", t: "text", nn: true, idx: true },
+      { n: "primary_business_name", t: "text" },
+      { n: "main_office_street", t: "text" },
+      { n: "main_office_city", t: "varchar(128)", idx: true },
+      { n: "main_office_state", t: "varchar(4)", idx: true },
+      { n: "main_office_zip", t: "varchar(16)" },
+      { n: "main_office_country", t: "varchar(64)" },
+      { n: "website", t: "text" },
+      { n: "main_phone", t: "varchar(32)" },
+      { n: "email", t: "text" },
+      { n: "total_aum", t: "bigint", idx: true },
+      { n: "discretionary_aum", t: "bigint" },
+      { n: "non_discretionary_aum", t: "bigint" },
+      { n: "total_accounts", t: "integer" },
+      { n: "discretionary_accounts", t: "integer" },
+      { n: "non_discretionary_accounts", t: "integer" },
+      { n: "total_employees", t: "integer" },
+      { n: "registered_iar_count", t: "integer" },
+      { n: "registration_status", t: "enum", nn: true, idx: true },
+      { n: "sec_registration_date", t: "date" },
+      { n: "is_large_adviser", t: "boolean" },
+      { n: "pct_individual_non_hnw", t: "numeric(5,2)" },
+      { n: "pct_individual_hnw", t: "numeric(5,2)" },
+      { n: "pct_pension_plans", t: "numeric(5,2)" },
+      { n: "pct_charitable_orgs", t: "numeric(5,2)" },
+      { n: "pct_corporations", t: "numeric(5,2)" },
+      { n: "pct_other_institutional", t: "numeric(5,2)" },
+      { n: "pct_pooled_investment", t: "numeric(5,2)" },
+      { n: "pct_government_entities", t: "numeric(5,2)" },
+      { n: "pct_other", t: "numeric(5,2)" },
+      { n: "comp_aum_pct", t: "boolean" },
+      { n: "comp_hourly", t: "boolean" },
+      { n: "comp_fixed_fee", t: "boolean" },
+      { n: "comp_commission", t: "boolean" },
+      { n: "comp_performance", t: "boolean" },
+      { n: "comp_subscription", t: "boolean" },
+      { n: "comp_other", t: "boolean" },
+      { n: "svc_financial_planning", t: "boolean" },
+      { n: "svc_portfolio_mgmt_indiv", t: "boolean" },
+      { n: "svc_portfolio_mgmt_inst", t: "boolean" },
+      { n: "svc_portfolio_mgmt_invco", t: "boolean" },
+      { n: "svc_portfolio_mgmt_pooled", t: "boolean" },
+      { n: "svc_pension_consulting", t: "boolean" },
+      { n: "svc_advisor_selection", t: "boolean" },
+      { n: "svc_publication_subscription", t: "boolean" },
+      { n: "svc_security_ratings", t: "boolean" },
+      { n: "svc_market_timing", t: "boolean" },
+      { n: "svc_educational_seminars", t: "boolean" },
+      { n: "has_custody", t: "boolean" },
+      { n: "custody_aum", t: "bigint" },
+      { n: "custody_accounts", t: "integer" },
+      { n: "has_disclosures", t: "boolean" },
+      { n: "disclosure_count", t: "integer" },
+      { n: "last_filing_date", t: "date" },
+      { n: "last_annual_update", t: "date" },
+      { n: "first_seen_at", t: "timestamp", nn: true },
+      { n: "last_updated_at", t: "timestamp", nn: true },
+      { n: "raw_json", t: "text" }
+    ]
+  },
+  { name: "firm_history", domain: "rias",
+    desc: "Quarterly snapshots of AUM, employees, and IAR count per firm. Powers get_aum_history.",
+    source: "Derived from firms on each ADV refresh", file: "lib/db/schema.ts",
+    columns: [
+      { n: "id", t: "serial", pk: true },
+      { n: "crd_number", t: "integer", nn: true, fk: "firms.crd_number", idx: true },
+      { n: "filing_date", t: "date", nn: true, idx: "unique" },
+      { n: "total_aum", t: "bigint" },
+      { n: "discretionary_aum", t: "bigint" },
+      { n: "total_accounts", t: "integer" },
+      { n: "total_employees", t: "integer" },
+      { n: "registered_iar_count", t: "integer" },
+      { n: "raw_json", t: "text" }
+    ]
+  },
+  { name: "advisors", domain: "rias",
+    desc: "Individual Investment Adviser Representatives (IARs) by CRD. Links to their current firm.",
+    source: "Form ADV Part 2B + IAPD", file: "lib/db/schema.ts",
+    columns: [
+      { n: "crd_number", t: "integer", pk: true },
+      { n: "first_name", t: "varchar(128)" },
+      { n: "middle_name", t: "varchar(128)" },
+      { n: "last_name", t: "varchar(128)", idx: true },
+      { n: "suffix", t: "varchar(32)" },
+      { n: "full_name", t: "text", nn: true, idx: true },
+      { n: "current_firm_crd", t: "integer", fk: "firms.crd_number", idx: true },
+      { n: "title", t: "text" },
+      { n: "has_disclosures", t: "boolean" },
+      { n: "disclosure_count", t: "integer" },
+      { n: "first_seen_at", t: "timestamp", nn: true },
+      { n: "last_updated_at", t: "timestamp", nn: true }
+    ]
+  },
+  { name: "advisor_history", domain: "rias",
+    desc: "Every firm an advisor has worked at, with start/end dates. Powers find_alumni — track movement between firms.",
+    source: "Derived from advisor CRD changes over time", file: "lib/db/schema.ts",
+    columns: [
+      { n: "id", t: "serial", pk: true },
+      { n: "advisor_crd", t: "integer", nn: true, fk: "advisors.crd_number", idx: true },
+      { n: "firm_crd", t: "integer", nn: true, fk: "firms.crd_number", idx: true },
+      { n: "start_date", t: "date" },
+      { n: "end_date", t: "date", idx: true },
+      { n: "title", t: "text" },
+      { n: "discovered_at", t: "timestamp", nn: true }
+    ]
+  },
+  { name: "firm_custodians", domain: "rias",
+    desc: "Which custodian(s) each firm uses (Schwab, Fidelity, Pershing, etc.). Powers firms_using_custodian.",
+    source: "Form ADV Part 1, Schedule D", file: "lib/db/schema.ts",
+    columns: [
+      { n: "id", t: "serial", pk: true },
+      { n: "firm_crd", t: "integer", nn: true, fk: "firms.crd_number", idx: true },
+      { n: "custodian_name", t: "text", nn: true, idx: true },
+      { n: "custodian_crd", t: "integer" },
+      { n: "custodian_sec_number", t: "varchar(32)" },
+      { n: "custody_type", t: "varchar(64)" },
+      { n: "aum_held", t: "bigint" },
+      { n: "accounts_held", t: "integer" }
+    ]
+  },
+  { name: "private_funds", domain: "rias",
+    desc: "Section 7.B private fund reporting — hedge funds, PE, VC, real estate funds managed by the firm.",
+    source: "Form ADV Section 7.B.1", file: "lib/db/schema.ts",
+    columns: [
+      { n: "id", t: "serial", pk: true },
+      { n: "firm_crd", t: "integer", nn: true, fk: "firms.crd_number", idx: true },
+      { n: "fund_name", t: "text", nn: true },
+      { n: "fund_id", t: "varchar(64)", idx: true },
+      { n: "fund_type", t: "varchar(64)" },
+      { n: "gross_asset_value", t: "bigint" },
+      { n: "minimum_investment", t: "bigint" },
+      { n: "beneficial_owners", t: "integer" },
+      { n: "master_feeder_status", t: "varchar(32)" }
+    ]
+  },
+  { name: "nonprofits", domain: "nonprofits",
+    desc: "~1.7M tax-exempt organizations from the IRS Exempt Organizations Business Master File. Covers 501(c)(3) charities, foundations, 501(c)(6) trade orgs, and more.",
+    source: "IRS EO BMF (monthly cron)", file: "lib/db/schema.ts",
+    columns: [
+      { n: "ein", t: "varchar(9)", pk: true },
+      { n: "name", t: "text", nn: true, idx: true },
+      { n: "in_care_of", t: "text" },
+      { n: "street", t: "text" },
+      { n: "city", t: "varchar(128)" },
+      { n: "state", t: "varchar(4)", idx: true },
+      { n: "zip", t: "varchar(16)" },
+      { n: "group_code", t: "varchar(8)" },
+      { n: "subsection", t: "integer", idx: true },
+      { n: "affiliation", t: "integer" },
+      { n: "classification", t: "varchar(32)" },
+      { n: "ruling_date", t: "varchar(8)" },
+      { n: "deductibility", t: "integer" },
+      { n: "foundation", t: "integer" },
+      { n: "activity_codes", t: "varchar(32)" },
+      { n: "organization_code", t: "integer" },
+      { n: "status_code", t: "integer" },
+      { n: "tax_period", t: "varchar(8)" },
+      { n: "asset_code", t: "integer", idx: true },
+      { n: "income_code", t: "integer" },
+      { n: "filing_req_code", t: "varchar(4)" },
+      { n: "pf_filing_req_code", t: "varchar(4)" },
+      { n: "acct_period", t: "varchar(4)" },
+      { n: "asset_amt", t: "bigint" },
+      { n: "income_amt", t: "bigint" },
+      { n: "revenue_amt", t: "bigint" },
+      { n: "ntee_code", t: "varchar(8)", idx: true },
+      { n: "sort_name", t: "text" },
+      { n: "region", t: "varchar(8)" },
+      { n: "last_updated_at", t: "timestamp", nn: true }
+    ]
+  },
+  { name: "ingest_runs", domain: "ops",
+    desc: "Audit log for every ADV / BMF refresh. Tracks status, row counts, errors, and timing.",
+    source: "Written by all cron jobs", file: "lib/db/schema.ts",
+    columns: [
+      { n: "id", t: "serial", pk: true },
+      { n: "started_at", t: "timestamp", nn: true },
+      { n: "finished_at", t: "timestamp" },
+      { n: "source", t: "varchar(64)", nn: true },
+      { n: "feed_date", t: "date" },
+      { n: "firms_processed", t: "integer" },
+      { n: "firms_inserted", t: "integer" },
+      { n: "firms_updated", t: "integer" },
+      { n: "status", t: "varchar(32)", nn: true },
+      { n: "error_message", t: "text" }
+    ]
+  },
+  { name: "propublica (passthrough)", domain: "passthrough",
+    desc: "Live API passthrough to ProPublica Nonprofit Explorer — full 990 filing history, financial detail by year. Not stored; queried on demand.",
+    source: "https://projects.propublica.org/nonprofits/api",
+    file: "lib/propublica/client.ts",
+    columns: [
+      { n: "propublica_org_search", t: "MCP tool" },
+      { n: "propublica_org_990", t: "MCP tool" }
+    ]
+  }
+];
+
+const REPO = "https://github.com/MRRVista/vistamark-ria-intel/blob/main/";
+const tablesEl = document.getElementById("tables");
+const searchEl = document.getElementById("search");
+const sortEl = document.getElementById("sort");
+const countEl = document.getElementById("count");
+const chipsEl = document.getElementById("domain-chips");
+const tokenEl = document.getElementById("token");
+const connectBtn = document.getElementById("connect-btn");
+const refreshBtn = document.getElementById("refresh-btn");
+const modeDot = document.getElementById("mode-dot");
+const healthBanner = document.getElementById("health-banner");
+const healthText = document.getElementById("health-text");
+
+let state = {
+  search: "",
+  domain: "all",
+  sort: "domain",
+  liveStats: null,
+  token: localStorage.getItem("vistamark_token") || ""
+};
+
+const DOMAIN_RANK = { rias: 0, nonprofits: 1, ops: 2, passthrough: 3 };
+
+if (state.token) tokenEl.value = state.token;
+
+function fmtNum(n) {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US");
+}
+function fmtRel(iso) {
+  if (!iso) return "never";
+  const t = new Date(iso).getTime();
+  const diff = Date.now() - t;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return m + "m ago";
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + "h ago";
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + "d ago";
+  const mo = Math.floor(d / 30);
+  return mo + "mo ago";
+}
+
+async function loadLiveStats() {
+  if (!state.token) return;
+  state.token = tokenEl.value.trim();
+  if (!state.token) return;
+  localStorage.setItem("vistamark_token", state.token);
+
+  healthBanner.className = "health-banner idle";
+  healthText.textContent = "Fetching live stats...";
+  modeDot.className = "dot static";
+  modeDot.textContent = "○ loading";
+
+  try {
+    const res = await fetch("/api/admin/stats", {
+      headers: { "access_token": state.token }
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status + " " + (await res.text()));
+    const data = await res.json();
+    state.liveStats = data;
+
+    if (data.db_ready === false) {
+      healthBanner.className = "health-banner error";
+      healthText.innerHTML = "<b>DATABASE_URL not set.</b> Stats endpoint responded, but no Postgres is wired up. Atlas remains in static mode.";
+      modeDot.className = "dot static";
+      modeDot.textContent = "○ no db";
+      return;
+    }
+
+    modeDot.className = "dot live";
+    modeDot.textContent = "● live";
+    refreshBtn.style.display = "inline-block";
+    healthBanner.className = "health-banner live";
+
+    const lastIngest = data.last_ingest_runs?.[0];
+    const totalRows = data.tables.reduce((s, t) => s + (t.count || 0), 0);
+    let parts = [
+      `<span class="health-label">Live</span><b>${fmtNum(totalRows)}</b> total rows across <b>${data.tables.filter(t => t.count != null).length}</b> tables`,
+      lastIngest ? `<span style="color:var(--ink-faint)">·</span> Last ingest: <b>${lastIngest.source}</b> <span style="color:var(--ink-dim)">(${lastIngest.status}, ${fmtRel(lastIngest.started_at)})</span>` : "",
+      `<span style="color:var(--ink-faint)">·</span> Refreshed ${fmtRel(data.generated_at)}`
+    ].filter(Boolean);
+    healthText.innerHTML = parts.join(" ");
+    render();
+  } catch (err) {
+    healthBanner.className = "health-banner error";
+    healthText.textContent = "Failed to load: " + (err.message || err);
+    modeDot.className = "dot error";
+    modeDot.textContent = "✕ error";
+  }
+}
+
+function render() {
+  let list = TABLES.map((t, i) => ({ ...t, _origIdx: i }));
+
+  if (state.domain !== "all") {
+    list = list.filter(t => t.domain === state.domain);
+  }
+
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
+    list = list.filter(t =>
+      t.name.toLowerCase().includes(q) ||
+      t.desc.toLowerCase().includes(q) ||
+      t.columns.some(c => c.n.toLowerCase().includes(q))
+    );
+  }
+
+  const liveByName = {};
+  if (state.liveStats?.tables) {
+    for (const t of state.liveStats.tables) liveByName[t.name] = t;
+  }
+
+  if (state.sort === "name") {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (state.sort === "cols-desc") {
+    list.sort((a, b) => b.columns.length - a.columns.length);
+  } else if (state.sort === "cols-asc") {
+    list.sort((a, b) => a.columns.length - b.columns.length);
+  } else if (state.sort === "rows-desc") {
+    list.sort((a, b) => (liveByName[b.name]?.count ?? -1) - (liveByName[a.name]?.count ?? -1));
+  } else {
+    list.sort((a, b) => DOMAIN_RANK[a.domain] - DOMAIN_RANK[b.domain] || a._origIdx - b._origIdx);
+  }
+
+  countEl.textContent = list.length;
+
+  if (list.length === 0) {
+    tablesEl.innerHTML = `<div class="empty-state"><h2>No matches</h2><p>Try a different search or clear filters.</p></div>`;
+    return;
+  }
+
+  const q = state.search.trim().toLowerCase();
+  tablesEl.innerHTML = list.map((t, i) => {
+    const tagLabel = {
+      rias: "Form ADV", nonprofits: "IRS BMF",
+      ops: "Operations", passthrough: "Passthrough"
+    }[t.domain];
+
+    const live = liveByName[t.name];
+    let liveRow = "";
+    if (live) {
+      if (live.error) {
+        liveRow = `<div class="live-row error">
+          <span class="live-label">Live</span>
+          <span class="live-value" title="${(live.error || '').replace(/"/g, '&quot;')}">⚠ ${live.error.slice(0, 60)}${live.error.length > 60 ? '…' : ''}</span>
+        </div>`;
+      } else {
+        liveRow = `<div class="live-row">
+          <span class="live-label">Live rows</span>
+          <span class="live-value">${fmtNum(live.count)}</span>
+          <span class="freshness">${live.latest_update ? "updated " + fmtRel(live.latest_update) : "—"}</span>
+        </div>`;
+      }
+    }
+
+    const cols = t.columns.map(c => {
+      const flags = [];
+      if (c.nn && !c.pk) flags.push('<span class="nn">NN</span>');
+      if (c.idx) flags.push(`<span class="idx">${c.idx === "unique" ? "UNIQ" : "IDX"}</span>`);
+      const cls = c.pk ? "pk" : c.fk ? "fk" : "";
+      const fkNote = c.fk ? ` → ${c.fk}` : "";
+      const matched = q && c.n.toLowerCase().includes(q);
+      return `<li${matched ? ' style="background:rgba(212,162,71,0.08)"' : ''}>
+        <span class="col-name ${cls}" title="${c.fk || ''}">${c.n}</span>
+        <span class="col-meta">${c.t}${fkNote ? `<span style="color:var(--blue)">${fkNote}</span>` : ''}${flags.length ? ' ' + flags.join(' ') : ''}</span>
+      </li>`;
+    }).join("");
+
+    const link = t.file.startsWith("http") ? t.file : REPO + t.file;
+
+    return `<article class="table-card" style="animation-delay:${i * 30}ms">
+      <div class="table-head">
+        <div class="table-name"><a href="${link}" target="_blank" rel="noopener">${t.name}</a></div>
+        <div class="table-tag tag-${t.domain}">${tagLabel}</div>
+      </div>
+      ${liveRow}
+      <div class="table-desc">${t.desc}</div>
+      <div class="table-stats">
+        <span><b>${t.columns.length}</b>cols</span>
+        <span><b>${t.columns.filter(c => c.idx).length}</b>indexed</span>
+        <span><b>${t.columns.filter(c => c.fk).length}</b>fk</span>
+        <span style="margin-left:auto;text-transform:none;letter-spacing:0;color:var(--ink-faint)">${t.source}</span>
+      </div>
+      <ul class="columns">${cols}</ul>
+    </article>`;
+  }).join("");
+}
+
+searchEl.addEventListener("input", e => { state.search = e.target.value; render(); });
+sortEl.addEventListener("change", e => { state.sort = e.target.value; render(); });
+chipsEl.addEventListener("click", e => {
+  const btn = e.target.closest(".chip");
+  if (!btn) return;
+  chipsEl.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  state.domain = btn.dataset.domain;
+  render();
+});
+connectBtn.addEventListener("click", loadLiveStats);
+refreshBtn.addEventListener("click", loadLiveStats);
+tokenEl.addEventListener("keydown", e => { if (e.key === "Enter") loadLiveStats(); });
+
+render();
+if (state.token) loadLiveStats();
+</script>
+</body>
+</html>
