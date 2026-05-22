@@ -1,1 +1,813 @@
-PLACEHOLDER_QUERY
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Query Console · vistamark-ria-intel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0d0a;
+    --bg-2: #16140f;
+    --bg-3: #1d1a13;
+    --ink: #f0ead6;
+    --ink-dim: #8a8270;
+    --ink-faint: #4a4538;
+    --rule: #2a261c;
+    --gold: #d4a247;
+    --gold-bright: #f0c060;
+    --green: #7fb069;
+    --red: #c8553d;
+    --blue: #6d9dc5;
+    --purple: #b08cb8;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --serif: 'Fraunces', Georgia, serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--mono); font-size: 13px; line-height: 1.5;
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(212, 162, 71, 0.04), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(109, 157, 197, 0.03), transparent 40%);
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 100;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    padding: 32px 40px 24px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 40px; flex-wrap: wrap;
+  }
+  .brand .crumb {
+    font-size: 11px; color: var(--ink-dim); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .brand .crumb a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px dashed transparent; }
+  .brand .crumb a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .brand h1 {
+    font-family: var(--serif); font-weight: 300;
+    font-size: 44px; letter-spacing: -0.02em; line-height: 1;
+  }
+  .brand h1 em { color: var(--gold); font-style: italic; font-weight: 500; }
+  .nav-tabs {
+    display: flex; gap: 24px; align-items: center;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .nav-tabs a {
+    color: var(--ink-dim); text-decoration: none;
+    padding-bottom: 4px; border-bottom: 1px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-tabs a:hover { color: var(--ink); }
+  .nav-tabs a.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .auth-bar {
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--rule);
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    background: var(--bg-2);
+  }
+  .auth-bar label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  input[type="password"], input[type="text"], input[type="number"], select, textarea {
+    background: var(--bg); border: 1px solid var(--rule); color: var(--ink);
+    font-family: var(--mono); font-size: 12px;
+    padding: 7px 12px; border-radius: 0; outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--gold); }
+  input::placeholder, textarea::placeholder { color: var(--ink-faint); }
+  input[type="password"] { width: 280px; }
+  select {
+    cursor: pointer; padding-right: 28px; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d4a247' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .btn {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 7px 14px; background: transparent;
+    border: 1px solid var(--gold); color: var(--gold);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { background: var(--gold); color: var(--bg); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:disabled:hover { background: transparent; color: var(--gold); }
+  .btn.ghost { border-color: var(--rule); color: var(--ink-dim); }
+  .btn.ghost:hover { border-color: var(--ink); background: transparent; color: var(--ink); }
+  .btn.primary {
+    background: var(--gold); color: var(--bg); font-weight: 600;
+  }
+  .btn.primary:hover { background: var(--gold-bright); }
+  .auth-status {
+    font-size: 11px; color: var(--ink-dim);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-left: auto;
+  }
+  .auth-status .ok { color: var(--green); }
+  .auth-status .err { color: var(--red); }
+
+  main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    min-height: calc(100vh - 220px);
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  aside {
+    border-right: 1px solid var(--rule);
+    padding: 24px 0;
+    background: var(--bg-2);
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+    position: sticky; top: 0;
+  }
+  @media (max-width: 900px) {
+    aside { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--rule); }
+  }
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-track { background: var(--bg-2); }
+  aside::-webkit-scrollbar-thumb { background: var(--rule); }
+
+  .tool-list-header {
+    padding: 0 24px 16px;
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink-dim);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .tool-list-header b { color: var(--gold); font-weight: 600; }
+  .tool-group {
+    padding: 0 0 16px;
+  }
+  .tool-group-title {
+    padding: 12px 24px 6px;
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+  }
+  .tool-item {
+    padding: 10px 24px;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .tool-item:hover { background: var(--bg-3); }
+  .tool-item.active {
+    background: var(--bg-3);
+    border-left-color: var(--gold);
+  }
+  .tool-item-name {
+    font-size: 12px; color: var(--ink); font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .tool-item.active .tool-item-name { color: var(--gold-bright); }
+  .tool-item-desc {
+    font-size: 10px; color: var(--ink-dim); line-height: 1.4;
+  }
+
+  section.workspace {
+    padding: 32px 40px;
+    overflow-x: auto;
+  }
+  .empty-workspace {
+    padding: 100px 40px; text-align: center; color: var(--ink-dim);
+  }
+  .empty-workspace h2 {
+    font-family: var(--serif); font-size: 32px; font-weight: 300;
+    color: var(--ink); margin-bottom: 12px;
+  }
+
+  .tool-detail h2 {
+    font-family: var(--serif); font-weight: 500;
+    font-size: 32px; letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+  .tool-detail h2 .tool-name-code {
+    font-family: var(--mono); font-size: 20px; color: var(--gold);
+    font-weight: 500; padding: 2px 8px;
+    background: rgba(212, 162, 71, 0.08);
+    border-radius: 3px;
+    margin-left: 8px;
+    letter-spacing: 0;
+  }
+  .tool-detail .tool-desc {
+    color: var(--ink-dim); font-size: 13px;
+    margin-bottom: 28px; max-width: 70ch;
+  }
+
+  .form-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    margin-bottom: 20px;
+    max-width: 900px;
+  }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field label {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .form-field label .req { color: var(--red); margin-left: 4px; }
+  .form-field label .type {
+    color: var(--ink-faint); margin-left: 6px; font-size: 9px;
+  }
+  .form-field input, .form-field select, .form-field textarea { width: 100%; }
+  .form-field textarea { min-height: 60px; resize: vertical; }
+  .form-field .help {
+    font-size: 10px; color: var(--ink-faint); margin-top: 2px;
+    text-transform: none; letter-spacing: 0;
+  }
+  .form-actions {
+    display: flex; gap: 10px; align-items: center;
+    margin-bottom: 28px; padding-bottom: 20px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .form-actions .meta {
+    margin-left: auto; font-size: 10px; color: var(--ink-faint);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .form-actions .meta b { color: var(--ink-dim); font-weight: 500; }
+
+  .result-section { margin-top: 8px; }
+  .result-header {
+    display: flex; gap: 16px; align-items: center;
+    margin-bottom: 14px;
+  }
+  .result-header h3 {
+    font-family: var(--serif); font-weight: 400;
+    font-size: 22px; letter-spacing: -0.01em;
+  }
+  .result-header .pill {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 2px;
+  }
+  .pill-ok { background: rgba(127, 176, 105, 0.15); color: var(--green); }
+  .pill-err { background: rgba(200, 85, 61, 0.15); color: var(--red); }
+  .pill-info { background: rgba(109, 157, 197, 0.15); color: var(--blue); }
+  .result-header .duration {
+    color: var(--ink-faint); font-size: 11px; margin-left: auto;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .view-tabs {
+    display: flex; gap: 0; margin-bottom: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .view-tab {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 8px 16px; background: transparent;
+    border: none; border-bottom: 2px solid transparent;
+    color: var(--ink-dim); cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .view-tab:hover { color: var(--ink); }
+  .view-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .result-body { padding-top: 16px; }
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
+  }
+  .result-table th {
+    background: var(--bg-3);
+    text-align: left; padding: 10px 12px;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 600;
+    border-bottom: 1px solid var(--rule);
+    position: sticky; top: 0;
+    cursor: pointer; user-select: none;
+  }
+  .result-table th:hover { color: var(--ink); }
+  .result-table th .sort-arrow {
+    margin-left: 4px; color: var(--gold); font-size: 9px;
+  }
+  .result-table td {
+    padding: 9px 12px; border-bottom: 1px solid rgba(42, 38, 28, 0.5);
+    vertical-align: top; max-width: 320px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .result-table td.expanded { white-space: normal; max-width: none; }
+  .result-table tr:hover td { background: var(--bg-3); }
+  .result-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--gold-bright); }
+  .result-table td.null { color: var(--ink-faint); font-style: italic; }
+  .result-table td.bool-t { color: var(--green); }
+  .result-table td.bool-f { color: var(--red); }
+  .result-table a { color: var(--blue); text-decoration: none; border-bottom: 1px dashed var(--rule); }
+  .result-table a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .result-table-wrap {
+    max-height: 540px;
+    overflow: auto;
+    border: 1px solid var(--rule);
+    background: var(--bg-2);
+  }
+  .result-table-wrap .result-table { border: none; }
+  .result-table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+  .result-table-wrap::-webkit-scrollbar-track { background: var(--bg-2); }
+  .result-table-wrap::-webkit-scrollbar-thumb { background: var(--rule); }
+  .result-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+
+  .result-json {
+    background: var(--bg-2); border: 1px solid var(--rule);
+    padding: 16px 18px; font-family: var(--mono); font-size: 12px;
+    line-height: 1.5; color: var(--ink-dim);
+    white-space: pre; overflow: auto; max-height: 540px;
+  }
+  .result-json .key { color: var(--gold); }
+  .result-json .string { color: var(--green); }
+  .result-json .number { color: var(--gold-bright); }
+  .result-json .bool { color: var(--blue); }
+  .result-json .null { color: var(--ink-faint); font-style: italic; }
+
+  .row-count {
+    margin-top: 12px;
+    font-size: 10px; color: var(--ink-faint);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .row-count b { color: var(--ink-dim); font-weight: 500; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 24px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-faint); flex-wrap: wrap; gap: 12px;
+  }
+  footer a { color: var(--ink-dim); text-decoration: none; border-bottom: 1px dashed var(--rule); }
+  footer a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+  @media (max-width: 720px) {
+    header, .auth-bar, section.workspace, footer { padding-left: 20px; padding-right: 20px; }
+    .brand h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header>
+  <div class="brand">
+    <div class="crumb"><a href="/">MRRVista</a> / vistamark-ria-intel / console</div>
+    <h1>Query <em>Console</em></h1>
+  </div>
+  <div class="nav-tabs">
+    <a href="/schema.html">Atlas</a>
+    <a href="/query.html" class="active">Console</a>
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source ↗</a>
+  </div>
+</header>
+
+<div class="auth-bar">
+  <label for="token">Access Token</label>
+  <input type="password" id="token" placeholder="ACCESS_TOKEN" autocomplete="off">
+  <button class="btn" id="connect-btn">Connect</button>
+  <button class="btn ghost" id="logout-btn" style="display:none">Logout</button>
+  <div class="auth-status" id="auth-status">Not connected</div>
+</div>
+
+<main>
+  <aside>
+    <div class="tool-list-header">
+      <span>Tools</span>
+      <span><b id="tool-count">—</b></span>
+    </div>
+    <div id="tool-list"></div>
+  </aside>
+
+  <section class="workspace" id="workspace">
+    <div class="empty-workspace">
+      <h2>Connect to begin</h2>
+      <p>Enter your <code style="color:var(--gold)">ACCESS_TOKEN</code> above. The console will auto-discover every MCP tool in <code style="color:var(--gold)">lib/mcp/tools.ts</code> and render a form for each one — no per-tool plumbing.</p>
+      <p style="margin-top:20px;font-size:11px;color:var(--ink-faint)">Same endpoint Vistabuilder will use: <code>POST /api/admin/query</code></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>vistamark-ria-intel · console v0.1</span>
+  <span>
+    <a href="/schema.html">schema atlas</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/MRRVista/vistamark-ria-intel/blob/main/lib/mcp/tools.ts" target="_blank">tools.ts</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">github</a>
+  </span>
+</footer>
+
+<script>
+const tokenEl = document.getElementById("token");
+const connectBtn = document.getElementById("connect-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authStatus = document.getElementById("auth-status");
+const toolListEl = document.getElementById("tool-list");
+const toolCountEl = document.getElementById("tool-count");
+const workspace = document.getElementById("workspace");
+
+let state = {
+  token: localStorage.getItem("vistamark_token") || "",
+  tools: [],
+  activeTool: null,
+  result: null,
+  view: "table",
+  sortCol: null,
+  sortDir: 1,
+  expandedRows: new Set()
+};
+
+if (state.token) tokenEl.value = state.token;
+
+function classifyTool(name) {
+  if (name.startsWith("irs_") || name.startsWith("propublica")) return "Nonprofits";
+  if (name === "database_status") return "Operations";
+  return "RIAs";
+}
+
+async function fetchTools() {
+  if (!state.token) return;
+  authStatus.innerHTML = '<span class="">Connecting...</span>';
+  try {
+    const res = await fetch("/api/admin/query", {
+      headers: { "access_token": state.token }
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error("HTTP " + res.status + ": " + txt.slice(0, 200));
+    }
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.tools)) throw new Error("Unexpected response shape");
+    state.tools = data.tools;
+    localStorage.setItem("vistamark_token", state.token);
+    authStatus.innerHTML = `<span class="ok">● Connected</span> · ${data.tools.length} tools`;
+    logoutBtn.style.display = "inline-block";
+    renderToolList();
+  } catch (err) {
+    authStatus.innerHTML = `<span class="err">✕ ${err.message || err}</span>`;
+    state.tools = [];
+    renderToolList();
+  }
+}
+
+function renderToolList() {
+  toolCountEl.textContent = state.tools.length || "—";
+  if (state.tools.length === 0) {
+    toolListEl.innerHTML = '<div style="padding:24px;font-size:11px;color:var(--ink-faint)">Connect to load tools</div>';
+    return;
+  }
+  const groups = {};
+  for (const t of state.tools) {
+    const g = classifyTool(t.name);
+    (groups[g] ||= []).push(t);
+  }
+  const order = ["RIAs", "Nonprofits", "Operations"];
+  toolListEl.innerHTML = order.filter(g => groups[g]).map(g => {
+    const tools = groups[g].sort((a, b) => a.name.localeCompare(b.name));
+    return `<div class="tool-group">
+      <div class="tool-group-title">${g}</div>
+      ${tools.map(t => `<div class="tool-item ${state.activeTool === t.name ? 'active' : ''}" data-tool="${t.name}">
+        <div class="tool-item-name">${t.name}</div>
+        <div class="tool-item-desc">${(t.description || '').slice(0, 90)}${(t.description || '').length > 90 ? '…' : ''}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join("");
+  toolListEl.querySelectorAll(".tool-item").forEach(el => {
+    el.addEventListener("click", () => selectTool(el.dataset.tool));
+  });
+}
+
+function selectTool(name) {
+  state.activeTool = name;
+  state.result = null;
+  state.sortCol = null;
+  state.sortDir = 1;
+  state.expandedRows = new Set();
+  renderToolList();
+  renderWorkspace();
+}
+
+function renderField(name, schema, required) {
+  const type = schema.type;
+  const desc = schema.description || "";
+  const def = schema.default;
+  const isReq = required.includes(name);
+
+  let input = "";
+  if (type === "boolean") {
+    input = `<select name="${name}" data-type="boolean">
+      <option value="">(unset)</option>
+      <option value="true" ${def === true ? 'selected' : ''}>true</option>
+      <option value="false" ${def === false ? 'selected' : ''}>false</option>
+    </select>`;
+  } else if (schema.enum && Array.isArray(schema.enum)) {
+    input = `<select name="${name}" data-type="enum">
+      <option value="">(unset)</option>
+      ${schema.enum.map(v => `<option value="${v}" ${v === def ? 'selected' : ''}>${v}</option>`).join('')}
+    </select>`;
+  } else if (type === "integer" || type === "number") {
+    input = `<input type="number" name="${name}" data-type="${type}" placeholder="${desc.slice(0, 40)}" ${def != null ? `value="${def}"` : ''} ${schema.minimum != null ? `min="${schema.minimum}"` : ''} ${schema.maximum != null ? `max="${schema.maximum}"` : ''}>`;
+  } else if (type === "array") {
+    input = `<input type="text" name="${name}" data-type="array" placeholder="comma-separated values">`;
+  } else {
+    input = `<input type="text" name="${name}" data-type="string" placeholder="${desc.slice(0, 40)}" ${def != null ? `value="${def}"` : ''}>`;
+  }
+
+  return `<div class="form-field">
+    <label>${name}${isReq ? '<span class="req">*</span>' : ''}<span class="type">${type || 'string'}</span></label>
+    ${input}
+    ${desc ? `<div class="help">${desc}</div>` : ''}
+  </div>`;
+}
+
+function renderWorkspace() {
+  if (!state.activeTool) {
+    workspace.innerHTML = `<div class="empty-workspace">
+      <h2>Pick a tool</h2>
+      <p>Select one from the left panel to render its form.</p>
+    </div>`;
+    return;
+  }
+  const tool = state.tools.find(t => t.name === state.activeTool);
+  if (!tool) return;
+  const schema = tool.inputSchema || {};
+  const props = schema.properties || {};
+  const required = schema.required || [];
+  const propNames = Object.keys(props);
+
+  const formFields = propNames.length === 0
+    ? '<div style="color:var(--ink-faint);font-size:12px">No parameters — just click Run.</div>'
+    : propNames.map(n => renderField(n, props[n], required)).join('');
+
+  workspace.innerHTML = `<div class="tool-detail">
+    <h2><span class="tool-name-code">${tool.name}</span></h2>
+    <div class="tool-desc">${tool.description || ''}</div>
+    <form id="tool-form">
+      <div class="form-grid">${formFields}</div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">▶ Run</button>
+        <button type="button" class="btn ghost" id="reset-btn">Reset</button>
+        <div class="meta">POST <b>/api/admin/query</b></div>
+      </div>
+    </form>
+    <div id="result-container"></div>
+  </div>`;
+
+  document.getElementById("tool-form").addEventListener("submit", e => {
+    e.preventDefault();
+    runTool();
+  });
+  document.getElementById("reset-btn").addEventListener("click", () => {
+    document.getElementById("tool-form").reset();
+    state.result = null;
+    document.getElementById("result-container").innerHTML = "";
+  });
+}
+
+async function runTool() {
+  const form = document.getElementById("tool-form");
+  const args = {};
+  const fields = form.querySelectorAll("[name]");
+  for (const f of fields) {
+    const v = f.value.trim();
+    if (v === "") continue;
+    const t = f.dataset.type;
+    if (t === "boolean") args[f.name] = v === "true";
+    else if (t === "integer") args[f.name] = parseInt(v, 10);
+    else if (t === "number") args[f.name] = parseFloat(v);
+    else if (t === "array") args[f.name] = v.split(",").map(s => s.trim()).filter(Boolean);
+    else args[f.name] = v;
+  }
+
+  const container = document.getElementById("result-container");
+  container.innerHTML = `<div class="result-section">
+    <div class="result-header"><h3>Running…</h3></div>
+  </div>`;
+
+  try {
+    const res = await fetch("/api/admin/query", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "access_token": state.token
+      },
+      body: JSON.stringify({ tool: state.activeTool, args })
+    });
+    const data = await res.json();
+    state.result = data;
+    state.sortCol = null;
+    state.sortDir = 1;
+    state.expandedRows = new Set();
+    renderResult();
+  } catch (err) {
+    container.innerHTML = `<div class="result-section">
+      <div class="result-header"><h3>Result</h3><span class="pill pill-err">network error</span></div>
+      <div class="result-body"><pre class="result-json">${(err.message || err).toString()}</pre></div>
+    </div>`;
+  }
+}
+
+function detectRows(result) {
+  if (Array.isArray(result)) {
+    return result.length > 0 && typeof result[0] === "object" && result[0] !== null ? result : null;
+  }
+  if (result && typeof result === "object") {
+    for (const key of ["items", "results", "rows", "firms", "advisors", "nonprofits", "data", "matches", "alumni", "history"]) {
+      const v = result[key];
+      if (Array.isArray(v) && v.length > 0 && typeof v[0] === "object") return v;
+    }
+  }
+  return null;
+}
+
+function syntaxHL(json) {
+  return json.replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(\.\d+)?([eE][+\-]?\d+)?)/g, m => {
+    let cls = "number";
+    if (/^"/.test(m)) cls = /:$/.test(m) ? "key" : "string";
+    else if (/true|false/.test(m)) cls = "bool";
+    else if (/null/.test(m)) cls = "null";
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+function fmtCell(v) {
+  if (v === null || v === undefined) return { html: 'null', cls: 'null' };
+  if (typeof v === "boolean") return { html: v ? 'true' : 'false', cls: v ? 'bool-t' : 'bool-f' };
+  if (typeof v === "number") return { html: v.toLocaleString('en-US'), cls: 'num' };
+  if (typeof v === "object") return { html: escapeHtml(JSON.stringify(v)), cls: '' };
+  const s = String(v);
+  if (/^\d{4,8}$/.test(s) && s.length <= 7) {
+    return { html: escapeHtml(s), cls: '' };
+  }
+  if (/^https?:\/\//.test(s)) {
+    return { html: `<a href="${escapeHtml(s)}" target="_blank" rel="noopener">${escapeHtml(s)}</a>`, cls: '' };
+  }
+  return { html: escapeHtml(s), cls: '' };
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderResult() {
+  const data = state.result;
+  const container = document.getElementById("result-container");
+  const pill = data.ok
+    ? `<span class="pill pill-ok">● ok</span>`
+    : `<span class="pill pill-err">✕ error</span>`;
+  const duration = `<span class="duration">${data.duration_ms ?? '—'} ms</span>`;
+
+  const rows = data.ok ? detectRows(data.result) : null;
+  const view = state.view;
+
+  let bodyHtml = "";
+  if (!data.ok) {
+    bodyHtml = `<pre class="result-json">${escapeHtml(data.error || "Unknown error")}</pre>`;
+  } else if (view === "json" || !rows) {
+    const txt = JSON.stringify(data.result, null, 2);
+    bodyHtml = `<pre class="result-json">${syntaxHL(escapeHtml(txt))}</pre>`;
+  } else {
+    bodyHtml = renderTable(rows);
+  }
+
+  const tabsHtml = data.ok && rows
+    ? `<div class="view-tabs">
+        <button class="view-tab ${view === 'table' ? 'active' : ''}" data-view="table">Table (${rows.length})</button>
+        <button class="view-tab ${view === 'json' ? 'active' : ''}" data-view="json">JSON</button>
+        <button class="view-tab" id="download-csv">↓ CSV</button>
+      </div>` : '';
+
+  container.innerHTML = `<div class="result-section">
+    <div class="result-header">
+      <h3>Result</h3>
+      ${pill}
+      ${rows ? `<span class="pill pill-info">${rows.length} rows</span>` : ''}
+      ${duration}
+    </div>
+    ${tabsHtml}
+    <div class="result-body">${bodyHtml}</div>
+  </div>`;
+
+  container.querySelectorAll(".view-tab[data-view]").forEach(t => {
+    t.addEventListener("click", () => {
+      state.view = t.dataset.view;
+      renderResult();
+    });
+  });
+  const dl = document.getElementById("download-csv");
+  if (dl && rows) dl.addEventListener("click", () => downloadCsv(rows));
+
+  container.querySelectorAll(".result-table th").forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (state.sortCol === col) state.sortDir *= -1;
+      else { state.sortCol = col; state.sortDir = 1; }
+      renderResult();
+    });
+  });
+
+  container.querySelectorAll(".result-table tbody tr").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      tr.querySelectorAll("td").forEach(td => td.classList.toggle("expanded"));
+    });
+  });
+}
+
+function renderTable(rows) {
+  const cols = [];
+  const seen = new Set();
+  for (let i = 0; i < Math.min(rows.length, 50); i++) {
+    for (const k of Object.keys(rows[i])) {
+      if (!seen.has(k)) { seen.add(k); cols.push(k); }
+    }
+  }
+  let sorted = rows;
+  if (state.sortCol) {
+    sorted = [...rows].sort((a, b) => {
+      const av = a[state.sortCol], bv = b[state.sortCol];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * state.sortDir;
+      return String(av).localeCompare(String(bv)) * state.sortDir;
+    });
+  }
+  const head = cols.map(c => {
+    const arrow = state.sortCol === c ? `<span class="sort-arrow">${state.sortDir > 0 ? '▲' : '▼'}</span>` : '';
+    return `<th data-col="${escapeHtml(c)}">${escapeHtml(c)}${arrow}</th>`;
+  }).join("");
+  const body = sorted.slice(0, 500).map(row => {
+    const tds = cols.map(c => {
+      const { html, cls } = fmtCell(row[c]);
+      return `<td class="${cls}" title="${escapeHtml(String(row[c] ?? ''))}">${html}</td>`;
+    }).join("");
+    return `<tr>${tds}</tr>`;
+  }).join("");
+  const cap = sorted.length > 500
+    ? `<div class="row-count">Showing <b>500</b> of <b>${sorted.length}</b> rows · download CSV for full set</div>`
+    : `<div class="row-count">Showing <b>${sorted.length}</b> rows</div>`;
+  return `<div class="result-table-wrap"><table class="result-table">
+    <thead><tr>${head}</tr></thead>
+    <tbody>${body}</tbody>
+  </table></div>${cap}`;
+}
+
+function downloadCsv(rows) {
+  if (!rows || rows.length === 0) return;
+  const cols = Object.keys(rows[0]);
+  const esc = (v) => {
+    if (v == null) return "";
+    const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [cols.join(",")];
+  for (const r of rows) lines.push(cols.map(c => esc(r[c])).join(","));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${state.activeTool}-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+connectBtn.addEventListener("click", () => {
+  state.token = tokenEl.value.trim();
+  fetchTools();
+});
+tokenEl.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    state.token = tokenEl.value.trim();
+    fetchTools();
+  }
+});
+logoutBtn.addEventListener("click", () => {
+  localStorage.removeItem("vistamark_token");
+  state.token = "";
+  state.tools = [];
+  state.activeTool = null;
+  state.result = null;
+  tokenEl.value = "";
+  authStatus.textContent = "Not connected";
+  logoutBtn.style.display = "none";
+  renderToolList();
+  renderWorkspace();
+});
+
+renderToolList();
+if (state.token) fetchTools();
+</script>
+</body>
+</html>
