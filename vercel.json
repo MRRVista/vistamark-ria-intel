@@ -8,6 +8,12 @@
     "api/admin/refresh-irs-bmf.ts": {
       "maxDuration": 300
     },
+    "api/admin/query.ts": {
+      "maxDuration": 30
+    },
+    "api/admin/stats.ts": {
+      "maxDuration": 15
+    },
     "api/cron/ingest-adv.ts": {
       "maxDuration": 300
     },
