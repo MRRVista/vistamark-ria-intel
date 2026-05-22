@@ -1,132 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vistamark RIA Intel</title>
-  <style>
-    :root {
-      --bg: #0a0e1a;
-      --card: #131826;
-      --border: #1f2937;
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --accent: #60a5fa;
-      --ok: #10b981;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    .card {
-      max-width: 640px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 2.5rem;
-    }
-    h1 {
-      margin: 0 0 0.5rem 0;
-      font-size: 1.75rem;
-      font-weight: 600;
-    }
-    .subtitle {
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-      font-size: 0.95rem;
-    }
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.25rem 0.75rem;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 999px;
-      font-size: 0.85rem;
-      color: var(--ok);
-      margin-bottom: 1.5rem;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--ok);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    .endpoint {
-      background: rgba(96, 165, 250, 0.08);
-      border: 1px solid rgba(96, 165, 250, 0.2);
-      border-radius: 6px;
-      padding: 0.75rem 1rem;
-      font-family: "SF Mono", Menlo, Consolas, monospace;
-      font-size: 0.85rem;
-      color: var(--accent);
-      margin: 1rem 0;
-      word-break: break-all;
-    }
-    .tools {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-    .tool {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 0.5rem 0.75rem;
-      font-family: "SF Mono", Menlo, Consolas, monospace;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    .footer {
-      margin-top: 2rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vistamark Intel</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fb; color: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.card { background: white; border-radius: 12px; padding: 40px 44px; max-width: 560px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px #e2e6eb; }
+h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.3px; }
+.tagline { color: #64748b; font-size: 14px; margin-bottom: 28px; }
+.row { margin-bottom: 24px; }
+.row h3 { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+.row p { font-size: 14px; line-height: 1.55; color: #334155; }
+.cta { display: inline-block; background: #0c4a6e; color: white; padding: 10px 22px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; margin-top: 8px; }
+.cta:hover { background: #075985; }
+code { background: #f1f5f9; padding: 1px 6px; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size: 13px; }
+.foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; }
+.foot a { color: #475569; text-decoration: none; }
+.foot a:hover { color: #0c4a6e; }
+</style>
 </head>
 <body>
-  <div class="card">
-    <div class="status"><span class="dot"></span> Server online</div>
-    <h1>Vistamark RIA Intel</h1>
-    <p class="subtitle">SEC Form ADV intelligence database exposed as an MCP server. Built and operated by Randall Stephens.</p>
-    
-    <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 0.5rem;">MCP endpoint:</p>
-    <div class="endpoint">POST /api/mcp</div>
-    
-    <p style="color: var(--muted); font-size: 0.9rem; margin: 1.5rem 0 0.5rem 0;">Available tools:</p>
-    <div class="tools">
-      <div class="tool">search_rias</div>
-      <div class="tool">get_ria_profile</div>
-      <div class="tool">search_advisors</div>
-      <div class="tool">find_alumni</div>
-      <div class="tool">get_aum_history</div>
-      <div class="tool">firms_using_custodian</div>
-      <div class="tool">top_rias_by</div>
-      <div class="tool">database_status</div>
-    </div>
-    
-    <div class="footer">
-      <a href="https://github.com/MRRVista/vistamark-ria-intel">Source</a> &middot; Internal &mdash; Vistamark Investments LLC
-    </div>
+<div class="card">
+  <h1>Vistamark Intel</h1>
+  <p class="tagline">SEC Form ADV + IRS EO BMF + ProPublica 990s, one MCP server.</p>
+
+  <div class="row">
+    <h3>Query Console</h3>
+    <p>Browse all RIA and nonprofit data interactively. Auto-discovers every MCP tool, generates forms, renders results.</p>
+    <a class="cta" href="/query.html">Open Console →</a>
   </div>
+
+  <div class="row">
+    <h3>MCP Endpoint</h3>
+    <p>JSON-RPC 2.0 at <code>/api/mcp</code>. Send <code>Authorization: Bearer &lt;ACCESS_TOKEN&gt;</code> or the <code>access_token</code> header. Connect from Claude.ai or any MCP client.</p>
+  </div>
+
+  <div class="foot">
+    Internal — Vistamark Investments LLC &middot;
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source</a>
+  </div>
+</div>
 </body>
 </html>
