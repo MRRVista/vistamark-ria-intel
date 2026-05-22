@@ -208,11 +208,6 @@ export const ingestRuns = pgTable("ingest_runs", {
   errorMessage: text("error_message"),
 });
 
-// ─── Phase 1 — IRS Exempt Organizations Business Master File (EO BMF) ──────
-// One row per tax-exempt organization. Sourced from
-// https://www.irs.gov/charities-non-profits/exempt-organizations-business-master-file-extract-eo-bmf
-// Refreshed monthly via api/cron/refresh-irs-bmf. ProPublica Nonprofit Explorer
-// is a separate passthrough (no table — see lib/propublica/client.ts).
 export const nonprofits = pgTable(
   "nonprofits",
   {
@@ -256,6 +251,76 @@ export const nonprofits = pgTable(
     stateSubsecIdx: index("nonprofits_state_subsec_idx").on(t.state, t.subsection),
   })
 );
+
+// Phase 2 — DOL Form 5500 ERISA plan filings. One row per annual filing
+// (keyed by ACK_ID). Sourced from https://askebsa.dol.gov/FOIA%20Files/ annual
+// bulk CSVs. Refreshed weekly via api/cron/refresh-dol-5500.
+export const plans = pgTable(
+  "plans",
+  {
+    ackId: varchar("ack_id", { length: 40 }).primaryKey(),
+    formPlanYearBeginDate: date("form_plan_year_begin_date"),
+    formTaxPrd: varchar("form_tax_prd", { length: 8 }),
+    typePlanEntityCd: integer("type_plan_entity_cd"),
+    typeDfePlanEntityCd: integer("type_dfe_plan_entity_cd"),
+    initialFilingInd: boolean("initial_filing_ind"),
+    amendedInd: boolean("amended_ind"),
+    finalFilingInd: boolean("final_filing_ind"),
+    shortPlanYrInd: boolean("short_plan_yr_ind"),
+    collectiveBargainInd: boolean("collective_bargain_ind"),
+    planYear: integer("plan_year"),
+    planName: text("plan_name"),
+    sponsDfePn: varchar("spons_dfe_pn", { length: 8 }),
+    sponsDfeEin: varchar("spons_dfe_ein", { length: 12 }),
+    sponsDfeName: text("spons_dfe_name"),
+    sponsDfeDbaName: text("spons_dfe_dba_name"),
+    sponsDfeMailAddr1: text("spons_dfe_mail_addr1"),
+    sponsDfeMailCity: varchar("spons_dfe_mail_city", { length: 64 }),
+    sponsDfeMailState: varchar("spons_dfe_mail_state", { length: 4 }),
+    sponsDfeMailZip: varchar("spons_dfe_mail_zip", { length: 16 }),
+    sponsDfePhone: varchar("spons_dfe_phone", { length: 20 }),
+    adminName: text("admin_name"),
+    adminEin: varchar("admin_ein", { length: 12 }),
+    adminPhone: varchar("admin_phone", { length: 20 }),
+    adminAddr1: text("admin_addr1"),
+    adminCity: varchar("admin_city", { length: 64 }),
+    adminState: varchar("admin_state", { length: 4 }),
+    adminZip: varchar("admin_zip", { length: 16 }),
+    totActivePartcpCnt: integer("tot_active_partcp_cnt"),
+    totPartcpBoyCnt: integer("tot_partcp_boy_cnt"),
+    rtrdSepPartcpRcvgCnt: integer("rtrd_sep_partcp_rcvg_cnt"),
+    rtrdSepPartcpFutCnt: integer("rtrd_sep_partcp_fut_cnt"),
+    pensionPlanFeatureCodes: text("pension_plan_feature_codes"),
+    welfarePlanFeatureCodes: text("welfare_plan_feature_codes"),
+    schAAttachedInd: boolean("sch_a_attached_ind"),
+    schCAttachedInd: boolean("sch_c_attached_ind"),
+    schDAttachedInd: boolean("sch_d_attached_ind"),
+    schGAttachedInd: boolean("sch_g_attached_ind"),
+    schHAttachedInd: boolean("sch_h_attached_ind"),
+    schIAttachedInd: boolean("sch_i_attached_ind"),
+    schRAttachedInd: boolean("sch_r_attached_ind"),
+    schMbAttachedInd: boolean("sch_mb_attached_ind"),
+    schSbAttachedInd: boolean("sch_sb_attached_ind"),
+    totAssetsBoyAmt: bigint("tot_assets_boy_amt", { mode: "number" }),
+    totAssetsEoyAmt: bigint("tot_assets_eoy_amt", { mode: "number" }),
+    netAssetsBoyAmt: bigint("net_assets_boy_amt", { mode: "number" }),
+    netAssetsEoyAmt: bigint("net_assets_eoy_amt", { mode: "number" }),
+    dateReceived: date("date_received"),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    sponsorEinIdx: index("plans_sponsor_ein_idx").on(t.sponsDfeEin),
+    sponsorNameIdx: index("plans_sponsor_name_idx").on(t.sponsDfeName),
+    adminEinIdx: index("plans_admin_ein_idx").on(t.adminEin),
+    stateIdx: index("plans_state_idx").on(t.sponsDfeMailState),
+    planYearIdx: index("plans_plan_year_idx").on(t.planYear),
+    assetsEoyIdx: index("plans_assets_eoy_idx").on(t.totAssetsEoyAmt),
+    stateYearIdx: index("plans_state_year_idx").on(t.sponsDfeMailState, t.planYear),
+  })
+);
+
+export type Plan = typeof plans.$inferSelect;
+export type PlanInsert = typeof plans.$inferInsert;
 
 export type Firm = typeof firms.$inferSelect;
 export type FirmInsert = typeof firms.$inferInsert;
