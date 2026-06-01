@@ -29,6 +29,14 @@ import {
   dolPlanSearch,
   dolPlanLookup,
 } from "../dol-5500/queries";
+import {
+  endowmentLookup,
+  endowmentSearch,
+  endowmentPeerSet,
+} from "../ipeds/queries";
+import {
+  nacuboBenchmarkLookup,
+} from "../nacubo/queries";
 
 export interface ToolDef {
   name: string;
@@ -50,7 +58,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the RIA database: number of firms, latest SEC feed ingested, last successful ingestion run.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -73,5 +81,38 @@ const RETIREMENT_TOOLS: ToolDef[] = [
   { name: "dol_plan_lookup", description: "Look up a specific DOL Form 5500 plan filing. Provide ackId (DOL's filing identifier) for a single filing, or (sponsorEin + planNumber) for that plan's full filing history across years.", inputSchema: { type: "object", properties: { ackId: { type: "string" }, sponsorEin: { type: "string" }, planNumber: { type: "string" }, planYear: { type: "number" } } }, handler: dolPlanLookup },
 ];
 
-export const TOOLS: ToolDef[] = [...RIA_TOOLS, ...NONPROFIT_TOOLS, ...MACRO_TOOLS, ...RETIREMENT_TOOLS];
+const ENDOWMENT_TOOLS: ToolDef[] = [
+  {
+    name: "endowment_search",
+    description: "Search U.S. higher education endowments by state, control (1=Public, 2=Private nonprofit, 3=Private for-profit), sector (1-9), endowment size range, and institution name. Returns institutions ranked by end-of-year endowment market value. Source: IPEDS Finance Survey Part H — covers all ~6,400 Title IV institutions back to FY 2003-04. Defaults to most recent FY available.",
+    inputSchema: { type: "object", properties: { state: { type: "string" }, control: { type: "number" }, sector: { type: "number" }, minEndowment: { type: "number" }, maxEndowment: { type: "number" }, fyear: { type: "number" }, nameContains: { type: "string" }, sortBy: { type: "string", enum: ["market_value_eoy", "market_value_boy", "name", "fyear"], default: "market_value_eoy" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 50, maximum: 500 }, offset: { type: "number", default: 0 } } },
+    handler: endowmentSearch,
+  },
+  {
+    name: "endowment_lookup",
+    description: "Look up a single institution's endowment history. Provide unitid (IPEDS unique identifier) or instnm (best fuzzy match wins). Returns full institution metadata plus time series of endowment market value beginning-of-year, end-of-year, contributions, net investment return, withdrawals, and other adjustments. Optional fyear filter to scope to one year.",
+    inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" }, fyear: { type: "number" } } },
+    handler: endowmentLookup,
+  },
+  {
+    name: "endowment_peer_set",
+    description: "Given a target institution (unitid or instnm), find peer institutions with similar-sized endowments in the same fiscal year. Default size band is ±25% of target endowment. Optional sameControl=true restricts peers to the same sector (public, private nonprofit, etc.). Useful for OCIO benchmarking.",
+    inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" }, fyear: { type: "number" }, sizeBandPct: { type: "number", default: 25 }, sameControl: { type: "boolean" }, limit: { type: "number", default: 25, maximum: 100 } } },
+    handler: endowmentPeerSet,
+  },
+  {
+    name: "nacubo_benchmark_lookup",
+    description: "Return NACUBO public NCSE/NTSE/NES benchmark aggregates for a given fiscal year and cohort. Cohorts: 'all' (default), 'over_5b', '1b_5b', '500m_1b', '250m_500m', '100m_250m', '50m_100m', 'under_50m', 'public', 'private_indep'. Returns 1-yr/3-yr/5-yr/10-yr average returns, asset allocation, spending rate, total assets, and median endowment value. Source: NACUBO public press releases — institution-specific data is paywalled by NACUBO.",
+    inputSchema: { type: "object", properties: { fyear: { type: "number" }, cohort: { type: "string" }, minFyear: { type: "number" }, maxFyear: { type: "number" }, limit: { type: "number", default: 50, maximum: 500 } } },
+    handler: nacuboBenchmarkLookup,
+  },
+];
+
+export const TOOLS: ToolDef[] = [
+  ...RIA_TOOLS,
+  ...NONPROFIT_TOOLS,
+  ...MACRO_TOOLS,
+  ...RETIREMENT_TOOLS,
+  ...ENDOWMENT_TOOLS,
+];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

@@ -252,9 +252,6 @@ export const nonprofits = pgTable(
   })
 );
 
-// Phase 2 — DOL Form 5500 ERISA plan filings. One row per annual filing
-// (keyed by ACK_ID). Sourced from https://askebsa.dol.gov/FOIA%20Files/ annual
-// bulk CSVs. Refreshed weekly via api/cron/refresh-dol-5500.
 export const plans = pgTable(
   "plans",
   {
@@ -319,6 +316,78 @@ export const plans = pgTable(
   })
 );
 
+// Phase 3 — IPEDS institutional directory + endowment market values + NACUBO public benchmarks.
+export const ipedsInstitutions = pgTable(
+  "ipeds_institutions",
+  {
+    unitid: integer("unitid").primaryKey(),
+    instnm: text("instnm").notNull(),
+    city: varchar("city", { length: 128 }),
+    state: varchar("state", { length: 4 }),
+    zip: varchar("zip", { length: 16 }),
+    sector: integer("sector"),
+    control: integer("control"),
+    iclevel: integer("iclevel"),
+    obereg: integer("obereg"),
+    webaddr: text("webaddr"),
+    closedDate: varchar("closed_date", { length: 16 }),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    nameIdx: index("ipeds_inst_name_idx").on(t.instnm),
+    stateIdx: index("ipeds_inst_state_idx").on(t.state),
+    sectorIdx: index("ipeds_inst_sector_idx").on(t.sector),
+    controlIdx: index("ipeds_inst_control_idx").on(t.control),
+  })
+);
+
+export const endowments = pgTable(
+  "endowments",
+  {
+    unitid: integer("unitid").notNull(),
+    fyear: integer("fyear").notNull(),
+    fileType: varchar("file_type", { length: 4 }).notNull(),
+    marketValueBoy: bigint("market_value_boy", { mode: "number" }),
+    marketValueEoy: bigint("market_value_eoy", { mode: "number" }),
+    contributions: bigint("contributions", { mode: "number" }),
+    netInvestmentReturn: bigint("net_investment_return", { mode: "number" }),
+    withdrawals: bigint("withdrawals", { mode: "number" }),
+    otherAdjustments: bigint("other_adjustments", { mode: "number" }),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.unitid, t.fyear] }),
+    fyearIdx: index("endowments_fyear_idx").on(t.fyear),
+    eoyIdx: index("endowments_eoy_idx").on(t.marketValueEoy),
+    unitidIdx: index("endowments_unitid_idx").on(t.unitid),
+  })
+);
+
+export const nacuboBenchmarks = pgTable(
+  "nacubo_benchmarks",
+  {
+    fyear: integer("fyear").notNull(),
+    cohort: varchar("cohort", { length: 64 }).notNull(),
+    cohortCount: integer("cohort_count"),
+    totalAssets: bigint("total_assets", { mode: "number" }),
+    medianValue: bigint("median_value", { mode: "number" }),
+    return1y: numeric("return_1y", { precision: 6, scale: 3 }),
+    return3y: numeric("return_3y", { precision: 6, scale: 3 }),
+    return5y: numeric("return_5y", { precision: 6, scale: 3 }),
+    return10y: numeric("return_10y", { precision: 6, scale: 3 }),
+    spendingRate: numeric("spending_rate", { precision: 6, scale: 3 }),
+    spendingAmount: bigint("spending_amount", { mode: "number" }),
+    assetAllocJson: text("asset_alloc_json"),
+    source: varchar("source", { length: 32 }),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.fyear, t.cohort] }),
+    fyearIdx: index("nacubo_benchmarks_fyear_idx").on(t.fyear),
+    cohortIdx: index("nacubo_benchmarks_cohort_idx").on(t.cohort),
+  })
+);
+
 export type Plan = typeof plans.$inferSelect;
 export type PlanInsert = typeof plans.$inferInsert;
 
@@ -331,3 +400,9 @@ export type FirmCustodian = typeof firmCustodians.$inferSelect;
 export type PrivateFund = typeof privateFunds.$inferSelect;
 export type Nonprofit = typeof nonprofits.$inferSelect;
 export type NonprofitInsert = typeof nonprofits.$inferInsert;
+export type IpedsInstitution = typeof ipedsInstitutions.$inferSelect;
+export type IpedsInstitutionInsert = typeof ipedsInstitutions.$inferInsert;
+export type Endowment = typeof endowments.$inferSelect;
+export type EndowmentInsert = typeof endowments.$inferInsert;
+export type NacuboBenchmark = typeof nacuboBenchmarks.$inferSelect;
+export type NacuboBenchmarkInsert = typeof nacuboBenchmarks.$inferInsert;
