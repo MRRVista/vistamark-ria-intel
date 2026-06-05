@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const mig = await runMigrations();
       if (!mig.ok) {
         console.error("[refresh-nacubo] Bootstrap failed:", mig.error);
-        res.status(500).json({ ok: false, stage: "bootstrap", ...mig });
+        res.status(500).json({ stage: "bootstrap", ...mig });
         return;
       }
     }
