@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireCron } from "../../lib/auth";
 import { ingestNacuboBenchmarks } from "../../lib/nacubo/ingest";
+import { runMigrations, v04TablesExist } from "../../lib/migrate";
 
 /**
- * Annual cron: re-seed NACUBO benchmarks. The actual update of the seed
- * data in lib/nacubo/data.ts happens by code commit each February when
- * NACUBO releases the new NCSE study — this cron just ensures the DB stays
- * in sync if anything has shifted.
+ * Annual cron: re-seed NACUBO benchmarks. Auto-bootstraps the v0.4.0 schema
+ * if not present (safety net in case this is the first endpoint hit after
+ * a fresh deploy).
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cron = requireCron(req);
@@ -15,6 +15,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   try {
+    if (!(await v04TablesExist())) {
+      console.log("[refresh-nacubo] Bootstrap: v0.4.0 tables missing; running migrations");
+      const mig = await runMigrations();
+      if (!mig.ok) {
+        console.error("[refresh-nacubo] Bootstrap failed:", mig.error);
+        res.status(500).json({ ok: false, stage: "bootstrap", ...mig });
+        return;
+      }
+    }
     const result = await ingestNacuboBenchmarks();
     res.status(200).json({ ok: true, ...result });
   } catch (err) {

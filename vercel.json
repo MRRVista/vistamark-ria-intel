@@ -10,8 +10,8 @@
     "api/cron/ingest-adv.ts": { "maxDuration": 300 },
     "api/cron/refresh-irs-bmf.ts": { "maxDuration": 300 },
     "api/cron/refresh-dol-5500.ts": { "maxDuration": 300 },
-    "api/cron/refresh-ipeds.ts": { "maxDuration": 300 },
-    "api/cron/refresh-nacubo.ts": { "maxDuration": 60 }
+    "api/cron/refresh-ipeds.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
+    "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" }
   },
   "crons": [
     { "path": "/api/cron/ingest-adv", "schedule": "0 6 * * 1" },
