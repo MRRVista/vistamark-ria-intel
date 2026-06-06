@@ -332,34 +332,40 @@ async function upsertEndowments(rows: EndowmentInsert[]): Promise<void> {
 
 /**
  * Pick the next (year, fileType) tuple to ingest. Strategy: walk through the
- * default backfill list of (year, F2), (year, F1A) pairs in chronological
- * order, returning the first one without a successful run yet. If all are
- * done, return the most recent year so the cron keeps it fresh.
+ * default backfill list of (year, F2), (year, F1A) pairs from most recent
+ * back to oldest, returning the first one without a successful run yet.
+ *
+ * extraSkip lets the caller mark sources to skip within the current session
+ * (e.g. ones that just 404'd or errored this run). Pass it as a set of
+ * source identifiers like "ipeds/f2/2024".
+ *
+ * Returns null when nothing left to try.
  */
-export async function pickNextFinance(): Promise<{ fyear: number; fileType: IpedsFinanceFile }> {
+export async function pickNextFinance(
+  extraSkip?: Set<string>
+): Promise<{ fyear: number; fileType: IpedsFinanceFile } | null> {
   if (!db) throw new Error("Database not configured");
   const okRuns = await db.execute(sql`
     SELECT source FROM ingest_runs
-    WHERE status = 'ok' AND source LIKE ${`${SOURCE_PREFIX}/%`}
+    WHERE status = 'ok' AND source LIKE ${`${SOURCE_PREFIX}/%`} AND firms_inserted > 0
   `);
   const done = new Set<string>();
   for (const r of (okRuns as any).rows ?? []) {
     done.add(String(r.source));
   }
 
-  // Try the most recent provisional year first, then walk backwards.
   const years = [...DEFAULT_FINANCE_YEARS].reverse();
   const files: IpedsFinanceFile[] = ["F2", "F1A"];
 
   for (const fyear of years) {
     for (const fileType of files) {
       const source = `${SOURCE_PREFIX}/${fileType.toLowerCase()}/${fyear}`;
-      if (!done.has(source)) return { fyear, fileType };
+      if (done.has(source)) continue;
+      if (extraSkip?.has(source)) continue;
+      return { fyear, fileType };
     }
   }
-
-  // All caught up — re-ingest the most recent year to pick up revisions.
-  return { fyear: years[0]!, fileType: "F2" };
+  return null;
 }
 
 export async function isDirectoryNeeded(): Promise<boolean> {
