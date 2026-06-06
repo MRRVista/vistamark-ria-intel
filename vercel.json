@@ -7,6 +7,7 @@
     "api/admin/refresh-dol-5500.ts": { "maxDuration": 300 },
     "api/admin/refresh-ipeds.ts": { "maxDuration": 300 },
     "api/admin/refresh-nacubo.ts": { "maxDuration": 60 },
+    "api/admin/bootstrap-once.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
     "api/cron/ingest-adv.ts": { "maxDuration": 300 },
     "api/cron/refresh-irs-bmf.ts": { "maxDuration": 300 },
     "api/cron/refresh-dol-5500.ts": { "maxDuration": 300 },
