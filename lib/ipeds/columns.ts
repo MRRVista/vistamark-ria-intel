@@ -12,7 +12,7 @@
  * Directory file:
  *   HD{YYYY}       — Institution metadata, keyed by UNITID
  *
- * Year naming: "2022-23" → F2223; FY ends June 30 of second year (FY23).
+ * Year naming: "2022-23" -> F2223; FY ends June 30 of second year (FY23).
  *
  * Provisional FY 2023-24 data is currently available; final FY 2022-23 and back
  * through FY 2003-04 are also available. Earlier finance files use a different
@@ -38,14 +38,14 @@ const IPEDS_BASE_URL =
 export type IpedsFinanceFile = "F2" | "F1A" | "F3";
 
 export function financeUrl(fyear: number, fileType: IpedsFinanceFile): string {
-  // fyear = the calendar year the FY ENDS in (e.g. 2023 → academic year 2022-23 → F2223)
+  // fyear = the calendar year the FY ENDS in (e.g. 2023 -> academic year 2022-23 -> F2223)
   const yy1 = String((fyear - 1) % 100).padStart(2, "0");
   const yy2 = String(fyear % 100).padStart(2, "0");
   return `${IPEDS_BASE_URL}/F${yy1}${yy2}_${fileType}.zip`;
 }
 
 export function directoryUrl(year: number): string {
-  // year is the calendar year (e.g. 2023 → HD2023.zip)
+  // year is the calendar year (e.g. 2023 -> HD2023.zip)
   return `${IPEDS_BASE_URL}/HD${year}.zip`;
 }
 
@@ -74,10 +74,31 @@ export const ICLEVEL_LABEL: Record<number, string> = {
   3: "Less than 2-year",
 };
 
+/**
+ * Normalize a header field name by stripping BOM/zero-width chars, quotes,
+ * surrounding whitespace, and upper-casing. IPEDS files have historically
+ * been Windows-1252/Latin1 but recent provisional files have shown UTF-8
+ * BOM bytes (0xEF 0xBB 0xBF) at the start which, after Latin1 decoding,
+ * appear as the three Latin-1 chars 0xEF 0xBB 0xBF (U+00EF U+00BB U+00BF).
+ * If we don't strip those, the first column (UNITID) gets indexed under
+ * the wrong key and every record-mapper call returns null.
+ */
+function normalizeHeader(s: string): string {
+  return s
+    // UTF-8 BOM read as native UTF-16 char
+    .replace(/^\uFEFF/, "")
+    // UTF-8 BOM read as three Latin-1 chars (very common with this decoder)
+    .replace(/^\u00EF\u00BB\u00BF/, "")
+    // Stray surrounding double quotes (some IPEDS years quote the header row)
+    .replace(/^"+|"+$/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 export function buildHeaderIndex(headerRow: string[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (let i = 0; i < headerRow.length; i++) {
-    const name = headerRow[i]!.trim().toUpperCase();
+    const name = normalizeHeader(headerRow[i] ?? "");
     if (name) map[name] = i;
   }
   return map;
@@ -94,7 +115,7 @@ export function field(
     if (i == null) continue;
     const v = row[i];
     if (v == null) continue;
-    const t = v.trim();
+    const t = v.trim().replace(/^"+|"+$/g, "");
     if (t !== "" && t !== ".") return t;
   }
   return null;

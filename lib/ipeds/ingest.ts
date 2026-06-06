@@ -49,6 +49,9 @@ export interface IngestResult {
   url: string;
   rowsProcessed: number;
   rowsUpserted: number;
+  rowsSkippedNoKey: number;
+  headerSample: string[];
+  firstRowSample: string[];
   durationMs: number;
 }
 
@@ -71,11 +74,6 @@ async function downloadCsv(url: string): Promise<Buffer> {
   return chosen.getData();
 }
 
-function* streamRows(buffer: Buffer): Generator<string[], void, unknown> {
-  // Helper would be cleaner as a generator but we keep ingest inline; not used.
-  return;
-}
-
 export async function ingestDirectory(year: number): Promise<IngestResult> {
   if (!db) throw new Error("Database not configured");
   const start = Date.now();
@@ -90,11 +88,14 @@ export async function ingestDirectory(year: number): Promise<IngestResult> {
 
   let rowsProcessed = 0;
   let rowsUpserted = 0;
+  let rowsSkippedNoKey = 0;
+  let headerSample: string[] = [];
+  let firstRowSample: string[] = [];
 
   try {
     const csvBuffer = await downloadCsv(url);
     const state = newStreamState();
-    const decoder = new TextDecoder("latin1"); // HD files use Windows-1252 / Latin1
+    const decoder = new TextDecoder("latin1");
     let headerIndex: Record<string, number> | null = null;
     let batch: IpedsInstitutionInsert[] = [];
 
@@ -104,12 +105,17 @@ export async function ingestDirectory(year: number): Promise<IngestResult> {
       const text = decoder.decode(slice, { stream: true });
       consumeCsvChunk(state, text, (row) => {
         if (!headerIndex) {
+          headerSample = row.slice(0, 10).map((c) => c.slice(0, 32));
           headerIndex = buildHeaderIndex(row);
           return;
         }
         rowsProcessed++;
+        if (firstRowSample.length === 0) {
+          firstRowSample = row.slice(0, 10).map((c) => c.slice(0, 32));
+        }
         const record = hdRowToRecord(row, headerIndex);
         if (record) batch.push(record);
+        else rowsSkippedNoKey++;
       });
       while (batch.length >= BATCH_SIZE) {
         const chunk = batch.splice(0, BATCH_SIZE);
@@ -119,12 +125,17 @@ export async function ingestDirectory(year: number): Promise<IngestResult> {
     }
     finishCsvStream(state, (row) => {
       if (!headerIndex) {
+        headerSample = row.slice(0, 10).map((c) => c.slice(0, 32));
         headerIndex = buildHeaderIndex(row);
         return;
       }
       rowsProcessed++;
+      if (firstRowSample.length === 0) {
+        firstRowSample = row.slice(0, 10).map((c) => c.slice(0, 32));
+      }
       const record = hdRowToRecord(row, headerIndex);
       if (record) batch.push(record);
+      else rowsSkippedNoKey++;
     });
     if (batch.length > 0) {
       await upsertInstitutions(batch);
@@ -142,7 +153,16 @@ export async function ingestDirectory(year: number): Promise<IngestResult> {
       })
       .where(sql`${ingestRuns.id} = ${runId}`);
 
-    return { source, url, rowsProcessed, rowsUpserted, durationMs: Date.now() - start };
+    return {
+      source,
+      url,
+      rowsProcessed,
+      rowsUpserted,
+      rowsSkippedNoKey,
+      headerSample,
+      firstRowSample,
+      durationMs: Date.now() - start,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db
@@ -176,6 +196,9 @@ export async function ingestFinance(
 
   let rowsProcessed = 0;
   let rowsUpserted = 0;
+  let rowsSkippedNoKey = 0;
+  let headerSample: string[] = [];
+  let firstRowSample: string[] = [];
 
   try {
     const csvBuffer = await downloadCsv(url);
@@ -190,12 +213,17 @@ export async function ingestFinance(
       const text = decoder.decode(slice, { stream: true });
       consumeCsvChunk(state, text, (row) => {
         if (!headerIndex) {
+          headerSample = row.slice(0, 10).map((c) => c.slice(0, 32));
           headerIndex = buildHeaderIndex(row);
           return;
         }
         rowsProcessed++;
+        if (firstRowSample.length === 0) {
+          firstRowSample = row.slice(0, 10).map((c) => c.slice(0, 32));
+        }
         const record = financeRowToRecord(row, headerIndex, fyear, fileType);
         if (record) batch.push(record);
+        else rowsSkippedNoKey++;
       });
       while (batch.length >= BATCH_SIZE) {
         const chunk = batch.splice(0, BATCH_SIZE);
@@ -205,12 +233,17 @@ export async function ingestFinance(
     }
     finishCsvStream(state, (row) => {
       if (!headerIndex) {
+        headerSample = row.slice(0, 10).map((c) => c.slice(0, 32));
         headerIndex = buildHeaderIndex(row);
         return;
       }
       rowsProcessed++;
+      if (firstRowSample.length === 0) {
+        firstRowSample = row.slice(0, 10).map((c) => c.slice(0, 32));
+      }
       const record = financeRowToRecord(row, headerIndex, fyear, fileType);
       if (record) batch.push(record);
+      else rowsSkippedNoKey++;
     });
     if (batch.length > 0) {
       await upsertEndowments(batch);
@@ -228,7 +261,16 @@ export async function ingestFinance(
       })
       .where(sql`${ingestRuns.id} = ${runId}`);
 
-    return { source, url, rowsProcessed, rowsUpserted, durationMs: Date.now() - start };
+    return {
+      source,
+      url,
+      rowsProcessed,
+      rowsUpserted,
+      rowsSkippedNoKey,
+      headerSample,
+      firstRowSample,
+      durationMs: Date.now() - start,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await db
@@ -322,9 +364,14 @@ export async function pickNextFinance(): Promise<{ fyear: number; fileType: Iped
 
 export async function isDirectoryNeeded(): Promise<boolean> {
   if (!db) return false;
+  // Treat the directory as "done" only if a successful run is on file AND
+  // it actually upserted some rows. The earlier v0.4.2 run created an 'ok'
+  // ingest_runs entry with 0 inserted rows (BOM-corrupted headers), which
+  // would otherwise cause this function to wrongly return false.
   const okRuns = await db.execute(sql`
-    SELECT source FROM ingest_runs
+    SELECT firms_inserted FROM ingest_runs
     WHERE status = 'ok' AND source = ${`${SOURCE_PREFIX}/hd/${DEFAULT_DIRECTORY_YEAR}`}
+      AND firms_inserted > 0
     LIMIT 1
   `);
   return ((okRuns as any).rows ?? []).length === 0;
