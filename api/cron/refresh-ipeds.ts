@@ -52,6 +52,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
     const next = await pickNextFinance();
+    if (!next) {
+      res.status(200).json({
+        ok: true,
+        stage: "finance",
+        skipped: "backfill complete; nothing to ingest this tick",
+      });
+      return;
+    }
     const result = await ingestFinance(next.fyear, next.fileType);
     res.status(200).json({ ok: true, stage: "finance", ...result });
   } catch (err) {

@@ -15,12 +15,12 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Manual IPEDS ingest trigger. Bearer CRON_SECRET required.
  *
  * Usage:
- *   POST /api/admin/refresh-ipeds                       → next (year, file) in backfill
- *   POST /api/admin/refresh-ipeds?mode=directory        → ingest directory file (HD2023)
+ *   POST /api/admin/refresh-ipeds                       -> next (year, file) in backfill
+ *   POST /api/admin/refresh-ipeds?mode=directory        -> ingest directory file (HD2023)
  *   POST /api/admin/refresh-ipeds?mode=directory&year=2024
- *   POST /api/admin/refresh-ipeds?fyear=2023&file=F2    → specific finance file
- *   POST /api/admin/refresh-ipeds?fyear=2023&file=F1A   → public FASB
- *   GET  /api/admin/refresh-ipeds                       → show status
+ *   POST /api/admin/refresh-ipeds?fyear=2023&file=F2    -> specific finance file
+ *   POST /api/admin/refresh-ipeds?fyear=2023&file=F1A   -> public FASB
+ *   GET  /api/admin/refresh-ipeds                       -> show status
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const auth = req.headers.authorization;
   if (!CRON_SECRET || auth !== `Bearer ${CRON_SECRET}`) {
-    res.status(401).json({ error: "Unauthorized — Bearer CRON_SECRET required" });
+    res.status(401).json({ error: "Unauthorized -- Bearer CRON_SECRET required" });
     return;
   }
 
@@ -86,6 +86,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const next = await pickNextFinance();
+    if (!next) {
+      res.status(200).json({
+        ok: true,
+        stage: "finance",
+        skipped: "backfill complete; nothing to ingest",
+      });
+      return;
+    }
     const result = await ingestFinance(next.fyear, next.fileType);
     res.status(200).json({ ok: true, stage: "finance", ...result });
   } catch (err) {
