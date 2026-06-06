@@ -20,11 +20,11 @@ import {
  *      all files are ingested or the function's time budget is exhausted.
  *      Caller should re-invoke until the response reports allDone=true.
  *
- * Necessary because the OLD production deployment (which is what serves the
- * */15-min cron under Rolling Releases) has a BOM-handling bug in its
- * header parser and would silently mark every finance file as "ok" with
- * zero rows inserted. Hitting this endpoint on the new (BOM-fixed) canary
- * deployment via web_fetch_vercel_url bypasses that.
+ * Necessary because the OLD production deployment (which is what serves
+ * the every-15-min cron under Rolling Releases) has a BOM-handling bug
+ * in its header parser and would silently mark every finance file as
+ * "ok" with zero rows inserted. Hitting this endpoint on the new
+ * (BOM-fixed) canary deployment via web_fetch_vercel_url bypasses that.
  *
  * Auth: relies on Vercel SSO (this is a preview/canary deployment URL).
  */
@@ -101,8 +101,8 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
           ok: false,
           error: err instanceof Error ? err.message : String(err),
         });
-        // Continue — missing/404 files are expected for some (year, file) tuples
-        // (e.g. provisional FY24 F1A not yet published).
+        // Continue -- missing/404 files are expected for some (year, file)
+        // tuples (e.g. provisional FY24 F1A not yet published).
       }
     }
     stages.push({
