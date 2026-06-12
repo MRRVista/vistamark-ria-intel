@@ -6,6 +6,15 @@
  *   - hdRowToRecord:       HD{YYYY}.csv → IpedsInstitutionInsert
  *   - financeRowToRecord:  F{YY}{YY}_F2 or _F1A → EndowmentInsert (or null if
  *                          no endowment value is reported)
+ *
+ * IPEDS Finance Survey F2/F1A endowment variable mapping:
+ *   F2H01 / F1H01 — Endowment value beginning of fiscal year
+ *   F2H02 / F1H02 — Endowment value end of fiscal year
+ *   F2H03 / F1H03 — Total net additions for the year (EOY minus BOY net change)
+ *                   Stored in `netChangeInEndowment` column.
+ *   F2H04-F2H06 — documented as net investment return / withdrawals / other,
+ *   F1H04-F1H06   but almost always blank in practice. Mapped here for
+ *                 future-proofing but expect NULL most of the time.
  */
 
 import {
@@ -51,7 +60,7 @@ export function financeRowToRecord(
 
   let boy: number | null = null;
   let eoy: number | null = null;
-  let contrib: number | null = null;
+  let netChange: number | null = null;
   let netReturn: number | null = null;
   let withdrawn: number | null = null;
   let otherAdj: number | null = null;
@@ -59,14 +68,14 @@ export function financeRowToRecord(
   if (fileType === "F2") {
     boy = fieldBigInt(row, idx, "F2H01");
     eoy = fieldBigInt(row, idx, "F2H02");
-    contrib = fieldBigInt(row, idx, "F2H03");
+    netChange = fieldBigInt(row, idx, "F2H03");
     netReturn = fieldBigInt(row, idx, "F2H04");
     withdrawn = fieldBigInt(row, idx, "F2H05");
     otherAdj = fieldBigInt(row, idx, "F2H06");
   } else if (fileType === "F1A") {
     boy = fieldBigInt(row, idx, "F1H01", "F1H01A");
     eoy = fieldBigInt(row, idx, "F1H02", "F1H02A");
-    contrib = fieldBigInt(row, idx, "F1H03");
+    netChange = fieldBigInt(row, idx, "F1H03");
     netReturn = fieldBigInt(row, idx, "F1H04");
     withdrawn = fieldBigInt(row, idx, "F1H05");
     otherAdj = fieldBigInt(row, idx, "F1H06");
@@ -78,7 +87,7 @@ export function financeRowToRecord(
   }
 
   // Skip rows that have no endowment data at all.
-  if (boy == null && eoy == null && contrib == null && withdrawn == null) {
+  if (boy == null && eoy == null && netChange == null && withdrawn == null) {
     return null;
   }
 
@@ -88,7 +97,7 @@ export function financeRowToRecord(
     fileType,
     marketValueBoy: boy,
     marketValueEoy: eoy,
-    contributions: contrib,
+    netChangeInEndowment: netChange,
     netInvestmentReturn: netReturn,
     withdrawals: withdrawn,
     otherAdjustments: otherAdj,

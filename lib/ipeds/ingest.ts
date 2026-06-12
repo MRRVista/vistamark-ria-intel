@@ -11,13 +11,9 @@
  * processes ~6,400 rows (directory) or ~2,000 rows (F2 finance, only schools
  * with endowments). Comfortably under the 300s maxDuration ceiling.
  *
- * NOTE on the `contributions` column in the endowments table: this field is
- * populated from IPEDS Finance Survey variable f2h03, which despite the
- * name is the *net change in endowment value* (EOY minus BOY), not gift
- * inflows. IPEDS does not expose contributions-only data on the F2 form.
- * The column would more accurately be named `net_change_in_endowment`,
- * but a rename would break MCP tool queries. Treat `contributions` as
- * net change until/unless renamed in a future schema migration.
+ * v0.5.0: The endowments.net_change_in_endowment column was renamed from
+ * the misleading `contributions` (IPEDS f2h03 is the net change in endowment
+ * = EOY minus BOY, not gift inflows).
  */
 
 import AdmZip from "adm-zip";
@@ -75,9 +71,6 @@ async function downloadCsv(url: string): Promise<Buffer> {
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   const zip = new AdmZip(buffer);
-  // IPEDS zips contain exactly one .csv plus optional revised .csv (rv_ prefix).
-  // Prefer the revised version when available (institutions revised data the
-  // following year), since it's the more accurate "final" reading.
   const entries = zip
     .getEntries()
     .filter((e) => !e.isDirectory && /\.csv$/i.test(e.entryName));
@@ -336,7 +329,7 @@ async function upsertEndowments(rows: EndowmentInsert[]): Promise<void> {
         fileType: sql`excluded.file_type`,
         marketValueBoy: sql`excluded.market_value_boy`,
         marketValueEoy: sql`excluded.market_value_eoy`,
-        contributions: sql`excluded.contributions`,
+        netChangeInEndowment: sql`excluded.net_change_in_endowment`,
         netInvestmentReturn: sql`excluded.net_investment_return`,
         withdrawals: sql`excluded.withdrawals`,
         otherAdjustments: sql`excluded.other_adjustments`,
@@ -354,8 +347,7 @@ async function upsertEndowments(rows: EndowmentInsert[]): Promise<void> {
  *   - not in the recent-error backoff window (default 24h)
  *
  * The backoff guards against the daily cron churning through provisional
- * NCES files that 404 for weeks/months until NCES publishes them (e.g.
- * FY2324_F2.zip as of mid-2026).
+ * NCES files that 404 for weeks/months until NCES publishes them.
  *
  * Returns null when nothing left to try.
  */
@@ -401,10 +393,6 @@ export async function pickNextFinance(
 
 export async function isDirectoryNeeded(): Promise<boolean> {
   if (!db) return false;
-  // Treat the directory as "done" only if a successful run is on file AND
-  // it actually upserted some rows. The earlier v0.4.2 run created an 'ok'
-  // ingest_runs entry with 0 inserted rows (BOM-corrupted headers), which
-  // would otherwise cause this function to wrongly return false.
   const okRuns = await db.execute(sql`
     SELECT firms_inserted FROM ingest_runs
     WHERE status = 'ok' AND source = ${`${SOURCE_PREFIX}/hd/${DEFAULT_DIRECTORY_YEAR}`}

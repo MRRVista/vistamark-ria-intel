@@ -349,7 +349,10 @@ export const endowments = pgTable(
     fileType: varchar("file_type", { length: 4 }).notNull(),
     marketValueBoy: bigint("market_value_boy", { mode: "number" }),
     marketValueEoy: bigint("market_value_eoy", { mode: "number" }),
-    contributions: bigint("contributions", { mode: "number" }),
+    // Renamed from `contributions` in v0.5.0. IPEDS variable f2h03 is
+    // "Total net additions to endowment for the year" = EOY minus BOY,
+    // not gift inflows. The old name was misleading.
+    netChangeInEndowment: bigint("net_change_in_endowment", { mode: "number" }),
     netInvestmentReturn: bigint("net_investment_return", { mode: "number" }),
     withdrawals: bigint("withdrawals", { mode: "number" }),
     otherAdjustments: bigint("other_adjustments", { mode: "number" }),
@@ -388,6 +391,45 @@ export const nacuboBenchmarks = pgTable(
   })
 );
 
+// v0.5.0 — SBA PPP Loans (FOIA bulk data, >=$150K loans).
+export const pppLoans = pgTable(
+  "ppp_loans",
+  {
+    loanNumber: varchar("loan_number", { length: 20 }).primaryKey(),
+    dateApproved: date("date_approved"),
+    borrowerName: text("borrower_name").notNull(),
+    borrowerAddress: text("borrower_address"),
+    borrowerCity: varchar("borrower_city", { length: 128 }),
+    borrowerState: varchar("borrower_state", { length: 4 }),
+    borrowerZip: varchar("borrower_zip", { length: 16 }),
+    loanStatus: varchar("loan_status", { length: 64 }),
+    loanStatusDate: date("loan_status_date"),
+    initialApprovalAmount: bigint("initial_approval_amount", { mode: "number" }),
+    currentApprovalAmount: bigint("current_approval_amount", { mode: "number" }),
+    undisbursedAmount: bigint("undisbursed_amount", { mode: "number" }),
+    businessType: varchar("business_type", { length: 128 }),
+    nonprofitFlag: boolean("nonprofit_flag"),
+    naicsCode: varchar("naics_code", { length: 8 }),
+    jobsReported: integer("jobs_reported"),
+    originatingLender: text("originating_lender"),
+    servicingLenderName: text("servicing_lender_name"),
+    forgivenessAmount: bigint("forgiveness_amount", { mode: "number" }),
+    forgivenessDate: date("forgiveness_date"),
+    ruralUrbanIndicator: varchar("rural_urban_indicator", { length: 2 }),
+    hubzoneIndicator: varchar("hubzone_indicator", { length: 2 }),
+    lmiIndicator: varchar("lmi_indicator", { length: 2 }),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    nameIdx: index("ppp_loans_name_idx").on(t.borrowerName),
+    stateIdx: index("ppp_loans_state_idx").on(t.borrowerState),
+    amountIdx: index("ppp_loans_amount_idx").on(t.currentApprovalAmount),
+    naicsIdx: index("ppp_loans_naics_idx").on(t.naicsCode),
+    businessIdx: index("ppp_loans_business_idx").on(t.businessType),
+    nonprofitIdx: index("ppp_loans_nonprofit_idx").on(t.nonprofitFlag),
+  })
+);
+
 export type Plan = typeof plans.$inferSelect;
 export type PlanInsert = typeof plans.$inferInsert;
 
@@ -406,3 +448,5 @@ export type Endowment = typeof endowments.$inferSelect;
 export type EndowmentInsert = typeof endowments.$inferInsert;
 export type NacuboBenchmark = typeof nacuboBenchmarks.$inferSelect;
 export type NacuboBenchmarkInsert = typeof nacuboBenchmarks.$inferInsert;
+export type PppLoan = typeof pppLoans.$inferSelect;
+export type PppLoanInsert = typeof pppLoans.$inferInsert;
