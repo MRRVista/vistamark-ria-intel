@@ -10,6 +10,14 @@
  * One Vercel function call ingests one (year, fileType) tuple. Each call
  * processes ~6,400 rows (directory) or ~2,000 rows (F2 finance, only schools
  * with endowments). Comfortably under the 300s maxDuration ceiling.
+ *
+ * NOTE on the `contributions` column in the endowments table: this field is
+ * populated from IPEDS Finance Survey variable f2h03, which despite the
+ * name is the *net change in endowment value* (EOY minus BOY), not gift
+ * inflows. IPEDS does not expose contributions-only data on the F2 form.
+ * The column would more accurately be named `net_change_in_endowment`,
+ * but a rename would break MCP tool queries. Treat `contributions` as
+ * net change until/unless renamed in a future schema migration.
  */
 
 import AdmZip from "adm-zip";
@@ -43,6 +51,13 @@ import type { IpedsFinanceFile } from "./columns";
 
 const SOURCE_PREFIX = "ipeds";
 const BATCH_SIZE = 500;
+
+/**
+ * After a source fails (e.g. HTTP 404 because NCES hasn't published a
+ * provisional FY24 file yet), back off and don't retry for this many hours.
+ * Prevents the daily cron from churning through 404'd sources every tick.
+ */
+const ERROR_BACKOFF_HOURS = 24;
 
 export interface IngestResult {
   source: string;
@@ -333,11 +348,14 @@ async function upsertEndowments(rows: EndowmentInsert[]): Promise<void> {
 /**
  * Pick the next (year, fileType) tuple to ingest. Strategy: walk through the
  * default backfill list of (year, F2), (year, F1A) pairs from most recent
- * back to oldest, returning the first one without a successful run yet.
+ * back to oldest, returning the first one that is:
+ *   - not already successfully ingested (status='ok' AND firms_inserted > 0)
+ *   - not in the caller's session-local skip set
+ *   - not in the recent-error backoff window (default 24h)
  *
- * extraSkip lets the caller mark sources to skip within the current session
- * (e.g. ones that just 404'd or errored this run). Pass it as a set of
- * source identifiers like "ipeds/f2/2024".
+ * The backoff guards against the daily cron churning through provisional
+ * NCES files that 404 for weeks/months until NCES publishes them (e.g.
+ * FY2324_F2.zip as of mid-2026).
  *
  * Returns null when nothing left to try.
  */
@@ -354,6 +372,18 @@ export async function pickNextFinance(
     done.add(String(r.source));
   }
 
+  // Recently-errored sources are in backoff and should be skipped for now.
+  const recentErrors = await db.execute(sql`
+    SELECT DISTINCT source FROM ingest_runs
+    WHERE status = 'error'
+      AND source LIKE ${`${SOURCE_PREFIX}/%`}
+      AND finished_at > NOW() - (${ERROR_BACKOFF_HOURS} || ' hours')::interval
+  `);
+  const backoff = new Set<string>();
+  for (const r of (recentErrors as any).rows ?? []) {
+    backoff.add(String(r.source));
+  }
+
   const years = [...DEFAULT_FINANCE_YEARS].reverse();
   const files: IpedsFinanceFile[] = ["F2", "F1A"];
 
@@ -362,6 +392,7 @@ export async function pickNextFinance(
       const source = `${SOURCE_PREFIX}/${fileType.toLowerCase()}/${fyear}`;
       if (done.has(source)) continue;
       if (extraSkip?.has(source)) continue;
+      if (backoff.has(source)) continue;
       return { fyear, fileType };
     }
   }
