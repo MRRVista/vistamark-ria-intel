@@ -16,6 +16,7 @@ import {
   companyConcept,
   padCik,
   type TickerEntry,
+  type CompanyConceptResponse,
 } from "./client";
 
 async function resolveCik(args: {
@@ -147,6 +148,54 @@ export async function edgarCompanyFilings(args: EdgarCompanyFilingsArgs) {
   };
 }
 
+// Common alternate XBRL tags for line items that filers report under different
+// concepts across years/companies. Tried in order only when the requested
+// concept itself returns no data (e.g. Apple tags revenue under
+// RevenueFromContractWithCustomerExcludingAssessedTax, not Revenues).
+const CONCEPT_FALLBACKS: Record<string, string[]> = {
+  Revenues: [
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueNet",
+  ],
+  RevenueFromContractWithCustomerExcludingAssessedTax: [
+    "Revenues",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueNet",
+  ],
+  NetIncomeLoss: ["ProfitLoss"],
+};
+
+function conceptHasData(data: CompanyConceptResponse | null): boolean {
+  if (!data || !data.units) return false;
+  return Object.values(data.units).some((arr) => Array.isArray(arr) && arr.length > 0);
+}
+
+/**
+ * Fetch a concept, falling back to common alternate tags if the requested one
+ * 404s or returns no observations. companyConcept throws on a non-OK response
+ * (the SEC returns 404 when a filer has never reported that exact tag), so each
+ * candidate is attempted independently and failures advance to the next tag.
+ */
+async function fetchConceptWithFallback(
+  cik: string,
+  concept: string,
+  taxonomy: string
+): Promise<{ data: CompanyConceptResponse | null; resolvedConcept: string | null; tried: string[] }> {
+  const candidates = [concept, ...(CONCEPT_FALLBACKS[concept] ?? [])];
+  const tried: string[] = [];
+  for (const cand of candidates) {
+    tried.push(cand);
+    try {
+      const data = await companyConcept(cik, cand, taxonomy);
+      if (conceptHasData(data)) return { data, resolvedConcept: cand, tried };
+    } catch {
+      // Non-OK (usually 404 — filer never reported this exact tag). Try next.
+    }
+  }
+  return { data: null, resolvedConcept: null, tried };
+}
+
 export interface EdgarFinancialConceptArgs {
   cik?: string | number;
   ticker?: string;
@@ -173,7 +222,22 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
     };
   }
   const taxonomy = args.taxonomy?.trim() || "us-gaap";
-  const data = await companyConcept(cik, args.concept, taxonomy);
+  const { data, resolvedConcept, tried } = await fetchConceptWithFallback(cik, args.concept, taxonomy);
+  if (!data || !resolvedConcept) {
+    return {
+      dataSource: "SEC EDGAR (XBRL companyconcept)",
+      company: { cik, name: matched?.title ?? null },
+      requestedConcept: args.concept,
+      taxonomy,
+      conceptsTried: tried,
+      observationCount: 0,
+      observations: [],
+      note:
+        `No XBRL data for "${args.concept}"` +
+        (tried.length > 1 ? ` or its known fallbacks (${tried.slice(1).join(", ")})` : "") +
+        ` under taxonomy "${taxonomy}" for this filer. The company may tag this line item under a different concept — inspect filings with edgar_company_filings, or pass an explicit alternate via the concept argument.`,
+    };
+  }
   const units = data.units ?? {};
   const unitKey = args.unit && units[args.unit] ? args.unit : Object.keys(units)[0] ?? null;
   let points: Array<Record<string, any>> = unitKey ? units[unitKey]! : [];
@@ -188,7 +252,11 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
   return {
     dataSource: "SEC EDGAR (XBRL companyconcept)",
     company: { cik, name: matched?.title ?? null },
-    concept: data.tag ?? args.concept,
+    requestedConcept: args.concept,
+    resolvedConcept,
+    conceptFallbackUsed: resolvedConcept !== args.concept,
+    conceptsTried: tried,
+    concept: data.tag ?? resolvedConcept,
     taxonomy,
     label: data.label ?? null,
     unit: unitKey,
@@ -205,6 +273,6 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
       frame: p.frame ?? null,
     })),
     note:
-      "XBRL facts as reported. Concepts use us-gaap taxonomy tags (e.g. Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, Assets, Liabilities, NetIncomeLoss, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue). A company may tag revenue under different concepts across years; if a concept returns nothing, try an alternate tag. annualOnly filters to 10-K / full-year facts.",
+      "XBRL facts as reported. Concepts use us-gaap taxonomy tags. When the requested concept returns nothing, a small set of common alternates is tried automatically (resolvedConcept shows which tag actually returned data; conceptFallbackUsed flags when a fallback was used). annualOnly filters to 10-K / full-year facts.",
   };
 }
