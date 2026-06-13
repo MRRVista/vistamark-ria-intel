@@ -58,6 +58,11 @@ import {
   ofrSeriesSearch,
   ofrSeries,
 } from "../ofr/tools";
+import {
+  edgarCompanyLookup,
+  edgarCompanyFilings,
+  edgarFinancialConcept,
+} from "../edgar/tools";
 
 export interface ToolDef {
   name: string;
@@ -79,7 +84,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC and OFR are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, and SEC EDGAR are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -219,6 +224,27 @@ const OFR_TOOLS: ToolDef[] = [
   },
 ];
 
+const EDGAR_TOOLS: ToolDef[] = [
+  {
+    name: "edgar_company_lookup",
+    description: "Resolve a public company to its SEC CIK by ticker or name (SEC EDGAR company_tickers.json, live). Returns scored matches with the 10-digit zero-padded cik, numeric cik, ticker, and SEC-registered name. Only companies with a listed ticker appear (private companies and non-ticker filers are excluded). Use a returned cik with edgar_company_filings or edgar_financial_concept.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", default: 10, maximum: 100 } }, required: ["query"] },
+    handler: edgarCompanyLookup,
+  },
+  {
+    name: "edgar_company_filings",
+    description: "Recent SEC filing history for a public company (EDGAR submissions API, live). Resolve the company by cik, ticker, or name. Optional formType filter (e.g. 10-K, 10-Q, 8-K, DEF 14A, 13F-HR, SC 13D, SC 13G, 4). Returns company metadata (name, tickers, exchanges, SIC, former names) plus the most recent filings (form, filing/report dates, accession number, primary document, and a direct EDGAR document URL). Covers the submissions 'recent' block (~1000 latest filings).",
+    inputSchema: { type: "object", properties: { cik: { type: "string" }, ticker: { type: "string" }, name: { type: "string" }, formType: { type: "string" }, limit: { type: "number", default: 25, maximum: 200 } } },
+    handler: edgarCompanyFilings,
+  },
+  {
+    name: "edgar_financial_concept",
+    description: "Fetch a public company's reported financial concept as a time series from SEC XBRL data (companyconcept API, live). Resolve the company by cik, ticker, or name; concept is a us-gaap taxonomy tag (e.g. Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, Assets, Liabilities, NetIncomeLoss, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue). Optional taxonomy (default us-gaap), unit (default first available, usually USD), annualOnly (10-K / full-year facts only), and limit. Returns the value time series with fiscal year/period, form, and filing date. A company may tag the same line item under different concepts across years.",
+    inputSchema: { type: "object", properties: { cik: { type: "string" }, ticker: { type: "string" }, name: { type: "string" }, concept: { type: "string" }, taxonomy: { type: "string" }, unit: { type: "string" }, annualOnly: { type: "boolean" }, limit: { type: "number", default: 40, maximum: 500 } }, required: ["concept"] },
+    handler: edgarFinancialConcept,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -229,5 +255,6 @@ export const TOOLS: ToolDef[] = [
   ...F13F_TOOLS,
   ...FDIC_TOOLS,
   ...OFR_TOOLS,
+  ...EDGAR_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
