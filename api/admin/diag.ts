@@ -4,9 +4,10 @@ import { db } from "../../lib/db";
 
 /**
  * Read-only diagnostic endpoint. Returns:
- *   - exact row counts for ipeds_institutions, endowments, nacubo_benchmarks, ppp_loans
+ *   - exact row counts for ipeds_institutions, endowments, nacubo_benchmarks,
+ *     ppp_loans, f13f_filings, f13f_holdings
  *   - distinct institutions and fyears coverage in endowments
- *   - the 50 most recent ipeds/* + sba-ppp/* ingest_runs entries
+ *   - the 50 most recent ipeds/* + sba-ppp/* + sec-13f/* ingest_runs entries
  *   - a Yale + Harvard sanity slice of the endowments table
  *
  * Auth: Vercel SSO (canary deployment URLs are protected by default).
@@ -24,6 +25,8 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         (SELECT COUNT(*) FROM endowments)                               AS endowments_total,
         (SELECT COUNT(*) FROM nacubo_benchmarks)                        AS nacubo_total,
         (SELECT COUNT(*) FROM ppp_loans)                                AS ppp_total,
+        (SELECT COUNT(*) FROM f13f_filings)                             AS f13f_filings_total,
+        (SELECT COUNT(*) FROM f13f_holdings)                            AS f13f_holdings_total,
         (SELECT COUNT(DISTINCT unitid) FROM endowments)                 AS distinct_endowment_institutions,
         (SELECT COUNT(DISTINCT fyear) FROM endowments)                  AS distinct_fyears,
         (SELECT MIN(fyear) FROM endowments)                             AS earliest_fyear,
@@ -35,7 +38,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       SELECT source, status, firms_processed, firms_inserted, started_at, finished_at,
              error_message
       FROM ingest_runs
-      WHERE source LIKE 'ipeds/%' OR source LIKE 'sba-ppp/%'
+      WHERE source LIKE 'ipeds/%' OR source LIKE 'sba-ppp/%' OR source LIKE 'sec-13f/%'
       ORDER BY started_at DESC
       LIMIT 50
     `);
