@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { runMigrations, v04TablesExist } from "../../lib/migrate";
+import { runMigrations } from "../../lib/migrate";
 import { ingestNacuboBenchmarks } from "../../lib/nacubo/ingest";
 import {
   ingestDirectory,
@@ -21,23 +21,23 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
   const stages: any[] = [];
 
   try {
-    // Stage 1: migration
-    if (!(await v04TablesExist())) {
-      const mig = await runMigrations();
-      if (!mig.ok) {
-        res.status(500).json({
-          ok: false,
-          totalDurationMs: Date.now() - start,
-          failedStage: "migration",
-          stages,
-          migration: mig,
-        });
-        return;
-      }
-      stages.push({ stage: "migration", ok: true, dir: mig.dir, applied: mig.applied });
-    } else {
-      stages.push({ stage: "migration", ok: true, skipped: "tables already exist" });
+    // Stage 1: migration. Always run — runMigrations() is idempotent
+    // (already-exists/duplicate statements are skipped, and the v0.5.0
+    // column rename is guarded by a DO $$ ... IF EXISTS $$ block). The old
+    // `if (!v04TablesExist())` guard meant new migrations (e.g. 0004) were
+    // never applied once the v0.4.x base tables existed.
+    const mig = await runMigrations();
+    if (!mig.ok) {
+      res.status(500).json({
+        ok: false,
+        totalDurationMs: Date.now() - start,
+        failedStage: "migration",
+        stages,
+        migration: mig,
+      });
+      return;
     }
+    stages.push({ stage: "migration", ok: true, dir: mig.dir, applied: mig.applied });
 
     // Stage 2: NACUBO seed
     const nacubo = await ingestNacuboBenchmarks();
