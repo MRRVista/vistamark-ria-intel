@@ -33,10 +33,17 @@ import {
   endowmentLookup,
   endowmentSearch,
   endowmentPeerSet,
+  endowmentPercentileRank,
+  endowmentGrowthHistory,
+  endowmentDecadeComparison,
 } from "../ipeds/queries";
 import {
   nacuboBenchmarkLookup,
 } from "../nacubo/queries";
+import {
+  pppSearch,
+  pppLookup,
+} from "../sba-ppp/queries";
 
 export interface ToolDef {
   name: string;
@@ -58,7 +65,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -90,7 +97,7 @@ const ENDOWMENT_TOOLS: ToolDef[] = [
   },
   {
     name: "endowment_lookup",
-    description: "Look up a single institution's endowment history. Provide unitid (IPEDS unique identifier) or instnm (best fuzzy match wins). Returns full institution metadata plus time series of endowment market value beginning-of-year, end-of-year, contributions, net investment return, withdrawals, and other adjustments. Optional fyear filter to scope to one year.",
+    description: "Look up a single institution's endowment history. Provide unitid (IPEDS unique identifier) or instnm (best fuzzy match wins). Returns full institution metadata plus time series of endowment market value beginning-of-year, end-of-year, net change in endowment (IPEDS f2h03 = EOY minus BOY), net investment return, withdrawals, and other adjustments. Optional fyear filter to scope to one year.",
     inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" }, fyear: { type: "number" } } },
     handler: endowmentLookup,
   },
@@ -101,10 +108,43 @@ const ENDOWMENT_TOOLS: ToolDef[] = [
     handler: endowmentPeerSet,
   },
   {
+    name: "endowment_percentile_rank",
+    description: "Given a target institution (unitid or instnm) and fiscal year, return where its end-of-year endowment ranks among ALL institutions reporting that year: the target value, its percentile (0-100, higher = larger), absolute rank (1 = largest), the size of the reporting universe, and distribution breakpoints (p10/p25/p50/p75/p90/p99). Defaults to the institution's latest reported FY. Useful for positioning a client institution against the national field.",
+    inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" }, fyear: { type: "number" } } },
+    handler: endowmentPercentileRank,
+  },
+  {
+    name: "endowment_growth_history",
+    description: "Full growth analytics for one institution (unitid or instnm): compound annual growth rate (CAGR) over 1-year, 3-year, 5-year, 10-year, and all-time windows using end-of-year market values; the best and worst single-year percentage moves; count of declining years; and the underlying year-by-year series. CAGR figures are percentages.",
+    inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" } } },
+    handler: endowmentGrowthHistory,
+  },
+  {
+    name: "endowment_decade_comparison",
+    description: "Compare two consecutive multi-year windows for one institution (unitid or instnm): the most recent N years vs the N years before that (default N=10). Returns start/end endowment values, total growth %, and CAGR for each window, plus the change in CAGR between windows (positive = growth accelerating). Useful for spotting whether an endowment's trajectory is improving or fading.",
+    inputSchema: { type: "object", properties: { unitid: { type: "number" }, instnm: { type: "string" }, windowYears: { type: "number", default: 10 } } },
+    handler: endowmentDecadeComparison,
+  },
+  {
     name: "nacubo_benchmark_lookup",
     description: "Return NACUBO public NCSE/NTSE/NES benchmark aggregates for a given fiscal year and cohort. Cohorts: 'all' (default), 'over_5b', '1b_5b', '500m_1b', '250m_500m', '100m_250m', '50m_100m', 'under_50m', 'public', 'private_indep'. Returns 1-yr/3-yr/5-yr/10-yr average returns, asset allocation, spending rate, total assets, and median endowment value. Source: NACUBO public press releases — institution-specific data is paywalled by NACUBO.",
     inputSchema: { type: "object", properties: { fyear: { type: "number" }, cohort: { type: "string" }, minFyear: { type: "number" }, maxFyear: { type: "number" }, limit: { type: "number", default: 50, maximum: 500 } } },
     handler: nacuboBenchmarkLookup,
+  },
+];
+
+const PPP_TOOLS: ToolDef[] = [
+  {
+    name: "ppp_search",
+    description: "Search SBA Paycheck Protection Program (PPP) loans (FOIA loan-level data, >=$150K loans and per-state files when ingested). Prospecting filter: borrower state, name, loan amount range, NAICS code or NAICS prefix, business type (e.g. 'Corporation', 'Non-Profit Organization', 'Limited Liability Company'), nonprofit-only flag, loan status, and city. Sorted by current approval amount by default. Returns borrower, amounts, forgiveness, jobs reported, lender, and location.",
+    inputSchema: { type: "object", properties: { state: { type: "string" }, nameContains: { type: "string" }, minAmount: { type: "number" }, maxAmount: { type: "number" }, naicsCode: { type: "string" }, naicsPrefix: { type: "string" }, businessType: { type: "string" }, nonprofitOnly: { type: "boolean" }, loanStatus: { type: "string" }, city: { type: "string" }, sortBy: { type: "string", enum: ["current_approval_amount", "initial_approval_amount", "forgiveness_amount", "jobs_reported", "name", "date_approved"], default: "current_approval_amount" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 50, maximum: 500 }, offset: { type: "number", default: 0 } } },
+    handler: pppSearch,
+  },
+  {
+    name: "ppp_lookup",
+    description: "Look up SBA PPP loans for a specific borrower. Provide loanNumber for a single loan, or borrowerName (fuzzy match, optionally scoped by state) to return all matching loans sorted by amount. Useful for checking whether a prospect, client, or counterparty took PPP money and how much was forgiven.",
+    inputSchema: { type: "object", properties: { loanNumber: { type: "string" }, borrowerName: { type: "string" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 200 } } },
+    handler: pppLookup,
   },
 ];
 
@@ -114,5 +154,6 @@ export const TOOLS: ToolDef[] = [
   ...MACRO_TOOLS,
   ...RETIREMENT_TOOLS,
   ...ENDOWMENT_TOOLS,
+  ...PPP_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

@@ -4,9 +4,9 @@ import { db } from "../../lib/db";
 
 /**
  * Read-only diagnostic endpoint. Returns:
- *   - exact row counts for ipeds_institutions, endowments, nacubo_benchmarks
+ *   - exact row counts for ipeds_institutions, endowments, nacubo_benchmarks, ppp_loans
  *   - distinct institutions and fyears coverage in endowments
- *   - the 50 most recent ipeds/* ingest_runs entries with status + row count
+ *   - the 50 most recent ipeds/* + sba-ppp/* ingest_runs entries
  *   - a Yale + Harvard sanity slice of the endowments table
  *
  * Auth: Vercel SSO (canary deployment URLs are protected by default).
@@ -23,6 +23,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
         (SELECT COUNT(*) FROM ipeds_institutions)                       AS institutions_total,
         (SELECT COUNT(*) FROM endowments)                               AS endowments_total,
         (SELECT COUNT(*) FROM nacubo_benchmarks)                        AS nacubo_total,
+        (SELECT COUNT(*) FROM ppp_loans)                                AS ppp_total,
         (SELECT COUNT(DISTINCT unitid) FROM endowments)                 AS distinct_endowment_institutions,
         (SELECT COUNT(DISTINCT fyear) FROM endowments)                  AS distinct_fyears,
         (SELECT MIN(fyear) FROM endowments)                             AS earliest_fyear,
@@ -34,7 +35,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       SELECT source, status, firms_processed, firms_inserted, started_at, finished_at,
              error_message
       FROM ingest_runs
-      WHERE source LIKE 'ipeds/%'
+      WHERE source LIKE 'ipeds/%' OR source LIKE 'sba-ppp/%'
       ORDER BY started_at DESC
       LIMIT 50
     `);
@@ -42,7 +43,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
     const yaleHarvardResult = await db.execute(sql`
       SELECT i.unitid, i.instnm, e.fyear, e.file_type,
              e.market_value_eoy, e.market_value_boy,
-             e.contributions, e.net_investment_return, e.withdrawals
+             e.net_change_in_endowment, e.net_investment_return, e.withdrawals
       FROM endowments e
       JOIN ipeds_institutions i ON i.unitid = e.unitid
       WHERE i.instnm IN ('Yale University', 'Harvard University')
