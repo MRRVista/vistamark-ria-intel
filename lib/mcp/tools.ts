@@ -48,6 +48,16 @@ import {
   holdingsByManager,
   holdersOfSecurity,
 } from "../sec-13f/queries";
+import {
+  fdicBankSearch,
+  fdicBankFinancials,
+  fdicFailedBanks,
+} from "../fdic/tools";
+import {
+  ofrFinancialStressIndex,
+  ofrSeriesSearch,
+  ofrSeries,
+} from "../ofr/tools";
 
 export interface ToolDef {
   name: string;
@@ -69,7 +79,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC and OFR are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -167,6 +177,48 @@ const F13F_TOOLS: ToolDef[] = [
   },
 ];
 
+const FDIC_TOOLS: ToolDef[] = [
+  {
+    name: "fdic_bank_search",
+    description: "Search FDIC-insured banks and thrifts (BankFind Suite API, live). Prospecting filter: state, name, total-asset range (whole USD), bank class (N=national/OCC, NM=state non-member, SM=state member/Fed, SB=state savings, SA=savings association, OI=insured branch of foreign bank), and community-bank flag. Defaults to active institutions, sorted by total assets descending. Returns name, FDIC cert #, location, total assets, deposits, net income, equity, ROA, ROE, offices, established date, and class. Useful for bank/trust prospecting and the institutional/OCIO bank channel.",
+    inputSchema: { type: "object", properties: { state: { type: "string" }, nameContains: { type: "string" }, minAssets: { type: "number" }, maxAssets: { type: "number" }, activeOnly: { type: "boolean", default: true }, bankClass: { type: "string" }, communityBankOnly: { type: "boolean" }, sortBy: { type: "string", enum: ["assets", "deposits", "netIncome", "roa", "roe", "name"], default: "assets" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 25, maximum: 500 }, offset: { type: "number", default: 0 } } },
+    handler: fdicBankSearch,
+  },
+  {
+    name: "fdic_bank_financials",
+    description: "Get a single bank's quarterly financial time series from the FDIC. Provide cert (FDIC certificate number) or name (best asset-weighted match resolves to a cert). Returns one row per quarterly call-report date (newest first): total assets, deposits, net income, equity (whole USD), plus ROA, ROE, net interest margin, efficiency ratio (percentages), and employee count. Useful for diligence on a bank prospect or counterparty trend.",
+    inputSchema: { type: "object", properties: { cert: { type: "number" }, name: { type: "string" }, limit: { type: "number", default: 20, maximum: 100 } } },
+    handler: fdicBankFinancials,
+  },
+  {
+    name: "fdic_failed_banks",
+    description: "Search historical FDIC bank/thrift failures. Filter by state, year range (fromYear/toYear), and name. Returns name, FDIC cert #, fail date, resolution type, deposits and assets at failure, and the FDIC's estimated resolution cost (whole USD), newest first. Useful for historical context and risk framing.",
+    inputSchema: { type: "object", properties: { state: { type: "string" }, fromYear: { type: "number" }, toYear: { type: "number" }, nameContains: { type: "string" }, limit: { type: "number", default: 25, maximum: 500 } } },
+    handler: fdicFailedBanks,
+  },
+];
+
+const OFR_TOOLS: ToolDef[] = [
+  {
+    name: "ofr_financial_stress_index",
+    description: "Get the OFR Financial Stress Index (FSI) — a daily, zero-centered index of global financial stress published by the U.S. Office of Financial Research. Positive = above-average stress, negative = below-average, 0 = historical average. Returns the latest reading, recent history (lookback days, default 30), and the latest category (credit, equity valuation, funding, safe assets, volatility) and region (US, other advanced economies, emerging markets) subindex contributions. A clean systemic-risk gauge to pair with the FRED/Treasury rate tools.",
+    inputSchema: { type: "object", properties: { lookback: { type: "number", default: 30, maximum: 1000 } } },
+    handler: ofrFinancialStressIndex,
+  },
+  {
+    name: "ofr_series_search",
+    description: "Search the OFR Data API catalog (data.financialresearch.gov) for a series mnemonic by keyword. The OFR Short-Term Funding Monitor covers repo markets (tri-party, DVP, GCF), money-market funds, and commercial paper. Returns the provider's catalog results; use a returned mnemonic with ofr_series. For the daily Financial Stress Index, use ofr_financial_stress_index instead.",
+    inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+    handler: ofrSeriesSearch,
+  },
+  {
+    name: "ofr_series",
+    description: "Fetch an OFR Data API time series by mnemonic (find one with ofr_series_search). Returns the observations (date/value), the latest reading, and the observation count; optional lookback caps to the most recent N points. Covers OFR Short-Term Funding Monitor series (repo rates and volumes, money-market fund data, commercial paper).",
+    inputSchema: { type: "object", properties: { mnemonic: { type: "string" }, lookback: { type: "number" } }, required: ["mnemonic"] },
+    handler: ofrSeries,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -175,5 +227,7 @@ export const TOOLS: ToolDef[] = [
   ...ENDOWMENT_TOOLS,
   ...PPP_TOOLS,
   ...F13F_TOOLS,
+  ...FDIC_TOOLS,
+  ...OFR_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
