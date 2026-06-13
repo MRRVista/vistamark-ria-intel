@@ -44,6 +44,10 @@ import {
   pppSearch,
   pppLookup,
 } from "../sba-ppp/queries";
+import {
+  holdingsByManager,
+  holdersOfSecurity,
+} from "../sec-13f/queries";
 
 export interface ToolDef {
   name: string;
@@ -65,7 +69,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F).", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -148,6 +152,21 @@ const PPP_TOOLS: ToolDef[] = [
   },
 ];
 
+const F13F_TOOLS: ToolDef[] = [
+  {
+    name: "holdings_by_manager",
+    description: "Show an institutional investment manager's reported equity holdings from SEC Form 13F. Provide managerName (fuzzy substring, e.g. 'stepstone', 'cambridge associates') or cik. Returns the manager's most recent ingested filing's positions sorted by market value (or a specific period via periodOfReport YYYY-MM-DD), plus the filing's total reported value and position count. Answers 'what does institution X hold?' for OCIO competitive intelligence. NOTE: 13F covers 13(f) securities (US-listed equities, ETFs, options, convertible debt) over the $100M reporting threshold — not private funds, fixed income, or non-US listings. Holdings are only available for managers that have been ingested into the database.",
+    inputSchema: { type: "object", properties: { managerName: { type: "string" }, cik: { type: "string" }, periodOfReport: { type: "string" }, minValueUsd: { type: "number" }, limit: { type: "number", default: 100, maximum: 1000 } } },
+    handler: holdingsByManager,
+  },
+  {
+    name: "holders_of_security",
+    description: "Show which institutional managers hold a given security, from SEC Form 13F filings. Provide cusip (9-char) or issuerContains (fuzzy issuer-name substring, e.g. 'NVIDIA', 'Apple'). Returns each holder's position value and share count, sorted by value, plus aggregate stats (distinct holder count, total positions, aggregate value) — the crowding / 'smart money' view. Optional periodOfReport (YYYY-MM-DD) and minValueUsd. Operates over ingested 13F filings only, so coverage depends on which managers have been loaded.",
+    inputSchema: { type: "object", properties: { cusip: { type: "string" }, issuerContains: { type: "string" }, periodOfReport: { type: "string" }, minValueUsd: { type: "number" }, limit: { type: "number", default: 100, maximum: 1000 } } },
+    handler: holdersOfSecurity,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -155,5 +174,6 @@ export const TOOLS: ToolDef[] = [
   ...RETIREMENT_TOOLS,
   ...ENDOWMENT_TOOLS,
   ...PPP_TOOLS,
+  ...F13F_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
