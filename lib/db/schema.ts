@@ -430,6 +430,74 @@ export const pppLoans = pgTable(
   })
 );
 
+// v0.6.0 — SEC Form 13F institutional holdings.
+// Source: SEC Form 13F Data Sets (flattened quarterly TSV bulk files).
+//   https://www.sec.gov/data-research/sec-markets-data/form-13f-data-sets
+// f13f_filings: one row per accession (SUBMISSION + COVERPAGE + SUMMARYPAGE).
+// f13f_holdings: one row per INFOTABLE position.
+// VALUE units: whole dollars from 2023-01-03 onward, thousands before; the
+// ingest writes the whole-dollar-normalized figure into *Usd columns.
+export const f13fFilings = pgTable(
+  "f13f_filings",
+  {
+    accessionNumber: varchar("accession_number", { length: 25 }).primaryKey(),
+    cik: varchar("cik", { length: 10 }),
+    filingDate: date("filing_date"),
+    submissionType: varchar("submission_type", { length: 10 }),
+    periodOfReport: date("period_of_report"),
+    filingManagerName: text("filing_manager_name"),
+    filingManagerCity: varchar("filing_manager_city", { length: 64 }),
+    filingManagerState: varchar("filing_manager_state", { length: 4 }),
+    reportType: varchar("report_type", { length: 40 }),
+    crdNumber: varchar("crd_number", { length: 9 }),
+    secFileNumber: varchar("sec_file_number", { length: 20 }),
+    tableEntryTotal: integer("table_entry_total"),
+    tableValueTotal: bigint("table_value_total", { mode: "number" }),
+    tableValueTotalUsd: bigint("table_value_total_usd", { mode: "number" }),
+    otherManagersCount: integer("other_managers_count"),
+    isAmendment: boolean("is_amendment"),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    managerIdx: index("f13f_filings_manager_idx").on(t.filingManagerName),
+    cikIdx: index("f13f_filings_cik_idx").on(t.cik),
+    periodIdx: index("f13f_filings_period_idx").on(t.periodOfReport),
+    valueIdx: index("f13f_filings_value_idx").on(t.tableValueTotalUsd),
+    crdIdx: index("f13f_filings_crd_idx").on(t.crdNumber),
+  })
+);
+
+export const f13fHoldings = pgTable(
+  "f13f_holdings",
+  {
+    accessionNumber: varchar("accession_number", { length: 25 }).notNull(),
+    infotableSk: bigint("infotable_sk", { mode: "number" }).notNull(),
+    nameOfIssuer: text("name_of_issuer"),
+    titleOfClass: varchar("title_of_class", { length: 150 }),
+    cusip: varchar("cusip", { length: 9 }),
+    figi: varchar("figi", { length: 12 }),
+    valueRaw: bigint("value_raw", { mode: "number" }),
+    valueUsd: bigint("value_usd", { mode: "number" }),
+    sshPrnamt: bigint("ssh_prnamt", { mode: "number" }),
+    sshPrnamtType: varchar("ssh_prnamt_type", { length: 10 }),
+    putCall: varchar("put_call", { length: 10 }),
+    investmentDiscretion: varchar("investment_discretion", { length: 10 }),
+    votingAuthSole: bigint("voting_auth_sole", { mode: "number" }),
+    votingAuthShared: bigint("voting_auth_shared", { mode: "number" }),
+    votingAuthNone: bigint("voting_auth_none", { mode: "number" }),
+    periodOfReport: date("period_of_report"),
+    lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.accessionNumber, t.infotableSk] }),
+    accessionIdx: index("f13f_holdings_accession_idx").on(t.accessionNumber),
+    cusipIdx: index("f13f_holdings_cusip_idx").on(t.cusip),
+    issuerIdx: index("f13f_holdings_issuer_idx").on(t.nameOfIssuer),
+    valueIdx: index("f13f_holdings_value_idx").on(t.valueUsd),
+    periodIdx: index("f13f_holdings_period_idx").on(t.periodOfReport),
+  })
+);
+
 export type Plan = typeof plans.$inferSelect;
 export type PlanInsert = typeof plans.$inferInsert;
 
@@ -450,3 +518,7 @@ export type NacuboBenchmark = typeof nacuboBenchmarks.$inferSelect;
 export type NacuboBenchmarkInsert = typeof nacuboBenchmarks.$inferInsert;
 export type PppLoan = typeof pppLoans.$inferSelect;
 export type PppLoanInsert = typeof pppLoans.$inferInsert;
+export type F13fFiling = typeof f13fFilings.$inferSelect;
+export type F13fFilingInsert = typeof f13fFilings.$inferInsert;
+export type F13fHolding = typeof f13fHoldings.$inferSelect;
+export type F13fHoldingInsert = typeof f13fHoldings.$inferInsert;
