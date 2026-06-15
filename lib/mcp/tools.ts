@@ -63,6 +63,11 @@ import {
   edgarCompanyFilings,
   edgarFinancialConcept,
 } from "../edgar/tools";
+import {
+  bdcList,
+  bdcProfile,
+  bdcScreen,
+} from "../bdc/tools";
 
 export interface ToolDef {
   name: string;
@@ -84,7 +89,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, and SEC EDGAR are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR, and BDC are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -245,6 +250,27 @@ const EDGAR_TOOLS: ToolDef[] = [
   },
 ];
 
+const BDC_TOOLS: ToolDef[] = [
+  {
+    name: "bdc_list",
+    description: "List the tracked universe of U.S.-listed Business Development Companies (BDCs) — large/mid-cap names in the VanEck BIZD / MVIS US BDC Index style. Returns ticker, name, and the live SEC CIK (resolved at query time), flagging any ticker that no longer resolves. Optional nameContains / tickerContains filters. BDCs are the main listed private-credit vehicles (Ares ARCC, Blue Owl OBDC, FS KKR FSK, Blackstone BXSL, Main Street MAIN, etc.); use a returned ticker/cik with bdc_profile or any edgar_* tool. NOTE: the universe is a curated snapshot, not a live BIZD holdings pull.",
+    inputSchema: { type: "object", properties: { nameContains: { type: "string" }, tickerContains: { type: "string" }, limit: { type: "number", default: 100, maximum: 100 } } },
+    handler: bdcList,
+  },
+  {
+    name: "bdc_profile",
+    description: "Profile a single BDC from SEC data (live EDGAR XBRL + submissions). Resolve by ticker (e.g. ARCC) or name. Returns key BDC financials — total assets, net assets, total investments at fair value, total investment income, net investment income, and NAV per share — plus recent filings (10-K/10-Q/8-K/N-2/DEF 14A) with direct EDGAR URLs. annualOnly (default true) uses 10-K / full-year facts. BDC XBRL tagging varies by filer, so each metric reports the concept that actually resolved, or null if this filer didn't tag it (NAV/share is frequently untagged). Figures are as-reported.",
+    inputSchema: { type: "object", properties: { ticker: { type: "string" }, name: { type: "string" }, annualOnly: { type: "boolean", default: true } } },
+    handler: bdcProfile,
+  },
+  {
+    name: "bdc_screen",
+    description: "Rank the tracked BDC universe by a financial metric pulled from SEC XBRL (live): netAssets (default), totalAssets, totalInvestmentsFairValue, totalInvestmentIncome, netInvestmentIncome, or navPerShare. Processes the first `limit` BDCs (default 12, max = universe size); each BDC is a separate SEC call, so larger limits are slower. Returns a descending ranking plus any names whose metric wasn't tagged or whose ticker didn't resolve. Useful for sizing and peer screening across listed private-credit BDCs.",
+    inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["totalAssets", "netAssets", "totalInvestmentsFairValue", "totalInvestmentIncome", "netInvestmentIncome", "navPerShare"], default: "netAssets" }, limit: { type: "number", default: 12, maximum: 40 }, annualOnly: { type: "boolean", default: true } } },
+    handler: bdcScreen,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -256,5 +282,6 @@ export const TOOLS: ToolDef[] = [
   ...FDIC_TOOLS,
   ...OFR_TOOLS,
   ...EDGAR_TOOLS,
+  ...BDC_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
