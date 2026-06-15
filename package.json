@@ -1,8 +1,8 @@
 {
   "name": "vistamark-ria-intel",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
-  "description": "Vistamark Intel — Form ADV + IRS EO BMF + ProPublica + DOL Form 5500 + IPEDS endowments + NACUBO benchmarks + SBA PPP loans + SEC Form 13F holdings + FDIC bank financials + OFR systemic-risk/funding + SEC EDGAR company intel + FRED/Treasury macro, normalized Postgres + live APIs, MCP server for Randall.",
+  "description": "Vistamark Intel — Form ADV + IRS EO BMF + ProPublica + DOL Form 5500 + IPEDS endowments + NACUBO benchmarks + SBA PPP loans + SEC Form 13F holdings + FDIC bank financials + OFR systemic-risk/funding + SEC EDGAR company intel + BDC (listed business development companies) + FRED/Treasury macro, normalized Postgres + live APIs, MCP server for Randall.",
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "vercel dev",
