@@ -44,9 +44,15 @@ export async function dolPlanSearch(args: DolPlanSearchArgs) {
   if (args.city) conds.push(ilike(plans.sponsDfeMailCity, args.city));
   if (args.planYear != null) conds.push(eq(plans.planYear, args.planYear));
   if (args.planType != null) conds.push(eq(plans.typePlanEntityCd, args.planType));
-  if (args.is401k) conds.push(ilike(plans.pensionPlanFeatureCodes, "%2C%"));
+  // Form 5500 pension feature code 2J = "Code section 401(k) feature".
+  // (2C is the MONEY PURCHASE plan code — the previous filter matched the wrong code.)
+  if (args.is401k) conds.push(ilike(plans.pensionPlanFeatureCodes, "%2J%"));
   if (args.isDefinedBenefit) {
-    conds.push(sql`${plans.pensionPlanFeatureCodes} ~ '3[DEFGH]'`);
+    // Defined-benefit pension feature codes are 1A–1I (pay-related, flat-dollar,
+    // cash balance, floor-offset, 401(h), 414(k), PBGC-covered, PBGC-terminated,
+    // frozen). The previous pattern (3[DEFGH]) matched unrelated "other
+    // characteristics" codes.
+    conds.push(sql`${plans.pensionPlanFeatureCodes} ~ '1[A-I]'`);
   }
   if (args.minAssetsEoy != null) conds.push(gte(plans.totAssetsEoyAmt, args.minAssetsEoy));
   if (args.maxAssetsEoy != null) conds.push(lte(plans.totAssetsEoyAmt, args.maxAssetsEoy));
