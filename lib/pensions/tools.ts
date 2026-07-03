@@ -8,24 +8,26 @@
  * datasets.
  *
  * Tools:
- *   ppd_plan_search  — screen/rank the plan universe (state, size, funded ratio)
- *   ppd_plan_profile — one plan's multi-year funding time series
+ *   ppd_plan_search     — screen/rank the plan universe (state, size, funded ratio)
+ *   ppd_plan_profile    — one plan's multi-year funding time series
+ *   ppd_list_variables  — the API's own variable catalog (q=ListVariables)
  *
  * Honest-data conventions: values are passed through as reported (with unit
  * conversion flagged explicitly in the output); fields a plan didn't report
  * come back null; if the primary variable set fails, a minimal core set is
  * retried and the output says so (degraded: true). rowsFetched and
- * sampleRawRow expose the upstream shape for diagnostics. Nothing is
+ * sampleRawRows expose the upstream shape for diagnostics. Nothing is
  * fabricated.
  */
-import { ppdQVariables, type PpdRow } from "./client";
+import { ppdQVariables, ppdList, isErrorEnvelope, type PpdRow } from "./client";
 
-// Primary variable set (PPD variable names). If the API rejects the set or
-// returns nothing usable, we fall back to CORE_VARS and mark the response
-// degraded.
+// Primary variable set (PPD variable names). ppd_id is deliberately NOT
+// requested — the API returns plan identifiers alongside requested variables,
+// and requesting non-variable columns can reject the whole query. If the API
+// rejects the set or returns nothing usable, we fall back to CORE_VARS and
+// mark the response degraded.
 const FULL_VARS = [
   "fy",
-  "ppd_id",
   "PlanName",
   "StateAbbrev",
   "AdministeringGovt",
@@ -37,7 +39,7 @@ const FULL_VARS = [
   "actives_tot",
   "beneficiaries_tot",
 ];
-const CORE_VARS = ["fy", "ppd_id", "PlanName", "MktAssets_net", "ActFundedRatio_GASB"];
+const CORE_VARS = ["fy", "PlanName", "MktAssets_net", "ActFundedRatio_GASB"];
 
 /** Case-insensitive field getter (the API's key casing is not guaranteed). */
 function field(row: PpdRow, ...names: string[]): any {
@@ -89,19 +91,26 @@ function mapRow(row: PpdRow) {
   };
 }
 
+function hasPlanIdentity(rows: PpdRow[]): boolean {
+  return rows.some(
+    (r) => field(r, "ppd_id") !== undefined || field(r, "PlanName") !== undefined
+  );
+}
+
 async function fetchRecent(): Promise<{ rows: PpdRow[]; degraded: boolean; varsUsed: string[] }> {
-  const fyStart = new Date().getFullYear() - 4;
+  const fyEnd = new Date().getFullYear();
+  const fyStart = fyEnd - 4;
   try {
-    const { rows } = await ppdQVariables(FULL_VARS, { fyStart });
-    // "Usable" means at least one row carries a plan identifier — a bare
+    const { rows } = await ppdQVariables(FULL_VARS, { fyStart, fyEnd });
+    // \"Usable\" means at least one row carries a plan identifier — a bare
     // status/meta envelope doesn't count as success.
-    if (rows.some((r) => field(r, "ppd_id") !== undefined || field(r, "PlanName") !== undefined)) {
+    if (hasPlanIdentity(rows)) {
       return { rows, degraded: false, varsUsed: FULL_VARS };
     }
   } catch {
     // fall through to core set
   }
-  const { rows } = await ppdQVariables(CORE_VARS, { fyStart });
+  const { rows } = await ppdQVariables(CORE_VARS, { fyStart, fyEnd });
   return { rows, degraded: true, varsUsed: CORE_VARS };
 }
 
@@ -174,7 +183,7 @@ export async function ppdPlanSearch(args: PpdPlanSearchArgs) {
     returned: out.length,
     plans: out,
     rowsFetched: rows.length,
-    sampleRawRow: rows.length ? rows[0] : null,
+    sampleRawRows: rows.slice(0, 2),
     dataSource: "Public Plans Database (publicplansdata.org, live API)",
     unitAssumption: "PPD thousands \u00d7 1000",
     degraded,
@@ -231,7 +240,7 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
         dataSource: "Public Plans Database (publicplansdata.org, live API)",
         error: `No plan matched \"${args.name}\". Use ppd_plan_search to browse the universe.`,
         rowsFetched: rows.length,
-        sampleRawRow: rows.length ? rows[0] : null,
+        sampleRawRows: rows.slice(0, 2),
         sampleOfPlanNames: sample,
         series: [],
       };
@@ -251,11 +260,13 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
     history = res.rows;
     degraded = true;
   }
-  // Defensive: filter to the target plan client-side even if the server-side
-  // ppdid filter was ignored, so a filter-param mismatch can't return the
-  // wrong plan's data.
+  // Defensive: scope to the target plan client-side even if the server-side
+  // ppdid filter was ignored (or no ppd_id was available), so a filter-param
+  // mismatch can't return the wrong plan's data.
   if (ppdId != null) {
     history = history.filter((r) => num(field(r, "ppd_id")) === ppdId);
+  } else if (resolvedName) {
+    history = history.filter((r) => String(field(r, "PlanName") ?? "") === resolvedName);
   }
 
   const series = history
@@ -283,5 +294,39 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
       " Series is annual by plan fiscal year (FY2001+), oldest first, capped to the most recent " +
       limit +
       " years.",
+  };
+}
+
+export interface PpdListVariablesArgs {
+  nameContains?: string;
+  limit?: number;
+}
+
+/**
+ * The API's own variable catalog (q=ListVariables). The authoritative source
+ * for exact variable names — useful both as a power-user discovery tool and
+ * as the endpoint truth probe when a QVariables query is rejected.
+ */
+export async function ppdListVariables(args: PpdListVariablesArgs) {
+  const { rows, raw } = await ppdList("ListVariables");
+  const errorEnvelope = isErrorEnvelope(rows);
+  let filtered = rows;
+  if (args.nameContains) {
+    const n = args.nameContains.trim().toLowerCase();
+    filtered = rows.filter((r) => JSON.stringify(r).toLowerCase().includes(n));
+  }
+  const limit = Math.min(args.limit ?? 50, 500);
+  const out = filtered.slice(0, limit);
+  return {
+    totalVariables: rows.length,
+    matched: filtered.length,
+    returned: out.length,
+    variables: out,
+    apiErrorEnvelope: errorEnvelope || undefined,
+    unparsedRaw: raw ?? undefined,
+    dataSource: "Public Plans Database variable catalog (q=ListVariables, live API)",
+    note: errorEnvelope
+      ? "The API returned an error/status envelope instead of a catalog — the rows above are the verbatim envelope for diagnosis."
+      : "Exact PPD variable names as published by the API. Use these names when interpreting ppd_plan_search/ppd_plan_profile fields.",
   };
 }

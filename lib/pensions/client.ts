@@ -7,13 +7,17 @@
  * annual data FY2001+. Free public API, no key.
  *
  * Endpoint shape (QVariables-style query):
- *   https://publicplansdata.org/api/?q=QVariables&variables=fy,ppd_id,PlanName,...&format=json
+ *   https://publicplansdata.org/api/?q=QVariables&variables=fy,PlanName,...&format=json
  *   Optional filters: filterfystart=YYYY, filterfyend=YYYY, filterppdid=NN
+ * Catalog queries: q=ListVariables / q=ListDataset (no variables param).
  *
  * The response envelope varies — observed shapes include a bare array of row
- * objects, [statusMeta, [rows]], nested arrays, and keyed objects — so
- * normalizeRows() flattens mixed envelopes and keeps only elements that look
- * like plan data rows (contain fy / ppd_id / PlanName keys, any casing).
+ * objects, [statusMeta, [rows]], nested arrays, and keyed objects — and the
+ * API signals rejection with a {status: \"ERROR\"} meta object rather than an
+ * HTTP error. normalizeRows() flattens mixed envelopes and keeps elements
+ * that look like plan data rows (fy / ppd_id / PlanName keys, any casing);
+ * if none qualify it returns all objects so callers can surface the actual
+ * shape (including error metas) instead of hiding it.
  */
 import { jsonFetch } from "../data/http";
 
@@ -61,6 +65,17 @@ export function normalizeRows(raw: any): PpdRow[] | null {
   return dataRows.length ? dataRows : objs;
 }
 
+/** True if the row set is just an API error/status envelope, not data. */
+export function isErrorEnvelope(rows: PpdRow[]): boolean {
+  return (
+    rows.length > 0 &&
+    rows.every((r) => {
+      const keys = Object.keys(r).map((k) => k.toLowerCase());
+      return keys.includes("status") || keys.includes("recordcount") || keys.includes("message");
+    })
+  );
+}
+
 export interface PpdQueryOpts {
   fyStart?: number;
   fyEnd?: number;
@@ -75,9 +90,28 @@ export async function ppdQVariables(
   params.set("q", "QVariables");
   params.set("variables", variables.join(","));
   params.set("format", "json");
-  if (opts.fyStart != null) params.set("filterfystart", String(opts.fyStart));
-  if (opts.fyEnd != null) params.set("filterfyend", String(opts.fyEnd));
+  if (opts.fyStart != null) {
+    params.set("filterfystart", String(opts.fyStart));
+    // The API appears to expect the year filters as a pair; default the end
+    // of the window to the current year when the caller doesn't provide one.
+    params.set("filterfyend", String(opts.fyEnd ?? new Date().getFullYear()));
+  } else if (opts.fyEnd != null) {
+    params.set("filterfyend", String(opts.fyEnd));
+  }
   if (opts.ppdId != null) params.set("filterppdid", String(opts.ppdId));
+  const raw = await jsonFetch<any>(`${PPD_BASE}?${params.toString()}`);
+  const rows = normalizeRows(raw);
+  if (!rows) return { rows: [], raw };
+  return { rows, raw: null };
+}
+
+/** Catalog queries (ListVariables / ListDataset) — no variables param. */
+export async function ppdList(
+  q: "ListVariables" | "ListDataset"
+): Promise<{ rows: PpdRow[]; raw: any | null }> {
+  const params = new URLSearchParams();
+  params.set("q", q);
+  params.set("format", "json");
   const raw = await jsonFetch<any>(`${PPD_BASE}?${params.toString()}`);
   const rows = normalizeRows(raw);
   if (!rows) return { rows: [], raw };
