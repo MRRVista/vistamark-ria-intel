@@ -68,6 +68,10 @@ import {
   bdcProfile,
   bdcScreen,
 } from "../bdc/tools";
+import {
+  ppdPlanSearch,
+  ppdPlanProfile,
+} from "../pensions/tools";
 
 export interface ToolDef {
   name: string;
@@ -89,7 +93,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR, and BDC are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR, BDC, and public-pension (PPD) tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -271,6 +275,21 @@ const BDC_TOOLS: ToolDef[] = [
   },
 ];
 
+const PENSION_TOOLS: ToolDef[] = [
+  {
+    name: "ppd_plan_search",
+    description: "Search/screen U.S. state & local public pension plans (Public Plans Database, live API — the CRR/MissionSquare/NASRA/GFOA panel of ~230 largest public plans, the vast majority of public-plan assets). Filter by state, plan name, market-asset range (whole USD), and GASB funded-ratio range; sort by assets (default), funded_ratio, return_assumption, or name. Returns each plan's latest reported FY: market/actuarial assets, actuarial liabilities, funded ratio %, investment return assumption %, and membership counts. Public/governmental plans are ERISA-exempt and NOT in the DOL 5500 dataset — this is the asset-owner universe for public-fund OCIO prospecting (underfunded plans and above-market return assumptions are conversation starters).",
+    inputSchema: { type: "object", properties: { state: { type: "string" }, nameContains: { type: "string" }, minAssetsUsd: { type: "number" }, maxAssetsUsd: { type: "number" }, minFundedRatioPct: { type: "number" }, maxFundedRatioPct: { type: "number" }, sortBy: { type: "string", enum: ["assets", "funded_ratio", "return_assumption", "name"], default: "assets" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 25, maximum: 250 } } },
+    handler: ppdPlanSearch,
+  },
+  {
+    name: "ppd_plan_profile",
+    description: "One public pension plan's multi-year funding history (Public Plans Database, live API). Resolve by ppdId or plan name (fuzzy; e.g. 'Illinois Municipal', 'California PERS'). Returns an annual series FY2001+ of market and actuarial assets, actuarial liabilities, GASB funded ratio %, investment return assumption %, and active/beneficiary membership, plus the latest year. Dollar amounts converted from PPD thousands to whole USD (flagged as unitAssumption). Useful for funding-trend diligence on a public-plan prospect: direction of funded ratio, whether the return assumption has been cut, and demographic pressure (actives vs beneficiaries).",
+    inputSchema: { type: "object", properties: { ppdId: { type: "number" }, name: { type: "string" }, limit: { type: "number", default: 25, maximum: 30 } } },
+    handler: ppdPlanProfile,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -283,5 +302,6 @@ export const TOOLS: ToolDef[] = [
   ...OFR_TOOLS,
   ...EDGAR_TOOLS,
   ...BDC_TOOLS,
+  ...PENSION_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
