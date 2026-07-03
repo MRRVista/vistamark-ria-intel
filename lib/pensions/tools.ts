@@ -14,12 +14,15 @@
  * Honest-data conventions: values are passed through as reported (with unit
  * conversion flagged explicitly in the output); fields a plan didn't report
  * come back null; if the primary variable set fails, a minimal core set is
- * retried and the output says so (degraded: true). Nothing is fabricated.
+ * retried and the output says so (degraded: true). rowsFetched and
+ * sampleRawRow expose the upstream shape for diagnostics. Nothing is
+ * fabricated.
  */
 import { ppdQVariables, type PpdRow } from "./client";
 
 // Primary variable set (PPD variable names). If the API rejects the set or
-// returns nothing, we fall back to CORE_VARS and mark the response degraded.
+// returns nothing usable, we fall back to CORE_VARS and mark the response
+// degraded.
 const FULL_VARS = [
   "fy",
   "ppd_id",
@@ -90,7 +93,11 @@ async function fetchRecent(): Promise<{ rows: PpdRow[]; degraded: boolean; varsU
   const fyStart = new Date().getFullYear() - 4;
   try {
     const { rows } = await ppdQVariables(FULL_VARS, { fyStart });
-    if (rows.length) return { rows, degraded: false, varsUsed: FULL_VARS };
+    // "Usable" means at least one row carries a plan identifier — a bare
+    // status/meta envelope doesn't count as success.
+    if (rows.some((r) => field(r, "ppd_id") !== undefined || field(r, "PlanName") !== undefined)) {
+      return { rows, degraded: false, varsUsed: FULL_VARS };
+    }
   } catch {
     // fall through to core set
   }
@@ -102,8 +109,9 @@ async function fetchRecent(): Promise<{ rows: PpdRow[]; degraded: boolean; varsU
 function latestPerPlan(rows: PpdRow[]): PpdRow[] {
   const byPlan = new Map<string, PpdRow>();
   for (const row of rows) {
-    const id = String(field(row, "ppd_id") ?? field(row, "PlanName") ?? "");
-    if (!id) continue;
+    const idRaw = field(row, "ppd_id") ?? field(row, "PlanName");
+    if (idRaw == null || idRaw === "") continue;
+    const id = String(idRaw);
     const fy = num(field(row, "fy")) ?? -1;
     const prev = byPlan.get(id);
     const prevFy = prev ? num(field(prev, "fy")) ?? -1 : -2;
@@ -159,12 +167,14 @@ export async function ppdPlanSearch(args: PpdPlanSearchArgs) {
 
   const limit = Math.min(args.limit ?? 25, 250);
   const out = mapped.slice(0, limit);
-  // NOTE: plans/matchCount lead the object deliberately — downstream summaries
+  // NOTE: rows/diagnostics lead the object deliberately — downstream summaries
   // truncate, and the data should surface before the boilerplate.
   return {
     matchCount: mapped.length,
     returned: out.length,
     plans: out,
+    rowsFetched: rows.length,
+    sampleRawRow: rows.length ? rows[0] : null,
     dataSource: "Public Plans Database (publicplansdata.org, live API)",
     unitAssumption: "PPD thousands \u00d7 1000",
     degraded,
@@ -220,6 +230,8 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
       return {
         dataSource: "Public Plans Database (publicplansdata.org, live API)",
         error: `No plan matched \"${args.name}\". Use ppd_plan_search to browse the universe.`,
+        rowsFetched: rows.length,
+        sampleRawRow: rows.length ? rows[0] : null,
         sampleOfPlanNames: sample,
         series: [],
       };
