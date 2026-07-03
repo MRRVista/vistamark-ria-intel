@@ -159,16 +159,18 @@ export async function ppdPlanSearch(args: PpdPlanSearchArgs) {
 
   const limit = Math.min(args.limit ?? 25, 250);
   const out = mapped.slice(0, limit);
+  // NOTE: plans/matchCount lead the object deliberately — downstream summaries
+  // truncate, and the data should surface before the boilerplate.
   return {
-    dataSource: "Public Plans Database (publicplansdata.org, live API)",
-    universe:
-      "~230 largest U.S. state & local public pension plans (CRR/MissionSquare/NASRA/GFOA panel), latest reported FY per plan",
-    unitAssumption: "PPD thousands \u00d7 1000",
-    degraded,
-    variablesUsed: varsUsed,
     matchCount: mapped.length,
     returned: out.length,
     plans: out,
+    dataSource: "Public Plans Database (publicplansdata.org, live API)",
+    unitAssumption: "PPD thousands \u00d7 1000",
+    degraded,
+    variablesUsed: varsUsed,
+    universe:
+      "~230 largest U.S. state & local public pension plans (CRR/MissionSquare/NASRA/GFOA panel), latest reported FY per plan",
     note:
       UNIT_NOTE +
       (degraded
@@ -199,15 +201,30 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
     const { rows } = await fetchRecent();
     const n = args.name.trim().toLowerCase();
     const latest = latestPerPlan(rows);
-    const exact = latest.find((r) => String(field(r, "PlanName") ?? "").toLowerCase() === n);
-    const hit = exact ?? latest.find((r) => String(field(r, "PlanName") ?? "").toLowerCase().includes(n));
-    if (!hit) {
+    const names = latest.map((r) => String(field(r, "PlanName") ?? ""));
+    const exactIdx = names.findIndex((nm) => nm.toLowerCase() === n);
+    // Fuzzy fallback 1: plan name contains the query. Fallback 2: every word of
+    // the query appears in the plan name (handles 'California PERS' vs
+    // 'California Public Employees\u2019 Retirement System' style differences).
+    const containsIdx = exactIdx >= 0 ? exactIdx : names.findIndex((nm) => nm.toLowerCase().includes(n));
+    let idx = containsIdx;
+    if (idx < 0) {
+      const words = n.split(/\s+/).filter(Boolean);
+      idx = names.findIndex((nm) => {
+        const nl = nm.toLowerCase();
+        return words.every((w) => nl.includes(w));
+      });
+    }
+    if (idx < 0) {
+      const sample = names.slice(0, 8);
       return {
         dataSource: "Public Plans Database (publicplansdata.org, live API)",
         error: `No plan matched \"${args.name}\". Use ppd_plan_search to browse the universe.`,
+        sampleOfPlanNames: sample,
         series: [],
       };
     }
+    const hit = latest[idx]!;
     ppdId = num(field(hit, "ppd_id"));
     resolvedName = field(hit, "PlanName") ?? null;
   }
@@ -238,17 +255,17 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
   const latest = trimmed.length ? trimmed[trimmed.length - 1] : null;
 
   return {
-    dataSource: "Public Plans Database (publicplansdata.org, live API)",
     plan: {
       ppdId,
       planName: latest?.planName ?? resolvedName,
       state: latest?.state ?? null,
     },
+    latest,
+    observationCount: trimmed.length,
+    series: trimmed,
+    dataSource: "Public Plans Database (publicplansdata.org, live API)",
     unitAssumption: "PPD thousands \u00d7 1000",
     degraded,
-    observationCount: trimmed.length,
-    latest,
-    series: trimmed,
     note:
       UNIT_NOTE +
       " Series is annual by plan fiscal year (FY2001+), oldest first, capped to the most recent " +

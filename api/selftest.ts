@@ -42,8 +42,8 @@ const CHECKS: Check[] = [
   { name: "edgar-concept", tool: "edgar_financial_concept", args: { ticker: "AAPL", concept: "Revenues", annualOnly: true, limit: 2 } },
   { name: "bdc-list", tool: "bdc_list", args: { limit: 5 } },
   { name: "bdc-profile", tool: "bdc_profile", args: { ticker: "ARCC" } },
-  { name: "ppd-search", tool: "ppd_plan_search", args: { state: "IL", limit: 3 }, note: "expect IL public plans (IMRF, Illinois Teachers, SURS, Chicago funds)" },
-  { name: "ppd-profile", tool: "ppd_plan_profile", args: { name: "California PERS" }, note: "unit sanity probe — CalPERS market assets should land in the hundreds of billions USD; if it reads ~$500M the thousands->USD conversion is wrong" },
+  { name: "ppd-search", tool: "ppd_plan_search", args: { state: "IL", limit: 2 }, note: "expect IL public plans (IMRF, Illinois Teachers, SURS, Chicago funds); plan rows lead the payload" },
+  { name: "ppd-profile", tool: "ppd_plan_profile", args: { name: "California", limit: 3 }, note: "unit sanity probe — a large CA plan's market assets should land in the hundreds of billions USD; if it reads ~$500M the thousands->USD conversion is wrong" },
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
 ];
