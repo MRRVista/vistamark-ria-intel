@@ -71,6 +71,7 @@ import {
 import {
   ppdPlanSearch,
   ppdPlanProfile,
+  ppdListVariables,
 } from "../pensions/tools";
 
 export interface ToolDef {
@@ -287,6 +288,12 @@ const PENSION_TOOLS: ToolDef[] = [
     description: "One public pension plan's multi-year funding history (Public Plans Database, live API). Resolve by ppdId or plan name (fuzzy; e.g. 'Illinois Municipal', 'California PERS'). Returns an annual series FY2001+ of market and actuarial assets, actuarial liabilities, GASB funded ratio %, investment return assumption %, and active/beneficiary membership, plus the latest year. Dollar amounts converted from PPD thousands to whole USD (flagged as unitAssumption). Useful for funding-trend diligence on a public-plan prospect: direction of funded ratio, whether the return assumption has been cut, and demographic pressure (actives vs beneficiaries).",
     inputSchema: { type: "object", properties: { ppdId: { type: "number" }, name: { type: "string" }, limit: { type: "number", default: 25, maximum: 30 } } },
     handler: ppdPlanProfile,
+  },
+  {
+    name: "ppd_list_variables",
+    description: "List the Public Plans Database's own variable catalog (q=ListVariables, live API) — the authoritative source for exact PPD variable names and definitions (e.g. MktAssets_net, ActFundedRatio_GASB, InvestmentReturnAssumption_GASB). Optional nameContains filter (matches anywhere in the catalog entry) and limit. Use to discover which funding, return, membership, and asset-allocation variables exist before interpreting ppd_plan_search / ppd_plan_profile output, or to diagnose a rejected query.",
+    inputSchema: { type: "object", properties: { nameContains: { type: "string" }, limit: { type: "number", default: 50, maximum: 500 } } },
+    handler: ppdListVariables,
   },
 ];
 
