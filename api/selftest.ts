@@ -39,7 +39,7 @@ const CHECKS: Check[] = [
   { name: "fdic", tool: "fdic_bank_search", args: { state: "IL", communityBankOnly: true, limit: 2 } },
   { name: "ofr-fsi", tool: "ofr_financial_stress_index", args: { lookback: 5 } },
   { name: "edgar-lookup", tool: "edgar_company_lookup", args: { query: "Apple", limit: 1 } },
-  { name: "edgar-concept", tool: "edgar_financial_concept", args: { ticker: "AAPL", concept: "Revenues", annualOnly: true, limit: 2 } },
+  { name: "edgar-concept", tool: "edgar_financial_concept", args: { ticker: "AAPL", concept: "Revenues", annualOnly: true, limit: 2 }, note: "stale-tag fallback probe — Apple stopped tagging Revenues after FY2018; expect resolvedConcept RevenueFromContractWithCustomerExcludingAssessedTax, a current-FY latest fact, and staleFallbackUsed:true (FY2018 latest = the old bug)" },
   { name: "edgar-fts", tool: "edgar_fulltext_search", args: { query: "Ares Capital", forms: "10-K", limit: 3 }, note: "full-text search probe — expect hits naming Ares Capital with CIK + doc URLs" },
   { name: "formd-search", tool: "formd_search", args: { query: "fund", limit: 3 }, note: "Form D probe — expect a large totalMatches and recent Reg D filings with issuer names" },
   { name: "usasp-awards", tool: "usaspending_awards_search", args: { recipientName: "University of Chicago", awardType: "grants", startDate: "2024-07-01", limit: 3 }, note: "federal grants probe (explicit ~2-yr window — the award-level endpoint is slow over wide windows) — expect multi-million-dollar UChicago obligations with agency names and award links" },
