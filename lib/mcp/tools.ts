@@ -45,6 +45,10 @@ import {
   pppLookup,
 } from "../sba-ppp/queries";
 import {
+  usaspendingAwardsSearch,
+  usaspendingTopRecipients,
+} from "../usaspending/tools";
+import {
   holdingsByManager,
   holdersOfSecurity,
 } from "../sec-13f/queries";
@@ -98,7 +102,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), BDC, and public-pension (PPD) tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), BDC, public-pension (PPD), and USAspending tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -178,6 +182,21 @@ const PPP_TOOLS: ToolDef[] = [
     description: "Look up SBA PPP loans for a specific borrower. Provide loanNumber for a single loan, or borrowerName (fuzzy match, optionally scoped by state) to return all matching loans sorted by amount. Useful for checking whether a prospect, client, or counterparty took PPP money and how much was forgiven.",
     inputSchema: { type: "object", properties: { loanNumber: { type: "string" }, borrowerName: { type: "string" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 200 } } },
     handler: pppLookup,
+  },
+];
+
+const USASPENDING_TOOLS: ToolDef[] = [
+  {
+    name: "usaspending_awards_search",
+    description: "Search federal awards to a recipient (USAspending.gov, live API). Award-level detail: grants, contracts, loans, or direct payments (awardType picks the group — the API cannot mix groups in one request). Filter by recipientName (fuzzy), keywords, recipientState, and startDate/endDate (default: last 10 years). Returns award ID, recipient, dates, obligation amount (whole USD), awarding agency/sub-agency, description, and a USAspending.gov award link. Prospecting/diligence signal: a nonprofit or health system living on large federal grants has budget and reserve dynamics worth a board conversation; a company with big federal contracts has revenue concentration worth knowing. Pairs with irs_eo_search (find the org) — then this shows its federal money.",
+    inputSchema: { type: "object", properties: { recipientName: { type: "string" }, keywords: { type: "string" }, awardType: { type: "string", enum: ["grants", "contracts", "loans", "direct_payments", "other", "idvs"], default: "grants" }, recipientState: { type: "string" }, startDate: { type: "string" }, endDate: { type: "string" }, sortBy: { type: "string", enum: ["amount", "end_date"], default: "amount" }, limit: { type: "number", default: 25, maximum: 100 }, page: { type: "number", default: 1 } } },
+    handler: usaspendingAwardsSearch,
+  },
+  {
+    name: "usaspending_top_recipients",
+    description: "Rank the top recipients of federal awards by obligation total (USAspending.gov, live API) — the screening view. Scope by awardType group (grants, contracts, loans, direct_payments, other, idvs), recipientState, and startDate/endDate (default: last 10 years). Returns recipient name, aggregated obligations (whole USD) over the requested period/type, and recipient identifiers. Use to screen e.g. 'top federal grant recipients in IL' for nonprofit/health-system prospecting, then drill into a name with usaspending_awards_search. Totals are period-scoped obligations, not lifetime figures.",
+    inputSchema: { type: "object", properties: { awardType: { type: "string", enum: ["grants", "contracts", "loans", "direct_payments", "other", "idvs"], default: "grants" }, recipientState: { type: "string" }, startDate: { type: "string" }, endDate: { type: "string" }, limit: { type: "number", default: 10, maximum: 100 }, page: { type: "number", default: 1 } } },
+    handler: usaspendingTopRecipients,
   },
 ];
 
@@ -320,6 +339,7 @@ export const TOOLS: ToolDef[] = [
   ...RETIREMENT_TOOLS,
   ...ENDOWMENT_TOOLS,
   ...PPP_TOOLS,
+  ...USASPENDING_TOOLS,
   ...F13F_TOOLS,
   ...FDIC_TOOLS,
   ...OFR_TOOLS,
