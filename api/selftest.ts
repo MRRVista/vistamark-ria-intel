@@ -44,6 +44,8 @@ const CHECKS: Check[] = [
   { name: "formd-search", tool: "formd_search", args: { query: "fund", limit: 3 }, note: "Form D probe — expect a large totalMatches and recent Reg D filings with issuer names" },
   { name: "usasp-awards", tool: "usaspending_awards_search", args: { recipientName: "University of Chicago", awardType: "grants", startDate: "2024-07-01", limit: 3 }, note: "federal grants probe (explicit ~2-yr window — the award-level endpoint is slow over wide windows) — expect multi-million-dollar UChicago obligations with agency names and award links" },
   { name: "usasp-top", tool: "usaspending_top_recipients", args: { recipientState: "IL", awardType: "grants", limit: 3 }, note: "screening probe — top IL federal grant recipients over the default 10-year window; expect state/university/health names with $B-scale totals" },
+  { name: "gleif-search", tool: "gleif_entity_search", args: { query: "BlackRock", limit: 3 }, note: "LEI resolution probe — expect BlackRock entities with 20-char LEIs, jurisdictions, and ACTIVE status" },
+  { name: "gleif-profile", tool: "gleif_entity_profile", args: { name: "Ares Management", childrenLimit: 3 }, note: "family-tree probe — resolve by name (top match), fetch record + direct/ultimate parents (null is a valid reporting exception) + up to 3 direct children" },
   { name: "bdc-list", tool: "bdc_list", args: { limit: 5 } },
   { name: "bdc-profile", tool: "bdc_profile", args: { ticker: "ARCC" } },
   { name: "ppd-listvars", tool: "ppd_list_variables", args: { nameContains: "assets", limit: 4 }, note: "endpoint truth probe — the API's own catalog of exact variable names; if this errors too, the query grammar assumption is wrong" },
