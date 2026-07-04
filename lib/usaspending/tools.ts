@@ -14,9 +14,13 @@
  *
  * API notes (api.usaspending.gov/api/v2): POST JSON endpoints; award type
  * groups cannot be mixed in one request (contracts vs grants vs loans...);
- * amounts are OBLIGATIONS in whole USD (not outlays). Parsed defensively —
- * sampleRawRow surfaces the upstream shape if mapping yields nothing, and
- * jsonFetch errors include the API's own error detail for diagnosis.
+ * amounts are OBLIGATIONS in whole USD (not outlays). Performance: the
+ * award-level search endpoint is slow over wide windows (fuzzy recipient
+ * text matching + sort across years), so its default period is the last
+ * 3 years; the aggregation endpoint handles wide windows fine, so
+ * top-recipients defaults to 10 years. Parsed defensively — sampleRawRow
+ * surfaces the upstream shape if mapping yields nothing, and jsonFetch
+ * errors include the API's own error detail for diagnosis.
  */
 import { jsonFetch } from "../data/http";
 
@@ -46,12 +50,16 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function resolvePeriod(startDate?: string, endDate?: string): { start_date: string; end_date: string } {
+function resolvePeriod(
+  startDate: string | undefined,
+  endDate: string | undefined,
+  defaultYears: number
+): { start_date: string; end_date: string } {
   const end = endDate ?? isoDate(new Date());
   let start = startDate;
   if (!start) {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 10);
+    d.setFullYear(d.getFullYear() - defaultYears);
     start = isoDate(d);
   }
   return { start_date: start, end_date: end };
@@ -99,7 +107,9 @@ export interface UsaspendingAwardsSearchArgs {
 
 export async function usaspendingAwardsSearch(args: UsaspendingAwardsSearchArgs) {
   const { codes, group } = resolveAwardTypes(args.awardType);
-  const time_period = [resolvePeriod(args.startDate, args.endDate)];
+  // Award-level search is slow over wide windows on the API side; default to
+  // a 3-year window and let callers widen explicitly via startDate/endDate.
+  const time_period = [resolvePeriod(args.startDate, args.endDate, 3)];
   const filters: any = { award_type_codes: codes, time_period };
   if (args.recipientName && args.recipientName.trim()) {
     filters.recipient_search_text = [args.recipientName.trim()];
@@ -156,7 +166,7 @@ export async function usaspendingAwardsSearch(args: UsaspendingAwardsSearchArgs)
     },
     note:
       OBLIGATION_NOTE +
-      " Default period is the last 10 years; pass startDate/endDate (YYYY-MM-DD) to change. The endpoint paginates without a total count — pageMetadata.hasNext signals more pages. Each award links to its USAspending page.",
+      " Default period is the last 3 YEARS (this endpoint is slow over wide windows — widen with startDate/endDate deliberately, or use usaspending_top_recipients for long-window totals). The endpoint paginates without a total count — pageMetadata.hasNext signals more pages. Each award links to its USAspending page.",
   };
 }
 
@@ -171,7 +181,7 @@ export interface UsaspendingTopRecipientsArgs {
 
 export async function usaspendingTopRecipients(args: UsaspendingTopRecipientsArgs) {
   const { codes, group } = resolveAwardTypes(args.awardType);
-  const time_period = [resolvePeriod(args.startDate, args.endDate)];
+  const time_period = [resolvePeriod(args.startDate, args.endDate, 10)];
   const filters: any = { award_type_codes: codes, time_period };
   if (args.recipientState && args.recipientState.trim()) {
     filters.recipient_locations = [{ country: "USA", state: args.recipientState.trim().toUpperCase() }];
@@ -208,6 +218,6 @@ export async function usaspendingTopRecipients(args: UsaspendingTopRecipientsArg
     },
     note:
       OBLIGATION_NOTE +
-      " Aggregated by recipient over the requested period and award-type group only — not a lifetime total. Default period is the last 10 years. Use usaspending_awards_search to drill into a recipient's individual awards.",
+      " Aggregated by recipient over the requested period and award-type group only — not a lifetime total. Default period is the last 10 years (this aggregation endpoint handles wide windows fine). Use usaspending_awards_search to drill into a recipient's individual awards.",
   };
 }
