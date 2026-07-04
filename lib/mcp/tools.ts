@@ -64,6 +64,10 @@ import {
   edgarFinancialConcept,
 } from "../edgar/tools";
 import {
+  edgarFullTextSearch,
+  formdSearch,
+} from "../edgar/fulltext";
+import {
   bdcList,
   bdcProfile,
   bdcScreen,
@@ -94,7 +98,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR, BDC, and public-pension (PPD) tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), BDC, and public-pension (PPD) tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -253,6 +257,18 @@ const EDGAR_TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: { cik: { type: "string" }, ticker: { type: "string" }, name: { type: "string" }, concept: { type: "string" }, taxonomy: { type: "string" }, unit: { type: "string" }, annualOnly: { type: "boolean" }, limit: { type: "number", default: 40, maximum: 500 } }, required: ["concept"] },
     handler: edgarFinancialConcept,
   },
+  {
+    name: "edgar_fulltext_search",
+    description: "Keyword search across the TEXT of all SEC EDGAR filings from 2001 onward (efts.sec.gov full-text search, live). The only free cross-filer search — reaches every filer including private funds and companies with no ticker (which edgar_company_lookup cannot resolve). Filter by form type(s) (comma-separated, e.g. 'D', '8-K,10-K', 'N-2') and date range (startDate/endDate, YYYY-MM-DD). Supports quoted phrases for exact match. Returns filer name, CIK, form, file date, accession number, and direct EDGAR document URLs. The API serves at most 10 hits per page — use offset (multiples of 10) to page through; totalMatches reports the full count. Useful for finding filings that MENTION a person, firm, fund, or term anywhere in the text.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, forms: { type: "string" }, startDate: { type: "string" }, endDate: { type: "string" }, limit: { type: "number", default: 10, maximum: 10 }, offset: { type: "number", default: 0 } }, required: ["query"] },
+    handler: edgarFullTextSearch,
+  },
+  {
+    name: "formd_search",
+    description: "Search SEC Form D filings — Reg D exempt-offering notices that reveal which GPs, private funds, and issuers are RAISING capital, filed within days of first sale (EDGAR full-text search scoped to forms D and D/A, live). Provide a keyword (fund/GP/issuer name or strategy term like 'credit fund', 'real estate', 'secondaries') and optional startDate/endDate (YYYY-MM-DD) to scope to recent raises. includeAmendments (default true) also returns D/A amendments. Each hit links to the filing, which lists offering size, amount sold, minimum investment, and related persons. 10 hits per page (offset paginates); totalMatches is the full count. Feeds GP fundraising intelligence, alternatives sourcing, and M&A/BA-Solutions-style buyer research.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, startDate: { type: "string" }, endDate: { type: "string" }, includeAmendments: { type: "boolean", default: true }, limit: { type: "number", default: 10, maximum: 10 }, offset: { type: "number", default: 0 } }, required: ["query"] },
+    handler: formdSearch,
+  },
 ];
 
 const BDC_TOOLS: ToolDef[] = [
@@ -285,7 +301,7 @@ const PENSION_TOOLS: ToolDef[] = [
   },
   {
     name: "ppd_plan_profile",
-    description: "One public pension plan's multi-year funding history (Public Plans Database, live API). Resolve by ppdId or plan name (fuzzy; e.g. 'Illinois Municipal', 'California PERS'). Returns an annual series FY2001+ of market and actuarial assets, actuarial liabilities, GASB funded ratio %, investment return assumption %, and active/beneficiary membership, plus the latest year. Dollar amounts converted from PPD thousands to whole USD (flagged as unitAssumption). Useful for funding-trend diligence on a public-plan prospect: direction of funded ratio, whether the return assumption has been cut, and demographic pressure (actives vs beneficiaries).",
+    description: "One public pension plan's multi-year funding history (Public Plans Database, live API). Resolve by ppdId or plan name (fuzzy; e.g. 'Illinois Municipal', 'California PERF'). Returns an annual series FY2001+ of market and actuarial assets, actuarial liabilities, GASB funded ratio %, investment return assumption %, and active/beneficiary membership, plus the latest year. Dollar amounts converted from PPD thousands to whole USD (flagged as unitAssumption). Useful for funding-trend diligence on a public-plan prospect: direction of funded ratio, whether the return assumption has been cut, and demographic pressure (actives vs beneficiaries).",
     inputSchema: { type: "object", properties: { ppdId: { type: "number" }, name: { type: "string" }, limit: { type: "number", default: 25, maximum: 30 } } },
     handler: ppdPlanProfile,
   },
