@@ -40,6 +40,8 @@ const CHECKS: Check[] = [
   { name: "ofr-fsi", tool: "ofr_financial_stress_index", args: { lookback: 5 } },
   { name: "edgar-lookup", tool: "edgar_company_lookup", args: { query: "Apple", limit: 1 } },
   { name: "edgar-concept", tool: "edgar_financial_concept", args: { ticker: "AAPL", concept: "Revenues", annualOnly: true, limit: 2 } },
+  { name: "edgar-fts", tool: "edgar_fulltext_search", args: { query: "Ares Capital", forms: "10-K", limit: 3 }, note: "full-text search probe — expect hits naming Ares Capital with CIK + doc URLs" },
+  { name: "formd-search", tool: "formd_search", args: { query: "fund", limit: 3 }, note: "Form D probe — expect a large totalMatches and recent Reg D filings with issuer names" },
   { name: "bdc-list", tool: "bdc_list", args: { limit: 5 } },
   { name: "bdc-profile", tool: "bdc_profile", args: { ticker: "ARCC" } },
   { name: "ppd-listvars", tool: "ppd_list_variables", args: { nameContains: "assets", limit: 4 }, note: "endpoint truth probe — the API's own catalog of exact variable names; if this errors too, the query grammar assumption is wrong" },
