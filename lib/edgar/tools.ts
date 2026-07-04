@@ -149,9 +149,11 @@ export async function edgarCompanyFilings(args: EdgarCompanyFilingsArgs) {
 }
 
 // Common alternate XBRL tags for line items that filers report under different
-// concepts across years/companies. Tried in order only when the requested
-// concept itself returns no data (e.g. Apple tags revenue under
-// RevenueFromContractWithCustomerExcludingAssessedTax, not Revenues).
+// concepts across years/companies. Tried when the requested concept returns
+// no data OR when its latest fact is STALE (e.g. Apple reported Revenues only
+// through FY2018, then switched to
+// RevenueFromContractWithCustomerExcludingAssessedTax — the old tag still has
+// data, so an empty-only fallback never fires; freshness has to be the trigger).
 const CONCEPT_FALLBACKS: Record<string, string[]> = {
   Revenues: [
     "RevenueFromContractWithCustomerExcludingAssessedTax",
@@ -166,34 +168,118 @@ const CONCEPT_FALLBACKS: Record<string, string[]> = {
   NetIncomeLoss: ["ProfitLoss"],
 };
 
+// A concept counts as stale when its most recent fact ended more than ~18
+// months ago — an actively used tag gets a new fact at least annually, filed
+// within a few months of period end, so 550 days is a safe threshold.
+const STALE_MS = 550 * 24 * 60 * 60 * 1000;
+
 function conceptHasData(data: CompanyConceptResponse | null): boolean {
   if (!data || !data.units) return false;
   return Object.values(data.units).some((arr) => Array.isArray(arr) && arr.length > 0);
 }
 
+function latestEnd(data: CompanyConceptResponse | null): string | null {
+  if (!data || !data.units) return null;
+  let max: string | null = null;
+  for (const arr of Object.values(data.units)) {
+    if (!Array.isArray(arr)) continue;
+    for (const p of arr) {
+      const e = (p as any)?.end;
+      if (typeof e === "string" && (max === null || e > max)) max = e;
+    }
+  }
+  return max;
+}
+
+function isStale(end: string | null): boolean {
+  if (!end) return true;
+  const t = Date.parse(end);
+  if (!Number.isFinite(t)) return true;
+  return Date.now() - t > STALE_MS;
+}
+
+async function tryConcept(
+  cik: string,
+  concept: string,
+  taxonomy: string
+): Promise<CompanyConceptResponse | null> {
+  try {
+    const data = await companyConcept(cik, concept, taxonomy);
+    return conceptHasData(data) ? data : null;
+  } catch {
+    // Non-OK (usually 404 — filer never reported this exact tag).
+    return null;
+  }
+}
+
 /**
- * Fetch a concept, falling back to common alternate tags if the requested one
- * 404s or returns no observations. companyConcept throws on a non-OK response
- * (the SEC returns 404 when a filer has never reported that exact tag), so each
- * candidate is attempted independently and failures advance to the next tag.
+ * Fetch a concept with freshness-aware fallback.
+ *
+ * Fast path: if the requested concept has data and its latest fact is recent,
+ * return it (one API call, no fallback traffic). Otherwise fetch the known
+ * alternate tags in parallel and return whichever candidate has the MOST
+ * RECENT latest fact — the requested concept wins ties. staleFallbackUsed
+ * flags the case where the requested tag had data but a fresher alternate
+ * was chosen; candidateLatest reports each candidate's latest fact end-date
+ * so the switch is auditable.
  */
 async function fetchConceptWithFallback(
   cik: string,
   concept: string,
   taxonomy: string
-): Promise<{ data: CompanyConceptResponse | null; resolvedConcept: string | null; tried: string[] }> {
-  const candidates = [concept, ...(CONCEPT_FALLBACKS[concept] ?? [])];
-  const tried: string[] = [];
-  for (const cand of candidates) {
-    tried.push(cand);
-    try {
-      const data = await companyConcept(cik, cand, taxonomy);
-      if (conceptHasData(data)) return { data, resolvedConcept: cand, tried };
-    } catch {
-      // Non-OK (usually 404 — filer never reported this exact tag). Try next.
+): Promise<{
+  data: CompanyConceptResponse | null;
+  resolvedConcept: string | null;
+  tried: string[];
+  candidateLatest: Record<string, string | null>;
+  staleFallbackUsed: boolean;
+}> {
+  const fallbacks = CONCEPT_FALLBACKS[concept] ?? [];
+  const tried: string[] = [concept];
+  const candidateLatest: Record<string, string | null> = {};
+
+  const primary = await tryConcept(cik, concept, taxonomy);
+  const primaryEnd = latestEnd(primary);
+  candidateLatest[concept] = primaryEnd;
+
+  if (primary && !isStale(primaryEnd)) {
+    return { data: primary, resolvedConcept: concept, tried, candidateLatest, staleFallbackUsed: false };
+  }
+  if (fallbacks.length === 0) {
+    return {
+      data: primary,
+      resolvedConcept: primary ? concept : null,
+      tried,
+      candidateLatest,
+      staleFallbackUsed: false,
+    };
+  }
+
+  tried.push(...fallbacks);
+  const results = await Promise.all(fallbacks.map((c) => tryConcept(cik, c, taxonomy)));
+
+  let best: { concept: string; data: CompanyConceptResponse; end: string | null } | null = primary
+    ? { concept, data: primary, end: primaryEnd }
+    : null;
+  for (let i = 0; i < fallbacks.length; i++) {
+    const d = results[i];
+    const e = latestEnd(d);
+    candidateLatest[fallbacks[i]] = e;
+    if (d && (best === null || (e ?? "") > (best.end ?? ""))) {
+      best = { concept: fallbacks[i], data: d, end: e };
     }
   }
-  return { data: null, resolvedConcept: null, tried };
+
+  if (best === null) {
+    return { data: null, resolvedConcept: null, tried, candidateLatest, staleFallbackUsed: false };
+  }
+  return {
+    data: best.data,
+    resolvedConcept: best.concept,
+    tried,
+    candidateLatest,
+    staleFallbackUsed: primary !== null && best.concept !== concept,
+  };
 }
 
 export interface EdgarFinancialConceptArgs {
@@ -222,7 +308,8 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
     };
   }
   const taxonomy = args.taxonomy?.trim() || "us-gaap";
-  const { data, resolvedConcept, tried } = await fetchConceptWithFallback(cik, args.concept, taxonomy);
+  const { data, resolvedConcept, tried, candidateLatest, staleFallbackUsed } =
+    await fetchConceptWithFallback(cik, args.concept, taxonomy);
   if (!data || !resolvedConcept) {
     return {
       dataSource: "SEC EDGAR (XBRL companyconcept)",
@@ -230,6 +317,7 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
       requestedConcept: args.concept,
       taxonomy,
       conceptsTried: tried,
+      candidateLatest,
       observationCount: 0,
       observations: [],
       note:
@@ -255,7 +343,9 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
     requestedConcept: args.concept,
     resolvedConcept,
     conceptFallbackUsed: resolvedConcept !== args.concept,
+    staleFallbackUsed,
     conceptsTried: tried,
+    candidateLatest,
     concept: data.tag ?? resolvedConcept,
     taxonomy,
     label: data.label ?? null,
@@ -273,6 +363,6 @@ export async function edgarFinancialConcept(args: EdgarFinancialConceptArgs) {
       frame: p.frame ?? null,
     })),
     note:
-      "XBRL facts as reported. Concepts use us-gaap taxonomy tags. When the requested concept returns nothing, a small set of common alternates is tried automatically (resolvedConcept shows which tag actually returned data; conceptFallbackUsed flags when a fallback was used). annualOnly filters to 10-K / full-year facts.",
+      "XBRL facts as reported. Concepts use us-gaap taxonomy tags. When the requested concept returns nothing OR its latest fact is stale (>~18 months old — filers switch tags across years, e.g. Revenues -> RevenueFromContractWithCustomerExcludingAssessedTax), common alternates are tried and the FRESHEST tag wins. resolvedConcept shows which tag returned the data; staleFallbackUsed flags a freshness-triggered switch; candidateLatest reports each candidate's latest fact date so the choice is auditable. annualOnly filters to 10-K / full-year facts.",
   };
 }
