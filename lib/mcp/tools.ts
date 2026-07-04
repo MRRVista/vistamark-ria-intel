@@ -72,6 +72,10 @@ import {
   formdSearch,
 } from "../edgar/fulltext";
 import {
+  gleifEntitySearch,
+  gleifEntityProfile,
+} from "../gleif/tools";
+import {
   bdcList,
   bdcProfile,
   bdcScreen,
@@ -102,7 +106,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), BDC, public-pension (PPD), and USAspending tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), GLEIF LEI, BDC, public-pension (PPD), and USAspending tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -188,7 +192,7 @@ const PPP_TOOLS: ToolDef[] = [
 const USASPENDING_TOOLS: ToolDef[] = [
   {
     name: "usaspending_awards_search",
-    description: "Search federal awards to a recipient (USAspending.gov, live API). Award-level detail: grants, contracts, loans, or direct payments (awardType picks the group — the API cannot mix groups in one request). Filter by recipientName (fuzzy), keywords, recipientState, and startDate/endDate (default: last 10 years). Returns award ID, recipient, dates, obligation amount (whole USD), awarding agency/sub-agency, description, and a USAspending.gov award link. Prospecting/diligence signal: a nonprofit or health system living on large federal grants has budget and reserve dynamics worth a board conversation; a company with big federal contracts has revenue concentration worth knowing. Pairs with irs_eo_search (find the org) — then this shows its federal money.",
+    description: "Search federal awards to a recipient (USAspending.gov, live API). Award-level detail: grants, contracts, loans, or direct payments (awardType picks the group — the API cannot mix groups in one request). Filter by recipientName (fuzzy), keywords, recipientState, and startDate/endDate (default: last 3 years — this endpoint is slow over wide windows; widen deliberately or use usaspending_top_recipients for long-window totals). Returns award ID, recipient, dates, obligation amount (whole USD), awarding agency/sub-agency, description, and a USAspending.gov award link. Prospecting/diligence signal: a nonprofit or health system living on large federal grants has budget and reserve dynamics worth a board conversation; a company with big federal contracts has revenue concentration worth knowing. Pairs with irs_eo_search (find the org) — then this shows its federal money.",
     inputSchema: { type: "object", properties: { recipientName: { type: "string" }, keywords: { type: "string" }, awardType: { type: "string", enum: ["grants", "contracts", "loans", "direct_payments", "other", "idvs"], default: "grants" }, recipientState: { type: "string" }, startDate: { type: "string" }, endDate: { type: "string" }, sortBy: { type: "string", enum: ["amount", "end_date"], default: "amount" }, limit: { type: "number", default: 25, maximum: 100 }, page: { type: "number", default: 1 } } },
     handler: usaspendingAwardsSearch,
   },
@@ -290,6 +294,21 @@ const EDGAR_TOOLS: ToolDef[] = [
   },
 ];
 
+const GLEIF_TOOLS: ToolDef[] = [
+  {
+    name: "gleif_entity_search",
+    description: "Resolve any legal entity worldwide to its LEI record (GLEIF LEI API, live — the ISO 17442 Legal Entity Identifier registry). Fulltext search across legal names, other/former names, and addresses; optional 2-letter country filter on the legal address. Returns LEI, legal name, entity status (ACTIVE/INACTIVE), jurisdiction, category, legal/HQ addresses, and registration status/dates. Coverage skews to financial-market participants — funds, GPs, banks, insurers, issuers — plus many private operating companies that ticker-based lookups (edgar_company_lookup) cannot reach. Use a returned lei with gleif_entity_profile for corporate family trees.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, country: { type: "string" }, limit: { type: "number", default: 10, maximum: 50 }, page: { type: "number", default: 1 } }, required: ["query"] },
+    handler: gleifEntitySearch,
+  },
+  {
+    name: "gleif_entity_profile",
+    description: "One entity's LEI record PLUS its corporate family tree (GLEIF LEI API, live): direct parent, ultimate parent, and direct children under ACCOUNTING-CONSOLIDATION relationships. Resolve by lei (20-char identifier) or by name (top fulltext match wins). Answers 'which umbrella does this fund sit under?' for manager diligence and maps a PE firm's entity structure for M&A buyer research. Null parents are common and valid — many entities file reporting exceptions (e.g. no consolidating parent). childTotal reports the full subsidiary count; childrenLimit (default 10, max 50) caps what's returned.",
+    inputSchema: { type: "object", properties: { lei: { type: "string" }, name: { type: "string" }, childrenLimit: { type: "number", default: 10, maximum: 50 } } },
+    handler: gleifEntityProfile,
+  },
+];
+
 const BDC_TOOLS: ToolDef[] = [
   {
     name: "bdc_list",
@@ -344,6 +363,7 @@ export const TOOLS: ToolDef[] = [
   ...FDIC_TOOLS,
   ...OFR_TOOLS,
   ...EDGAR_TOOLS,
+  ...GLEIF_TOOLS,
   ...BDC_TOOLS,
   ...PENSION_TOOLS,
 ];
