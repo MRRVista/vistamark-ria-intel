@@ -25,6 +25,12 @@
  *     transaction_catg on Treasury's own sub-total lines — these are
  *     treated as total rows (excluded from category sums and top lists,
  *     reported separately) to avoid double counting.
+ *   • NEGATION GUARD: contains-matching the default focus term 'withheld'
+ *     also matches Treasury's 'Taxes - Non Withheld Ind/SECA …' categories
+ *     (self-employment estimated taxes) — which pollutes the payroll
+ *     signal and, worse, trips the multi-category path that suppresses
+ *     MTD/FYTD. Unless the requested term itself starts with 'non',
+ *     negated matches ('non withheld', 'non-withheld') are excluded.
  *
  * UNIT SAFETY (net-liquidity lesson applied): DTS figures are stated by
  * Treasury in MILLIONS of USD. The cash tool carries a plausibility gate
@@ -253,7 +259,19 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
   // Focus category — default: withheld individual/FICA taxes, the
   // near-real-time payroll signal.
   const focusTerm = (args.focusCategory ?? "withheld").toLowerCase();
-  const focusRows = mapped.filter((m) => !isTotalRow(m.category) && m.category.toLowerCase().includes(focusTerm));
+  // Negation guard (live-caught): 'withheld' also substring-matches
+  // Treasury's 'Taxes - Non Withheld Ind/SECA …' categories, polluting the
+  // payroll series and tripping the multi-category MTD/FYTD suppression.
+  // Unless the requested term itself starts with 'non', negated matches
+  // are excluded.
+  const isNegatedMatch = (c: string) =>
+    !focusTerm.startsWith("non") &&
+    (c.includes(`non ${focusTerm}`) || c.includes(`non-${focusTerm}`) || c.includes(`non${focusTerm}`));
+  const focusRows = mapped.filter((m) => {
+    if (isTotalRow(m.category)) return false;
+    const c = m.category.toLowerCase();
+    return c.includes(focusTerm) && !isNegatedMatch(c);
+  });
   const matchedCategories = [...new Set(focusRows.map((m) => m.category))];
   const byDate = new Map<string, number>();
   for (const m of focusRows) {
@@ -290,6 +308,6 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
     ...(parsedNothing && rows.length ? { sampleRawRow: rows[0] } : {}),
     note:
       DTS_UNITS_NOTE +
-      " Side sums exclude Treasury's own sub-total lines — 'Total…' categories and rows whose category is the literal string 'null' — to avoid double counting (those are reported separately under reportedTotalRows). Note that Public Debt Cash Issues/Redemptions appear as ordinary categories, so netFlow includes financing flows, not just fiscal ones. The default focus — withheld individual/FICA tax deposits — tracks wage payrolls with ~1-day lag; FYTD comparisons against the same point last fiscal year are the cleanest signal, since payment-calendar effects make day/week deltas noisy. Category matching is case-insensitive contains — try focusCategory 'corporate' for corporate income taxes or 'interest' for debt service.",
+      " Side sums exclude Treasury's own sub-total lines — 'Total…' categories and rows whose category is the literal string 'null' — to avoid double counting (those are reported separately under reportedTotalRows). Note that Public Debt Cash Issues/Redemptions appear as ordinary categories, so netFlow includes financing flows, not just fiscal ones. The default focus — withheld individual/FICA tax deposits — tracks wage payrolls with ~1-day lag (negated 'Non Withheld' categories are excluded unless explicitly requested); FYTD comparisons against the same point last fiscal year are the cleanest signal, since payment-calendar effects make day/week deltas noisy. Category matching is case-insensitive contains — try focusCategory 'corporate' for corporate income taxes or 'interest' for debt service.",
   };
 }
