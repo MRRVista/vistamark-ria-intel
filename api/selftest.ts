@@ -38,6 +38,8 @@ const CHECKS: Check[] = [
   { name: "macro-signals", tool: "macro_market_signals", args: {}, note: "flagship composite probe — 21 FRED indicators across six pillars in parallel; expect real values with dates, threshold signals, a highlights array, and a netLiquidity block in the low-$T range with unit-verified components; failedIndicators lists any wrong mnemonic" },
   { name: "fred-batch", tool: "fred_batch_latest", args: { seriesIds: ["VIXCLS", "T10Y2Y"] }, note: "generic batch probe — expect both series with titles, latest values, and 1m/3m changes" },
   { name: "treasury", tool: "treasury_avg_rates", args: {} },
+  { name: "dts-cash", tool: "treasury_daily_cash", args: { lookbackDays: 21 }, note: "daily TGA probe — expect a closing balance in the plausible $30B–$2.5T band (values in $ millions from Treasury), a dated daily series, and week/month changes; sampleRawRow appears if field names drifted" },
+  { name: "dts-flows", tool: "treasury_daily_flows", args: { lookbackDays: 21 }, note: "daily fiscal-flows probe — expect latest-day top deposit/withdrawal categories, side sums excluding Treasury 'Total' rows, and a withheld-tax focus block (the near-real-time payroll signal) with today/MTD/FYTD amounts" },
   { name: "fdic", tool: "fdic_bank_search", args: { state: "IL", communityBankOnly: true, limit: 2 } },
   { name: "ofr-fsi", tool: "ofr_financial_stress_index", args: { lookback: 5 } },
   { name: "edgar-lookup", tool: "edgar_company_lookup", args: { query: "Apple", limit: 1 } },
