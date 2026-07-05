@@ -35,6 +35,8 @@ const CHECKS: Check[] = [
   { name: "dol-il-assets", tool: "dol_plan_search", args: { state: "IL", minAssetsEoy: 50000000, limit: 2 }, note: "state + assets only, no feature-code filter" },
   { name: "dol-401k", tool: "dol_plan_search", args: { state: "IL", is401k: true, minAssetsEoy: 50000000, limit: 2 }, note: "401(k) feature-code filter (2J) — the previously failing check" },
   { name: "fred-curve", tool: "fred_yield_curve", args: {} },
+  { name: "macro-signals", tool: "macro_market_signals", args: {}, note: "flagship composite probe — 21 FRED indicators across six pillars in parallel; expect real values with dates, threshold signals, a highlights array, and a netLiquidity block in the low-$T range with unit-verified components; failedIndicators lists any wrong mnemonic" },
+  { name: "fred-batch", tool: "fred_batch_latest", args: { seriesIds: ["VIXCLS", "T10Y2Y"] }, note: "generic batch probe — expect both series with titles, latest values, and 1m/3m changes" },
   { name: "treasury", tool: "treasury_avg_rates", args: {} },
   { name: "fdic", tool: "fdic_bank_search", args: { state: "IL", communityBankOnly: true, limit: 2 } },
   { name: "ofr-fsi", tool: "ofr_financial_stress_index", args: { lookback: 5 } },
