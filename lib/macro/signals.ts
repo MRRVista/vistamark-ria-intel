@@ -8,11 +8,19 @@
  *   macro_market_signals — 21 indicators across six pillars, fetched in
  *     parallel, each with latest value, ~1-month and ~3-month priors,
  *     changes, and a threshold-based signal reading; plus computed Fed NET
- *     LIQUIDITY (WALCL − ON RRP − TGA, unit-normalized) and a highlights
- *     array of currently-firing signals.
+ *     LIQUIDITY (WALCL − ON RRP − TGA) and a highlights array of
+ *     currently-firing signals.
  *   fred_batch_latest — generic parallel fetch of any FRED series list
  *     with the same latest/1m/3m math (feeds ad-hoc dashboards and
  *     Randall's pre-market briefs).
+ *
+ * UNIT SAFETY (live-caught bug): FRED mixes magnitudes across the H.4.1
+ * family — WALCL is stated in millions while the first release of this
+ * module assumed WTREGEN was in billions and computed a −$873T net
+ * liquidity. Component multipliers are now derived from FRED's own units
+ * metadata at call time (million/billion/trillion parsing) with hardcoded
+ * fallbacks, the resolved multipliers are reported for audit, and a
+ * plausibility check flags any net-liquidity result outside a sane range.
  *
  * These are historical-relationship indicators, not predictions. The
  * interpretation strings state well-documented empirical regularities
@@ -53,6 +61,16 @@ function valueAtOrBefore(points: SeriesPoint[], targetDate: string): SeriesPoint
 
 function round3(x: number | null): number | null {
   return x == null || !Number.isFinite(x) ? null : +x.toFixed(3);
+}
+
+/** Parse a FRED units string into a USD multiplier, with a fallback. */
+function usdMultiplier(units: string | null | undefined, fallback: number): number {
+  if (!units) return fallback;
+  if (/trillion/i.test(units)) return 1e12;
+  if (/billion/i.test(units)) return 1e9;
+  if (/million/i.test(units)) return 1e6;
+  if (/thousand/i.test(units)) return 1e3;
+  return fallback;
 }
 
 type SignalFn = (latest: number, change3m: number | null) => { signal: string; firing: boolean };
@@ -115,10 +133,10 @@ const INDICATORS: IndicatorDef[] = [
       ? { signal: "ABOVE-average financial stress", firing: true }
       : { signal: "below-average financial stress", firing: false },
   },
-  // —— Liquidity plumbing ——
-  { id: "WALCL", name: "Fed balance sheet (total assets)", pillar: "liquidity", unitLabel: "$ millions (weekly, Wed)", rule: trendRule("balance-sheet expansion", "QT / balance-sheet runoff") },
-  { id: "RRPONTSYD", name: "Overnight reverse repo (ON RRP)", pillar: "liquidity", unitLabel: "$ billions (daily)", rule: trendRule("cash parking at the Fed (drains market liquidity)", "RRP drain releasing liquidity into the system") },
-  { id: "WTREGEN", name: "Treasury General Account (TGA)", pillar: "liquidity", unitLabel: "$ billions (weekly, Wed)", rule: trendRule("TGA rebuild absorbing liquidity", "TGA drawdown adding liquidity") },
+  // —— Liquidity plumbing (units resolved live from FRED metadata) ——
+  { id: "WALCL", name: "Fed balance sheet (total assets)", pillar: "liquidity", unitLabel: "level (weekly, Wed; units per FRED)", rule: trendRule("balance-sheet expansion", "QT / balance-sheet runoff") },
+  { id: "RRPONTSYD", name: "Overnight reverse repo (ON RRP)", pillar: "liquidity", unitLabel: "level (daily; units per FRED)", rule: trendRule("cash parking at the Fed (drains market liquidity)", "RRP drain releasing liquidity into the system") },
+  { id: "WTREGEN", name: "Treasury General Account (TGA)", pillar: "liquidity", unitLabel: "level (weekly, Wed; units per FRED)", rule: trendRule("TGA rebuild absorbing liquidity", "TGA drawdown adding liquidity") },
   // —— Growth & labor ——
   {
     id: "ICSA", name: "Initial jobless claims", pillar: "growth", unitLabel: "claims (weekly)",
@@ -229,6 +247,11 @@ export async function macroMarketSignals(args: MacroMarketSignalsArgs = {}) {
   const byId: Record<string, { reading: IndicatorReading; points: SeriesPoint[] }> = {};
   for (const r of results) byId[r.reading.id] = { reading: r.reading, points: r.points };
 
+  // Surface FRED's own units strings on the liquidity components.
+  if (byId["WALCL"] && walclMeta?.units) byId["WALCL"].reading.unit = walclMeta.units;
+  if (byId["RRPONTSYD"] && rrpMeta?.units) byId["RRPONTSYD"].reading.unit = rrpMeta.units;
+  if (byId["WTREGEN"] && tgaMeta?.units) byId["WTREGEN"].reading.unit = tgaMeta.units;
+
   const highlights: string[] = [];
   for (const r of results) {
     if (r.firing && r.reading.latest != null) {
@@ -236,16 +259,19 @@ export async function macroMarketSignals(args: MacroMarketSignalsArgs = {}) {
     }
   }
 
-  // —— Net liquidity: WALCL ($MM) − ON RRP ($B) − TGA ($B) ——
+  // —— Net liquidity: WALCL − ON RRP − TGA, unit multipliers resolved from
+  // FRED metadata at call time (the v0.15.0 hardcoded-billions assumption
+  // for WTREGEN produced a −$873T result — caught live by the selftest
+  // plausibility expectation). Fallbacks: WALCL millions, RRP billions,
+  // TGA millions. ——
   let netLiquidity: any = null;
   if (liquidityWanted) {
     const w = byId["WALCL"], r = byId["RRPONTSYD"], t = byId["WTREGEN"];
-    const unitWarnings: string[] = [];
-    if (walclMeta?.units && !/million/i.test(walclMeta.units)) unitWarnings.push(`WALCL units read '${walclMeta.units}', expected millions`);
-    if (rrpMeta?.units && !/billion/i.test(rrpMeta.units)) unitWarnings.push(`RRPONTSYD units read '${rrpMeta.units}', expected billions`);
-    if (tgaMeta?.units && !/billion/i.test(tgaMeta.units)) unitWarnings.push(`WTREGEN units read '${tgaMeta.units}', expected billions`);
+    const wMult = usdMultiplier(walclMeta?.units, 1e6);
+    const rMult = usdMultiplier(rrpMeta?.units, 1e9);
+    const tMult = usdMultiplier(tgaMeta?.units, 1e6);
     const compute = (wp: SeriesPoint | null, rp: SeriesPoint | null, tp: SeriesPoint | null): number | null =>
-      wp && rp && tp ? wp.value * 1e6 - rp.value * 1e9 - tp.value * 1e9 : null;
+      wp && rp && tp ? wp.value * wMult - rp.value * rMult - tp.value * tMult : null;
     const latestNet = compute(w?.points[0] ?? null, r?.points[0] ?? null, t?.points[0] ?? null);
     if (latestNet != null) {
       const anchor = w!.points[0]!.date;
@@ -260,18 +286,24 @@ export async function macroMarketSignals(args: MacroMarketSignalsArgs = {}) {
         valueAtOrBefore(t!.points, daysAgoIso(anchor, 91))
       );
       const trn = (x: number | null) => (x == null ? null : +(x / 1e12).toFixed(3));
+      const plausible = latestNet > 0 && latestNet < 2e13;
       netLiquidity = {
-        definition: "Fed balance sheet (WALCL) − overnight reverse repo (RRPONTSYD) − Treasury General Account (WTREGEN), normalized to USD",
+        definition: "Fed balance sheet (WALCL) − overnight reverse repo (RRPONTSYD) − Treasury General Account (WTREGEN), normalized to USD via FRED units metadata",
         latestUsdTrillions: trn(latestNet),
         oneMonthAgoUsdTrillions: trn(net1m),
         threeMonthsAgoUsdTrillions: trn(net3m),
-        change3mUsdTrillions: net3m != null ? trn(latestNet - net3m + 0) : null,
+        change3mUsdTrillions: net3m != null ? trn(latestNet - net3m) : null,
         asOf: { walcl: w!.points[0]!.date, rrp: r!.points[0]!.date, tga: t!.points[0]!.date },
+        componentUnits: {
+          WALCL: { units: walclMeta?.units ?? null, multiplierApplied: wMult },
+          RRPONTSYD: { units: rrpMeta?.units ?? null, multiplierApplied: rMult },
+          WTREGEN: { units: tgaMeta?.units ?? null, multiplierApplied: tMult },
+        },
+        ...(plausible ? {} : { plausibilityWarning: "Net liquidity outside the sane $0–$20T range — inspect componentUnits before trusting this figure." }),
         note: "Rising net liquidity has historically coincided with support for risk assets; drains (QT + TGA rebuilds + RRP growth) with headwinds. Components mix weekly and daily frequencies — asOf dates differ.",
-        ...(unitWarnings.length ? { unitWarnings } : {}),
       };
-      if (netLiquidity.change3mUsdTrillions != null && Math.abs(netLiquidity.change3mUsdTrillions) >= 0.2) {
-        highlights.push(`Net liquidity ${netLiquidity.change3mUsdTrillions > 0 ? "UP" : "DOWN"} ${Math.abs(netLiquidity.change3mUsdTrillions)}T over ~3 months (now ${netLiquidity.latestUsdTrillions}T)`);
+      if (plausible && netLiquidity.change3mUsdTrillions != null && Math.abs(netLiquidity.change3mUsdTrillions) >= 0.2) {
+        highlights.push(`Net liquidity ${netLiquidity.change3mUsdTrillions > 0 ? "UP" : "DOWN"} $${Math.abs(netLiquidity.change3mUsdTrillions)}T over ~3 months (now $${netLiquidity.latestUsdTrillions}T)`);
       }
     }
   }
