@@ -15,6 +15,17 @@
  *     near-real-time labor-market read. FYTD comparisons are the cleanest
  *     use (payment-calendar effects make day/week deltas noisy).
  *
+ * SCHEMA QUIRKS (live-verified 2026-07-05):
+ *   • operating_cash_balance publishes TWO account_type rows per date —
+ *     'Treasury General Account (TGA) Opening Balance' and '... Closing
+ *     Balance' — with the value in open_today_bal on both (there is no
+ *     close_today_bal column in the current schema). Per-date selection
+ *     prefers the Closing row; balanceBasis reports which row served it.
+ *   • deposits_withdrawals rows carry the literal string 'null' as
+ *     transaction_catg on Treasury's own sub-total lines — these are
+ *     treated as total rows (excluded from category sums and top lists,
+ *     reported separately) to avoid double counting.
+ *
  * UNIT SAFETY (net-liquidity lesson applied): DTS figures are stated by
  * Treasury in MILLIONS of USD. The cash tool carries a plausibility gate
  * (TGA outside $30B–$2.5T flags a warning instead of silently reporting
@@ -94,7 +105,7 @@ export async function treasuryDailyCash(args: TreasuryDailyCashArgs = {}) {
   const isTga = (t: any) => /general account|federal reserve/i.test(String(t ?? ""));
 
   let scoped = rows.filter((r) => isTga(r?.account_type));
-  let scopeNote = "Treasury General Account rows";
+  let scopeNote = "Treasury General Account rows; Closing Balance row preferred per date";
   if (!scoped.length) {
     scoped = rows;
     scopeNote = `no TGA-labeled account_type found — returning all rows (types present: ${accountTypesPresent.join("; ") || "none"})`;
@@ -110,15 +121,18 @@ export async function treasuryDailyCash(args: TreasuryDailyCashArgs = {}) {
     }))
     .filter((x): x is CashPoint => Boolean(x.date));
 
-  // newest-first, one row per date (first wins)
-  const series: CashPoint[] = [];
-  const seen = new Set<string>();
+  // One row per date. The current schema carries TWO TGA rows per date
+  // (Opening Balance / Closing Balance, value in open_today_bal on both) —
+  // prefer the Closing row so the headline is the end-of-day balance.
+  const isClosing = (t: string | null) => /closing/i.test(String(t ?? ""));
+  const byDateMap = new Map<string, CashPoint>();
   for (const m of mapped) {
-    if (!seen.has(m.date)) {
-      seen.add(m.date);
-      series.push(m);
+    const existing = byDateMap.get(m.date);
+    if (!existing || (isClosing(m.accountType) && !isClosing(existing.accountType))) {
+      byDateMap.set(m.date, m);
     }
   }
+  const series = [...byDateMap.values()].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const latest = series[0] ?? null;
   const latestBal = balanceOf(latest);
@@ -141,8 +155,8 @@ export async function treasuryDailyCash(args: TreasuryDailyCashArgs = {}) {
   return {
     dataSource: "Daily Treasury Statement — Operating Cash Balance (api.fiscaldata.treasury.gov, live)",
     latestDate: latest?.date ?? null,
-    latestAccountType: latest?.accountType ?? null,
     latestClosingBalanceUsdBillions: toB(latestBal),
+    balanceBasis: latest?.accountType ?? null,
     changeVs1WeekUsdBillions: toB(changeWeekMillions),
     changeVs1MonthUsdBillions: toB(changeMonthMillions),
     observationCount: series.length,
@@ -153,7 +167,7 @@ export async function treasuryDailyCash(args: TreasuryDailyCashArgs = {}) {
     ...(plausible ? {} : { plausibilityWarning: "Latest TGA balance is outside the sane $30B–$2.5T band — inspect sampleRawRow/field units before trusting this figure." }),
     note:
       DTS_UNITS_NOTE +
-      " This is the DAILY counterpart of the weekly WTREGEN series in macro_market_signals' net-liquidity calc: TGA drawdowns inject liquidity into the banking system; rebuilds (tax season, post-debt-ceiling refills) drain it. observations values are in $ millions; headline conversions are in $ billions.",
+      " This is the DAILY counterpart of the weekly WTREGEN series in macro_market_signals' net-liquidity calc: TGA drawdowns inject liquidity into the banking system; rebuilds (tax season, post-debt-ceiling refills) drain it. balanceBasis reports which account_type row served the headline (Closing Balance preferred; if it reads Opening Balance, Treasury changed the row layout). observations values are in $ millions; headline conversions are in $ billions. For ~1-month changes use lookbackDays >= 40 so the window reaches the comparison point.",
   };
 }
 
@@ -206,7 +220,10 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
     mapped = mapped.filter((m) => String(m.type ?? "").toLowerCase().startsWith(want));
   }
 
-  const isTotalRow = (c: string) => /total/i.test(c);
+  // Treasury's own sub-total lines: 'Total…' categories AND rows whose
+  // transaction_catg is the literal string 'null' (live-verified) — both
+  // excluded from category sums/top lists to avoid double counting.
+  const isTotalRow = (c: string) => /total/i.test(c) || c.trim().toLowerCase() === "null";
   const isDeposit = (t: string | null) => String(t ?? "").toLowerCase().startsWith("dep");
   const isWithdrawal = (t: string | null) => String(t ?? "").toLowerCase().startsWith("with");
 
@@ -225,7 +242,7 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
     return {
       sumExTotalsTodayMillions: +sum.toFixed(0),
       topCategoriesToday: top,
-      reportedTotalRows: totalRows.map((m) => ({ category: m.category, todayMillions: m.todayMillions })),
+      reportedTotalRows: totalRows.map((m) => ({ category: m.category, transactionType: m.type, todayMillions: m.todayMillions })),
     };
   };
 
@@ -236,7 +253,7 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
   // Focus category — default: withheld individual/FICA taxes, the
   // near-real-time payroll signal.
   const focusTerm = (args.focusCategory ?? "withheld").toLowerCase();
-  const focusRows = mapped.filter((m) => m.category.toLowerCase().includes(focusTerm));
+  const focusRows = mapped.filter((m) => !isTotalRow(m.category) && m.category.toLowerCase().includes(focusTerm));
   const matchedCategories = [...new Set(focusRows.map((m) => m.category))];
   const byDate = new Map<string, number>();
   for (const m of focusRows) {
@@ -273,6 +290,6 @@ export async function treasuryDailyFlows(args: TreasuryDailyFlowsArgs = {}) {
     ...(parsedNothing && rows.length ? { sampleRawRow: rows[0] } : {}),
     note:
       DTS_UNITS_NOTE +
-      " Side sums exclude Treasury's own 'Total…' rows to avoid double counting (those are reported separately). The default focus — withheld individual/FICA tax deposits — tracks wage payrolls with ~1-day lag; FYTD comparisons against the same point last fiscal year are the cleanest signal, since payment-calendar effects make day/week deltas noisy. Category matching is case-insensitive contains — try focusCategory 'corporate' for corporate income taxes or 'interest' for debt service.",
+      " Side sums exclude Treasury's own sub-total lines — 'Total…' categories and rows whose category is the literal string 'null' — to avoid double counting (those are reported separately under reportedTotalRows). Note that Public Debt Cash Issues/Redemptions appear as ordinary categories, so netFlow includes financing flows, not just fiscal ones. The default focus — withheld individual/FICA tax deposits — tracks wage payrolls with ~1-day lag; FYTD comparisons against the same point last fiscal year are the cleanest signal, since payment-calendar effects make day/week deltas noisy. Category matching is case-insensitive contains — try focusCategory 'corporate' for corporate income taxes or 'interest' for debt service.",
   };
 }
