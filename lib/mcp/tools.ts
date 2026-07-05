@@ -26,6 +26,9 @@ import {
   fredBatchLatest,
 } from "../macro/signals";
 import {
+  morningMarketBrief,
+} from "../brief/market";
+import {
   treasuryAvgRates,
   treasuryDebtOutstanding,
 } from "../treasury/tools";
@@ -117,7 +120,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D/frames), GLEIF LEI, BDC, public-pension (PPD), USAspending, Treasury DTS, and the macro signals layer are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D/frames), GLEIF LEI, BDC, public-pension (PPD), USAspending, Treasury DTS, the macro signals layer, and the morning market brief are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -143,17 +146,23 @@ const MACRO_TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: { seriesIds: { type: "array", items: { type: "string" } }, maxSeries: { type: "number", default: 15, maximum: 15 } }, required: ["seriesIds"] },
     handler: fredBatchLatest,
   },
+  {
+    name: "morning_market_brief",
+    description: "THE pre-market composite in one call — assembles the whole early-warning stack: macro_market_signals (21 indicators + net liquidity), treasury_daily_cash (daily TGA — the daily liquidity read), treasury_daily_flows (withheld-tax payroll signal + fiscal tape), fred_yield_curve (full curve + inversion flags), and ofr_financial_stress_index (daily systemic gauge). Returns headline bullets, trimmed per-source sections, and briefMarkdown — a compact markdown note sized for direct insertion into a morning-brief prompt or email. Each section is independently error-isolated, so one upstream hiccup degrades that section rather than the brief. Also served unauthenticated at GET /api/market-brief for cron consumption (aggregated public macro data only — FRED/Treasury/OFR). Built for Randall's pre-market brief; indicators, not predictions.",
+    inputSchema: { type: "object", properties: {} },
+    handler: morningMarketBrief,
+  },
   { name: "treasury_avg_rates", description: "Average interest rate paid on outstanding U.S. Treasury debt, broken out by security type (Bills, Notes, Bonds, TIPS, FRNs, etc.) and security description. Published monthly. Defaults to most recent available month.", inputSchema: { type: "object", properties: { asOfDate: { type: "string" } } }, handler: treasuryAvgRates },
   { name: "treasury_debt_outstanding", description: "Total U.S. Treasury debt outstanding by security class. Includes notes, bonds, bills, TIPS, FRNs, savings bonds, GAS, and intragovernmental holdings. Returns per-security amounts in millions plus a top-line total in trillions.", inputSchema: { type: "object", properties: { asOfDate: { type: "string" } } }, handler: treasuryDebtOutstanding },
   {
     name: "treasury_daily_cash",
-    description: "Daily Treasury General Account (TGA) cash balance from the Daily Treasury Statement (FiscalData, live, no key) — the DAILY version of the weekly WTREGEN series in macro_market_signals' net-liquidity calc. TGA drawdowns inject liquidity into the banking system; rebuilds (tax season, post-debt-ceiling refills) drain it. Returns the latest closing balance ($B), ~1-week and ~1-month changes ($B), and the daily series (values reported by Treasury in $ millions), plus the account types present for audit. Published each business day for the prior business day. Plausibility-gated ($30B–$2.5T) after the net-liquidity unit lesson; sampleRawRow surfaces if Treasury's field names drift.",
+    description: "Daily Treasury General Account (TGA) cash balance from the Daily Treasury Statement (FiscalData, live, no key) — the DAILY version of the weekly WTREGEN series in macro_market_signals' net-liquidity calc. TGA drawdowns inject liquidity into the banking system; rebuilds (tax season, post-debt-ceiling refills) drain it. Returns the latest closing balance ($B), ~1-week and ~1-month changes ($B), and the daily series (values reported by Treasury in $ millions), plus the account types present for audit. Published each business day for the prior business day. Plausibility-gated ($30B–$2.5T) after the net-liquidity unit lesson; sampleRawRow surfaces if Treasury's field names drift. balanceBasis reports whether the Closing or Opening Balance row served the headline. For ~1-month changes use lookbackDays >= 40.",
     inputSchema: { type: "object", properties: { lookbackDays: { type: "number", default: 30, maximum: 400 } } },
     handler: treasuryDailyCash,
   },
   {
     name: "treasury_daily_flows",
-    description: "Daily federal cash deposits and withdrawals by category from the Daily Treasury Statement (FiscalData, live, no key) — the real-time fiscal-flows tape. Headline signal: 'Taxes - Withheld Individual/FICA' deposits track wage payrolls with ~1-day lag; focusCategory defaults to 'withheld' and returns that category's daily series plus latest today/MTD/FYTD amounts (FYTD vs the same point last fiscal year is the cleanest comparison — payment-calendar effects make day/week deltas noisy). Also returns the latest day's top deposit and withdrawal categories (topN, default 8), side sums excluding Treasury's own 'Total' rows (double-count guard; totals reported separately), and net flow. Category matching is case-insensitive contains — try focusCategory 'corporate' (corporate income taxes) or 'interest' (debt service). Optional transactionType filter ('deposits'|'withdrawals'). Figures in $ millions; publication lags one business day.",
+    description: "Daily federal cash deposits and withdrawals by category from the Daily Treasury Statement (FiscalData, live, no key) — the real-time fiscal-flows tape. Headline signal: 'Taxes - Withheld Individual/FICA' deposits track wage payrolls with ~1-day lag; focusCategory defaults to 'withheld' and returns that category's daily series plus latest today/MTD/FYTD amounts (FYTD vs the same point last fiscal year is the cleanest comparison — payment-calendar effects make day/week deltas noisy). Also returns the latest day's top deposit and withdrawal categories (topN, default 8), side sums excluding Treasury's own sub-total lines ('Total…' categories and literal-'null' category rows — double-count guard; totals reported separately), and net flow (which includes Public Debt Cash Issues/Redemptions, i.e. financing flows). Category matching is case-insensitive contains — try focusCategory 'corporate' (corporate income taxes) or 'interest' (debt service). Optional transactionType filter ('deposits'|'withdrawals'). Figures in $ millions; publication lags one business day.",
     inputSchema: { type: "object", properties: { lookbackDays: { type: "number", default: 30, maximum: 120 }, focusCategory: { type: "string" }, transactionType: { type: "string", enum: ["deposits", "withdrawals"] }, topN: { type: "number", default: 8, maximum: 25 } } },
     handler: treasuryDailyFlows,
   },
