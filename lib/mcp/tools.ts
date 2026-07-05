@@ -72,6 +72,9 @@ import {
   formdSearch,
 } from "../edgar/fulltext";
 import {
+  edgarConceptFrame,
+} from "../edgar/frames";
+import {
   gleifEntitySearch,
   gleifEntityProfile,
 } from "../gleif/tools";
@@ -106,7 +109,7 @@ const RIA_TOOLS: ToolDef[] = [
   { name: "get_aum_history", description: "Get the time series of AUM, accounts, and employees for a given firm across all ingested ADV filings.", inputSchema: { type: "object", properties: { crdNumber: { type: "number" }, limit: { type: "number", default: 50, maximum: 200 } }, required: ["crdNumber"] }, handler: getAumHistory },
   { name: "firms_using_custodian", description: "List firms reporting a specific qualified custodian (e.g., 'Schwab', 'Fidelity', 'Pershing'). Returns assets and accounts held with that custodian.", inputSchema: { type: "object", properties: { custodianName: { type: "string" }, limit: { type: "number", default: 100, maximum: 500 } }, required: ["custodianName"] }, handler: firmsUsingCustodian },
   { name: "top_rias_by", description: "Rank firms by AUM, accounts, employees, or registered IAR count. Optionally scoped to a single state.", inputSchema: { type: "object", properties: { metric: { type: "string", enum: ["aum", "accounts", "employees", "iars"], default: "aum" }, state: { type: "string" }, limit: { type: "number", default: 25, maximum: 100 } }, required: ["metric"] }, handler: topRiasBy },
-  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D), GLEIF LEI, BDC, public-pension (PPD), and USAspending tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
+  { name: "database_status", description: "Get the health and freshness of the database: firm count, latest SEC feed, last successful ingest run across all DB-backed data sources (ADV, BMF, DOL 5500, IPEDS, NACUBO, SBA PPP, SEC 13F). Note: FDIC, OFR, SEC EDGAR (incl. full-text/Form D/frames), GLEIF LEI, BDC, public-pension (PPD), and USAspending tools are live-API sources with no local ingest, so they do not appear here.", inputSchema: { type: "object", properties: {} }, handler: databaseStatus },
 ];
 
 const NONPROFIT_TOOLS: ToolDef[] = [
@@ -276,9 +279,15 @@ const EDGAR_TOOLS: ToolDef[] = [
   },
   {
     name: "edgar_financial_concept",
-    description: "Fetch a public company's reported financial concept as a time series from SEC XBRL data (companyconcept API, live). Resolve the company by cik, ticker, or name; concept is a us-gaap taxonomy tag (e.g. Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, Assets, Liabilities, NetIncomeLoss, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue). Optional taxonomy (default us-gaap), unit (default first available, usually USD), annualOnly (10-K / full-year facts only), and limit. Returns the value time series with fiscal year/period, form, and filing date. A company may tag the same line item under different concepts across years.",
+    description: "Fetch a public company's reported financial concept as a time series from SEC XBRL data (companyconcept API, live). Resolve the company by cik, ticker, or name; concept is a us-gaap taxonomy tag (e.g. Revenues, RevenueFromContractWithCustomerExcludingAssessedTax, Assets, Liabilities, NetIncomeLoss, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue). Optional taxonomy (default us-gaap), unit (default first available, usually USD), annualOnly (10-K / full-year facts only), and limit. Returns the value time series with fiscal year/period, form, and filing date. Freshness-aware tag fallback: when the requested concept returns nothing OR its latest fact is stale (>~18 months — filers switch tags across years), common alternates are tried and the freshest tag wins (staleFallbackUsed flags the switch; candidateLatest makes it auditable).",
     inputSchema: { type: "object", properties: { cik: { type: "string" }, ticker: { type: "string" }, name: { type: "string" }, concept: { type: "string" }, taxonomy: { type: "string" }, unit: { type: "string" }, annualOnly: { type: "boolean" }, limit: { type: "number", default: 40, maximum: 500 } }, required: ["concept"] },
     handler: edgarFinancialConcept,
+  },
+  {
+    name: "edgar_concept_frame",
+    description: "Screen or rank ALL SEC filers by one XBRL concept for one period (EDGAR frames API, live) — the cross-market transpose of edgar_financial_concept. E.g. 'largest filers by Assets at Q4 2025', 'every filer's NetIncomeLoss for CY2025', or a named peer set's values via nameContains. Provide concept (us-gaap tag), year, and optionally quarter and instantaneous; duration frames (CY2025, CY2025Q3) serve flow concepts like Revenues/NetIncomeLoss, instantaneous frames (CY2025Q4I) serve balance-sheet concepts like Assets/StockholdersEquity — mismatches are retried automatically (resolvedFrame shows what served the data). Returns entities sorted by value (sortDir 'asc' for smallest-first) with entityName, CIK, value, period end, and accession number; minValue floors a screen; totalEntities reports the full universe size. One as-reported fact per filer per frame; frames lag filings by weeks. unit defaults to USD ('shares' and 'USD-per-shares' also exist).",
+    inputSchema: { type: "object", properties: { concept: { type: "string" }, year: { type: "number" }, quarter: { type: "number" }, instantaneous: { type: "boolean" }, taxonomy: { type: "string" }, unit: { type: "string" }, nameContains: { type: "string" }, minValue: { type: "number" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 25, maximum: 200 } }, required: ["concept", "year"] },
+    handler: edgarConceptFrame,
   },
   {
     name: "edgar_fulltext_search",
@@ -297,13 +306,13 @@ const EDGAR_TOOLS: ToolDef[] = [
 const GLEIF_TOOLS: ToolDef[] = [
   {
     name: "gleif_entity_search",
-    description: "Resolve any legal entity worldwide to its LEI record (GLEIF LEI API, live — the ISO 17442 Legal Entity Identifier registry). Fulltext search across legal names, other/former names, and addresses; optional 2-letter country filter on the legal address. Returns LEI, legal name, entity status (ACTIVE/INACTIVE), jurisdiction, category, legal/HQ addresses, and registration status/dates. Coverage skews to financial-market participants — funds, GPs, banks, insurers, issuers — plus many private operating companies that ticker-based lookups (edgar_company_lookup) cannot reach. Use a returned lei with gleif_entity_profile for corporate family trees.",
+    description: "Resolve any legal entity worldwide to its LEI record (GLEIF LEI API, live — the ISO 17442 Legal Entity Identifier registry). Fulltext search across legal names, other/former names, and addresses; optional 2-letter country filter on the legal address. Returns LEI, legal name, entity status (ACTIVE/INACTIVE), jurisdiction, category, legal/HQ addresses, and registration status/dates. Results are re-ranked client-side to put legal-name matches first (GLEIF's own fulltext also matches addresses). Coverage skews to financial-market participants — funds, GPs, banks, insurers, issuers — plus many private operating companies that ticker-based lookups (edgar_company_lookup) cannot reach. Use a returned lei with gleif_entity_profile for corporate family trees.",
     inputSchema: { type: "object", properties: { query: { type: "string" }, country: { type: "string" }, limit: { type: "number", default: 10, maximum: 50 }, page: { type: "number", default: 1 } }, required: ["query"] },
     handler: gleifEntitySearch,
   },
   {
     name: "gleif_entity_profile",
-    description: "One entity's LEI record PLUS its corporate family tree (GLEIF LEI API, live): direct parent, ultimate parent, and direct children under ACCOUNTING-CONSOLIDATION relationships. Resolve by lei (20-char identifier) or by name (top fulltext match wins). Answers 'which umbrella does this fund sit under?' for manager diligence and maps a PE firm's entity structure for M&A buyer research. Null parents are common and valid — many entities file reporting exceptions (e.g. no consolidating parent). childTotal reports the full subsidiary count; childrenLimit (default 10, max 50) caps what's returned.",
+    description: "One entity's LEI record PLUS its corporate family tree (GLEIF LEI API, live): direct parent, ultimate parent, and direct children under ACCOUNTING-CONSOLIDATION relationships. Resolve by lei (20-char identifier) or by name (best legal-name match wins). Answers 'which umbrella does this fund sit under?' for manager diligence and maps a PE firm's entity structure for M&A buyer research. Null parents are common and valid — many entities file reporting exceptions (e.g. no consolidating parent). childTotal reports the full subsidiary count; childrenLimit (default 10, max 50) caps what's returned.",
     inputSchema: { type: "object", properties: { lei: { type: "string" }, name: { type: "string" }, childrenLimit: { type: "number", default: 10, maximum: 50 } } },
     handler: gleifEntityProfile,
   },
