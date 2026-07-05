@@ -4,11 +4,29 @@
  * - politeFetch: identifies as Vistamark, retries on 5xx + network errors, modest backoff.
  *   ProPublica and IRS both expect a real User-Agent; missing UA can trigger blocks.
  * - jsonFetch:   politeFetch + JSON parse + status-OK guard.
+ *
+ * CREDENTIAL REDACTION (live-caught 2026-07-05): error messages built from
+ * request URLs flow into tool error strings, which surface on the
+ * unauthenticated /api/selftest and /api/market-brief endpoints of a PUBLIC
+ * repo's production deployment. A transient FRED 403 printed the full
+ * request URL including api_key. redactUrl() scrubs sensitive query-param
+ * values (api_key/key/token/secret/password variants) from BOTH the URL and
+ * the echoed response body in every error path here, so no keyed upstream
+ * (FRED today; EIA/BLS/Data.gov when enabled) can leak a credential through
+ * an error string. Over-redaction of a non-secret 'key=' param in an error
+ * message is harmless; the safe direction is broad.
  */
 
 const USER_AGENT =
   process.env.VISTAMARK_USER_AGENT ??
   "Vistamark Intel (vistamark-ria-intel; mrice@vistamarkllc.com)";
+
+const SENSITIVE_PARAM = /((?:api[_-]?key|apikey|key|token|access[_-]?token|secret|password)=)[^&#\s]*/gi;
+
+/** Scrub sensitive query-param values from a URL or URL-bearing text. */
+export function redactUrl(text: string): string {
+  return text.replace(SENSITIVE_PARAM, "$1[redacted]");
+}
 
 export interface PoliteFetchOptions extends RequestInit {
   retries?: number;        // default 3
@@ -58,7 +76,7 @@ export async function politeFetch(url: string, init: PoliteFetchOptions = {}): P
       }
     }
   }
-  throw lastErr ?? new Error(`politeFetch failed after ${retries + 1} attempts: ${url}`);
+  throw lastErr ?? new Error(`politeFetch failed after ${retries + 1} attempts: ${redactUrl(url)}`);
 }
 
 export async function jsonFetch<T = unknown>(
@@ -68,7 +86,7 @@ export async function jsonFetch<T = unknown>(
   const res = await politeFetch(url, init);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} from ${url}: ${body.slice(0, 200)}`);
+    throw new Error(`HTTP ${res.status} from ${redactUrl(url)}: ${redactUrl(body).slice(0, 200)}`);
   }
   return (await res.json()) as T;
 }
