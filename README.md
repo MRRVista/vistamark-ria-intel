@@ -1,123 +1,108 @@
 # Vistamark Intel
 
-A unified intelligence database for RIA prospecting, nonprofit research, retirement-plan analysis, and macro/rate context — built on public SEC, IRS, DOL, ProPublica, FRED, and U.S. Treasury data and exposed to Claude via the Model Context Protocol (MCP).
+A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **57 tools across 15 dataset families.** Queried in production by Randall, Vistamark's AI associate.
 
 ## Data domains
 
-- **RIA intelligence (Form ADV)** — weekly ingest of the SEC IAPD bulk feed (~17K SEC-registered investment advisers). Firms, advisors, AUM history, custodians, private funds.
-- **Nonprofit intelligence** — monthly IRS Exempt Organizations Business Master File (1.7M+ tax-exempt orgs) + live ProPublica Nonprofit Explorer for full 990 financial history.
-- **Retirement plan intelligence (Phase 2)** — annual DOL Form 5500 ERISA filings (~800K plans/year). Sponsor, administrator, plan type, asset levels, participant counts, 401(k)/DB flags.
-- **Macro / rates (Phase 3)** — FRED passthrough for any of the 800K+ economic series; pre-built Treasury yield curve tool; Treasury Fiscal Data for outstanding debt and avg rates.
+**DB-backed (Neon Postgres, scheduled ingests):**
+
+- **Form ADV (SEC IAPD)** — weekly ingest; ~23.7K SEC-registered advisers. Firms, advisors, AUM history, custodians, private funds, alumni tracking.
+- **IRS Exempt Organizations BMF** — 6-region rotation; 1.7M+ tax-exempt orgs with asset/income/revenue bands.
+- **DOL Form 5500** — annual ERISA filings (sponsor, plan type, assets, participants, 401(k)/DB flags). Thursday refresh cron + manual admin backfill.
+- **IPEDS Finance Survey Part H** — ~6,400 Title IV institutions' endowments, FY2003-04 onward, with peer sets, percentile ranks, and growth analytics.
+- **NACUBO** — public NCSE/NTSE benchmark aggregates by cohort.
+- **SBA PPP / SEC 13F** — schema live; loaded via manual admin ingests (the quarterly 13F cron is currently a deliberate no-op stub).
+
+**Live-API (no local ingest):**
+
+- **ProPublica Nonprofit Explorer** — full 990 filing histories.
+- **FRED** — series search/fetch, full yield curve, batch latest, and a curated 22-indicator macro market-signals layer (six pillars + computed net liquidity = WALCL − RRP − TGA).
+- **Treasury FiscalData** — avg rates, debt outstanding, and the Daily Treasury Statement: daily TGA cash and daily deposits/withdrawals incl. the withheld individual/FICA payroll signal (negation-guarded category matching).
+- **Morning market brief** — one-call pre-market composite (signals + daily TGA + fiscal flows + curve + OFR FSI) with ready-to-send briefMarkdown.
+- **FDIC BankFind** — bank search, quarterly financials, failure history.
+- **OFR** — daily Financial Stress Index + Short-Term Funding Monitor series.
+- **SEC EDGAR** — company lookup/filings, XBRL concepts with freshness-aware tag fallback, cross-market concept frames, full-text search (2001+), Form D exempt-offering search.
+- **GLEIF LEI** — global entity resolution + corporate family trees.
+- **BDC universe** — curated listed-BDC (BIZD-style) list with EDGAR-backed profiles and screens.
+- **Public Plans Database** — the ~230 largest U.S. state/local pension plans, multi-year funding history.
+- **USAspending** — federal awards by recipient + top-recipient screens.
+
+## Endpoints
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/mcp` | `ACCESS_TOKEN` header | MCP JSON-RPC (initialize, tools/list, tools/call) |
+| `GET /api/selftest` | none | Read-only diagnostic battery (36 checks). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
+| `GET /api/market-brief` | none | The morning composite, served for the vistamark-m365 pre-market digest cron. Aggregated public macro data only — same exposure posture as selftest. |
 
 ## Setup
 
-### 1. Connect Postgres in Vercel dashboard
-
-Storage tab → Create Database → Neon (Postgres) → **Launch plan** ($19/mo, 10 GB storage). The full schema lands at ~3–4 GB so the free 0.5 GB tier is too tight once nonprofit + 5500 data is loaded.
-
-### 2. Environment variables
+### Environment variables
 
 | Name | Required | Purpose |
 |------|----------|---------|
 | `DATABASE_URL` | yes | Auto-injected by the Neon integration |
 | `ACCESS_TOKEN` | yes | Required header on every MCP request |
-| `CRON_SECRET` | yes | Authenticates manual cron triggers and migration |
-| `FRED_API_KEY` | for Phase 3 | Free key at https://fred.stlouisfed.org/docs/api/api_key.html |
-| `DOL_5500_YEAR` | optional | Override which year to ingest (default = current year − 2) |
+| `CRON_SECRET` | yes | Authenticates manual cron/admin triggers |
+| `FRED_API_KEY` | yes (macro tools) | Free key — https://fred.stlouisfed.org |
+| `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2) |
+| `EIA_API_KEY` / `BLS_API_KEY` / `DATA_GOV_API_KEY` | future | Reserved for the keyed-API expansion tier |
 
-Redeploy after setting env vars.
-
-### 3. Apply schema + first ingest
+### First ingest (after schema migrate)
 
 ```bash
 BASE="https://<your-deploy>.vercel.app"
-
-# Apply migrations (idempotent)
 curl -X POST "$BASE/api/admin/migrate" -H "Authorization: Bearer $CRON_SECRET"
-
-# Form ADV (~3–5 min)
 curl -X POST "$BASE/api/cron/ingest-adv" -H "Authorization: Bearer $CRON_SECRET"
-
-# IRS BMF — 6 regions × ~90s each
 for region in eo1 eo2 eo3 eo4 eo_pr eo_xx; do
-  curl -X POST "$BASE/api/admin/refresh-irs-bmf?region=$region" \
-    -H "Authorization: Bearer $CRON_SECRET"
+  curl -X POST "$BASE/api/admin/refresh-irs-bmf?region=$region" -H "Authorization: Bearer $CRON_SECRET"
 done
-
-# DOL Form 5500 — defaults to year (current - 2); ~3-5 min
 curl -X POST "$BASE/api/admin/refresh-dol-5500" -H "Authorization: Bearer $CRON_SECRET"
+curl -X POST "$BASE/api/admin/refresh-ipeds" -H "Authorization: Bearer $CRON_SECRET"
+curl -X POST "$BASE/api/admin/refresh-nacubo" -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-Crons keep everything fresh:
+### Scheduled crons (vercel.json)
 
 | Cron | Schedule (UTC) | Purpose |
 |------|----------------|---------|
-| `ingest-adv` | Mondays 06:00 | Weekly Form ADV refresh |
-| `refresh-irs-bmf` | Wednesdays 04:00 | Next region in 6-region rotation |
-| `refresh-dol-5500` | Thursdays 05:00 | Re-pull latest plan year (catches amendments) |
+| `ingest-adv` | Mon 06:00 | Weekly Form ADV refresh |
+| `refresh-irs-bmf` | Wed 04:00 | Next region in the 6-region rotation |
+| `refresh-dol-5500` | Thu 05:00 | Re-pull latest plan year |
+| `refresh-ipeds` | daily 06:00 | IPEDS freshness check |
+| `refresh-nacubo` | Feb 15 yearly | Annual NACUBO study refresh |
+| `refresh-13f` | quarterly (1st, 08:00) | **Stub** — returns 200, no-op; real 13F loads are manual admin ingests |
 
-## Claude.ai connector
+`database_status` reports per-pipeline health: each ingest family's latest run, errors sorted first with redacted error messages — a failing scheduled ingest surfaces there instead of failing silently. A family absent from `pipelineHealth` has never created a run record, meaning its handler is not being reached.
 
-- URL: `https://<your-deploy>.vercel.app/api/mcp`
-- Header: `ACCESS_TOKEN: <your-token>`
+## MCP tools (57 total)
 
-## MCP tools (19 total)
+RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3)
 
-### RIA intelligence (Form ADV)
-
-| Tool | Purpose |
-|------|---------|
-| `search_rias` | Multi-filter RIA search (state, AUM range, client mix, services, custody) |
-| `get_ria_profile` | Full firm dossier — ADV fields, AUM history, advisors, custodians, private funds |
-| `search_advisors` | Find individual IARs by name or current firm |
-| `find_alumni` | Find advisors who used to work at a firm and where they went |
-| `get_aum_history` | Time series of AUM, accounts, employees for one firm |
-| `firms_using_custodian` | List firms using a given custodian |
-| `top_rias_by` | Leaderboard by AUM, accounts, employees, or IAR count |
-| `database_status` | Freshness — firm count, latest feed, last ingest |
-
-### Nonprofit intelligence
-
-| Tool | Purpose | Source |
-|------|---------|--------|
-| `propublica_org_search` | Keyword search with state / NTEE / subsection filters | ProPublica live API |
-| `propublica_org_990` | Full 990 filing history time series | ProPublica live API |
-| `irs_eo_lookup` | Fast EIN-based IRS BMF lookup | Local Postgres |
-| `irs_eo_search` | Multi-filter prospecting — state, subsection, NTEE prefix, asset bands | Local Postgres |
-
-### Retirement plans (DOL Form 5500)
-
-| Tool | Purpose |
-|------|---------|
-| `dol_plan_search` | Plan prospecting — sponsor name/EIN/state, 401(k), DB flag, asset and participant ranges |
-| `dol_plan_lookup` | Plan dossier by ACK_ID or (sponsorEIN + planNumber) across years |
-
-### Macro / rates
-
-| Tool | Purpose | Source |
-|------|---------|--------|
-| `fred_series_search` | Keyword search for any FRED series | FRED API |
-| `fred_get_series` | Observations for a series, with date filter + transformation | FRED API |
-| `fred_yield_curve` | Full Treasury curve (1M–30Y) with computed 10Y-2Y and 10Y-3M spreads + inversion flags | FRED |
-| `treasury_avg_rates` | Average rates on outstanding Treasury debt by security type | Treasury Fiscal Data |
-| `treasury_debt_outstanding` | Total debt outstanding by security class | Treasury Fiscal Data |
+Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 
 ## Example flows
 
+- *"What's the pre-market picture?"* → `morning_market_brief` (no args)
+- *"Which macro signals are firing?"* → `macro_market_signals`
+- *"Daily TGA and the payroll tax tape"* → `treasury_daily_cash` / `treasury_daily_flows`
 - *"401(k) plans in Illinois over $50M"* → `dol_plan_search` (state=IL, is401k=true, minAssetsEoy=50000000)
-- *"501(c)(3) in Chicago with assets over $10M"* → `irs_eo_search` (state=IL, city=Chicago, subsection=3, minAssetCode=8)
-- *"How inverted is the curve?"* → `fred_yield_curve` (no args)
-- *"10Y Treasury, last 5 years monthly"* → `fred_get_series` (seriesId=DGS10, frequency=m, observationStart=2021-01-01)
+- *"Rank all SEC filers by Assets, Q4 2025"* → `edgar_concept_frame` (concept=Assets, year=2025, quarter=4)
+- *"Who's raising credit funds this month?"* → `formd_search` (query='credit fund', startDate=…)
+- *"UChicago endowment vs the national field"* → `endowment_percentile_rank` (instnm='University of Chicago')
+- *"Illinois public pensions under 50% funded"* → `ppd_plan_search` (state=IL, maxFundedRatioPct=50)
 
 ## Roadmap
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Form ADV + IRS BMF + ProPublica 990s | shipped |
-| 2 | DOL Form 5500 (ERISA retirement plans) | shipped |
-| 3 | FRED + Treasury passthroughs | shipped |
-| 4 | EDGAR 13F + N-PORT filings | planned |
-| 5 | IPEDS endowments + NACUBO cohort returns | planned |
-| 6 | Form 5500 Schedule C (service-provider relationships) | planned |
+| 2 | DOL Form 5500 | shipped |
+| 3 | FRED + Treasury + macro signals + Daily Treasury Statement + morning brief | shipped |
+| 4 | IPEDS endowments + NACUBO cohort benchmarks | shipped |
+| 5 | FDIC, OFR, EDGAR suite (FTS/Form D/frames), GLEIF, BDC, PPD pensions, USAspending, GLEIF | shipped |
+| 6 | 13F automated quarterly parse (cron currently a stub; manual admin ingest live) | pending |
+| 7 | Keyed-API tier: EIA, BLS, Data.gov, CFTC COT | pending env keys |
+| 8 | 990-PF / NCUA / FINRA verification batch | pending Randall channel |
 
 Internal — Vistamark Investments LLC.

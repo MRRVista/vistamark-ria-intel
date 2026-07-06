@@ -23,7 +23,7 @@ interface Check {
 }
 
 const CHECKS: Check[] = [
-  { name: "db-status", tool: "database_status", args: {} },
+  { name: "db-status", tool: "database_status", args: {}, note: "pipeline-health probe — pipelineHealth lists each ingest family's LATEST run (errors sorted first, redacted + truncated errorMessage), so a failing scheduled ingest is visible here instead of hidden behind ok-only filtering; a family absent from the list has never created a run record, meaning its handler is not being reached at all" },
   { name: "adv-search", tool: "search_rias", args: { state: "IL", minAum: 100000000, limit: 2 } },
   { name: "adv-top", tool: "top_rias_by", args: { metric: "aum", state: "IL", limit: 3 } },
   { name: "irs-bmf", tool: "irs_eo_search", args: { state: "IL", subsection: 3, minAssetAmt: 25000000, limit: 2 } },
@@ -31,16 +31,16 @@ const CHECKS: Check[] = [
   { name: "endowment-search", tool: "endowment_search", args: { state: "IL", minEndowment: 25000000, maxEndowment: 250000000, limit: 2 } },
   { name: "endowment-rank", tool: "endowment_percentile_rank", args: { instnm: "University of Chicago" } },
   { name: "nacubo", tool: "nacubo_benchmark_lookup", args: { fyear: 2024, cohort: "all" } },
-  { name: "dol-any", tool: "dol_plan_search", args: { limit: 1 }, note: "unfiltered — total = full table row count (0 here means the table is EMPTY, an ingest problem not a query problem)" },
+  { name: "dol-any", tool: "dol_plan_search", args: { limit: 1 }, note: "unfiltered — total = full table row count (0 here means the table is EMPTY, an ingest problem not a query problem — check db-status pipelineHealth for the dol-5500 family's latest run)" },
   { name: "dol-il-assets", tool: "dol_plan_search", args: { state: "IL", minAssetsEoy: 50000000, limit: 2 }, note: "state + assets only, no feature-code filter" },
   { name: "dol-401k", tool: "dol_plan_search", args: { state: "IL", is401k: true, minAssetsEoy: 50000000, limit: 2 }, note: "401(k) feature-code filter (2J) — the previously failing check" },
   { name: "fred-curve", tool: "fred_yield_curve", args: {} },
-  { name: "macro-signals", tool: "macro_market_signals", args: {}, note: "flagship composite probe — 21 FRED indicators across six pillars in parallel; expect real values with dates, threshold signals, a highlights array, and a netLiquidity block in the low-$T range with unit-verified components; failedIndicators lists any wrong mnemonic" },
+  { name: "macro-signals", tool: "macro_market_signals", args: {}, note: "flagship composite probe — 22 FRED indicators across six pillars in parallel; expect real values with dates, threshold signals, a highlights array, and a netLiquidity block in the low-$T range with unit-verified components; failedIndicators lists any wrong mnemonic" },
   { name: "fred-batch", tool: "fred_batch_latest", args: { seriesIds: ["VIXCLS", "T10Y2Y"] }, note: "generic batch probe — expect both series with titles, latest values, and 1m/3m changes" },
   { name: "market-brief", tool: "morning_market_brief", args: {}, note: "pre-market composite probe — expect headline bullets (net liquidity, TGA close with 1w/1m changes and Closing balanceBasis, withheld-tax day/MTD/FYTD, curve spreads, OFR FSI), five trimmed sections, and a briefMarkdown block; per-section errors degrade that section only, never the whole brief" },
   { name: "treasury", tool: "treasury_avg_rates", args: {} },
-  { name: "dts-cash", tool: "treasury_daily_cash", args: { lookbackDays: 21 }, note: "daily TGA probe — expect a closing balance in the plausible $30B–$2.5T band (values in $ millions from Treasury), a dated daily series, and week/month changes; sampleRawRow appears if field names drifted" },
-  { name: "dts-flows", tool: "treasury_daily_flows", args: { lookbackDays: 21 }, note: "daily fiscal-flows probe — expect latest-day top deposit/withdrawal categories, side sums excluding Treasury 'Total' rows, and a withheld-tax focus block (the near-real-time payroll signal) with today/MTD/FYTD amounts" },
+  { name: "dts-cash", tool: "treasury_daily_cash", args: { lookbackDays: 45 }, note: "daily TGA probe — lookbackDays 45 so BOTH the ~1-week and ~1-month changes populate; expect a closing balance in the plausible $30B–$2.5T band (values in $ millions from Treasury), Closing balanceBasis, and a dated daily series; sampleRawRow appears if field names drifted" },
+  { name: "dts-flows", tool: "treasury_daily_flows", args: { lookbackDays: 21 }, note: "daily fiscal-flows probe — expect latest-day top deposit/withdrawal categories, side sums excluding Treasury 'Total' rows, and a withheld-tax focus block (the near-real-time payroll signal) with today/MTD/FYTD amounts and exactly one matched category (negation guard)" },
   { name: "fdic", tool: "fdic_bank_search", args: { state: "IL", communityBankOnly: true, limit: 2 } },
   { name: "ofr-fsi", tool: "ofr_financial_stress_index", args: { lookback: 5 } },
   { name: "edgar-lookup", tool: "edgar_company_lookup", args: { query: "Apple", limit: 1 } },
@@ -58,7 +58,7 @@ const CHECKS: Check[] = [
   { name: "ppd-search", tool: "ppd_plan_search", args: { state: "IL", limit: 2 }, note: "expect IL public plans (IMRF, Illinois Teachers, SURS, Chicago funds); plan rows lead the payload" },
   { name: "ppd-profile", tool: "ppd_plan_profile", args: { name: "California", limit: 3 }, note: "unit sanity probe — a large CA plan's market assets should land in the hundreds of billions USD; if it reads ~$500M the thousands->USD conversion is wrong" },
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
-  { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
+  { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
 ];
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {

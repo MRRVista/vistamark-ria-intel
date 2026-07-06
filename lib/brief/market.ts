@@ -2,7 +2,7 @@
  * Morning market brief — the pre-market composite. One call assembles the
  * whole early-warning stack:
  *
- *   • macro_market_signals (21 indicators, six pillars, net liquidity)
+ *   • macro_market_signals (22 indicators, six pillars, net liquidity)
  *   • treasury_daily_cash   (daily TGA — the daily liquidity read)
  *   • treasury_daily_flows  (withheld-tax payroll signal + fiscal tape)
  *   • fred_yield_curve      (full curve + inversion flags)
@@ -166,7 +166,7 @@ export async function morningMarketBrief(_args: MorningMarketBriefArgs = {}) {
   if (!signals?.error && signals?.pillars) {
     md.push("");
     md.push("## Signal board");
-    md.push("Full 21-indicator board in sections.macroSignals (curve / credit / liquidity / growth / inflation / sentiment).");
+    md.push("Full 22-indicator board in sections.macroSignals (curve / credit / liquidity / growth / inflation / sentiment).");
   }
   const briefMarkdown = md.join("\n");
 
