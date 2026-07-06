@@ -14,6 +14,15 @@
  * v0.5.0: The endowments.net_change_in_endowment column was renamed from
  * the misleading `contributions` (IPEDS f2h03 is the net change in endowment
  * = EOY minus BOY, not gift inflows).
+ *
+ * v0.17.x (live-caught via pipelineHealth): a 404 on the newest provisional
+ * year (e.g. F2324_F2.zip before NCES publishes it) was recorded as a
+ * status='error' run EVERY DAY by the 06:00 cron. That is an EXPECTED
+ * condition, not a failure — it is now recorded as status='skipped' with the
+ * message, ingestFinance/ingestDirectory return a skip-shaped result instead
+ * of throwing, and pickNextFinance's backoff window covers both 'error' and
+ * 'skipped' so the probe stays at one attempt per backoff window regardless
+ * of cron frequency. Real failures (non-404) still record 'error' and throw.
  */
 
 import AdmZip from "adm-zip";
@@ -49,11 +58,19 @@ const SOURCE_PREFIX = "ipeds";
 const BATCH_SIZE = 500;
 
 /**
- * After a source fails (e.g. HTTP 404 because NCES hasn't published a
- * provisional FY24 file yet), back off and don't retry for this many hours.
- * Prevents the daily cron from churning through 404'd sources every tick.
+ * After a source fails or is skipped (e.g. HTTP 404 because NCES hasn't
+ * published a provisional FY file yet), back off and don't retry for this
+ * many hours. Prevents the cron from churning through unpublished sources.
  */
 const ERROR_BACKOFF_HOURS = 24;
+
+/** NCES returned 404 — the file simply isn't published yet. Expected. */
+class NotPublishedError extends Error {
+  constructor(url: string) {
+    super(`HTTP 404 fetching ${url} — not published by NCES yet (expected for the newest provisional year; will re-probe after backoff)`);
+    this.name = "NotPublishedError";
+  }
+}
 
 export interface IngestResult {
   source: string;
@@ -64,10 +81,13 @@ export interface IngestResult {
   headerSample: string[];
   firstRowSample: string[];
   durationMs: number;
+  /** Set when the run was skipped (file not yet published) rather than ingested. */
+  skipped?: string;
 }
 
 async function downloadCsv(url: string): Promise<Buffer> {
   const res = await politeFetch(url, { timeoutMs: 240_000 });
+  if (res.status === 404) throw new NotPublishedError(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
   const buffer = Buffer.from(await res.arrayBuffer());
   const zip = new AdmZip(buffer);
@@ -80,6 +100,20 @@ async function downloadCsv(url: string): Promise<Buffer> {
   const revised = entries.find((e) => /^rv_/i.test(e.entryName));
   const chosen = revised ?? entries[0]!;
   return chosen.getData();
+}
+
+function skipResult(source: string, url: string, start: number, message: string): IngestResult {
+  return {
+    source,
+    url,
+    rowsProcessed: 0,
+    rowsUpserted: 0,
+    rowsSkippedNoKey: 0,
+    headerSample: [],
+    firstRowSample: [],
+    durationMs: Date.now() - start,
+    skipped: message,
+  };
 }
 
 export async function ingestDirectory(year: number): Promise<IngestResult> {
@@ -173,6 +207,19 @@ export async function ingestDirectory(year: number): Promise<IngestResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof NotPublishedError) {
+      await db
+        .update(ingestRuns)
+        .set({
+          status: "skipped",
+          finishedAt: new Date(),
+          errorMessage: message,
+          firmsProcessed: 0,
+          firmsInserted: 0,
+        })
+        .where(sql`${ingestRuns.id} = ${runId}`);
+      return skipResult(source, url, start, message);
+    }
     await db
       .update(ingestRuns)
       .set({
@@ -281,6 +328,19 @@ export async function ingestFinance(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof NotPublishedError) {
+      await db
+        .update(ingestRuns)
+        .set({
+          status: "skipped",
+          finishedAt: new Date(),
+          errorMessage: message,
+          firmsProcessed: 0,
+          firmsInserted: 0,
+        })
+        .where(sql`${ingestRuns.id} = ${runId}`);
+      return skipResult(source, url, start, message);
+    }
     await db
       .update(ingestRuns)
       .set({
@@ -344,10 +404,12 @@ async function upsertEndowments(rows: EndowmentInsert[]): Promise<void> {
  * back to oldest, returning the first one that is:
  *   - not already successfully ingested (status='ok' AND firms_inserted > 0)
  *   - not in the caller's session-local skip set
- *   - not in the recent-error backoff window (default 24h)
+ *   - not in the recent error/skip backoff window (default 24h)
  *
- * The backoff guards against the daily cron churning through provisional
- * NCES files that 404 for weeks/months until NCES publishes them.
+ * The backoff guards against the cron churning through provisional NCES
+ * files that 404 for weeks/months until NCES publishes them — and covers
+ * BOTH 'error' and 'skipped' runs, so the newest-year probe stays at one
+ * attempt per backoff window regardless of cron frequency.
  *
  * Returns null when nothing left to try.
  */
@@ -364,15 +426,15 @@ export async function pickNextFinance(
     done.add(String(r.source));
   }
 
-  // Recently-errored sources are in backoff and should be skipped for now.
-  const recentErrors = await db.execute(sql`
+  // Recently-errored OR recently-skipped sources are in backoff.
+  const recentBackoff = await db.execute(sql`
     SELECT DISTINCT source FROM ingest_runs
-    WHERE status = 'error'
+    WHERE status IN ('error', 'skipped')
       AND source LIKE ${`${SOURCE_PREFIX}/%`}
       AND finished_at > NOW() - (${ERROR_BACKOFF_HOURS} || ' hours')::interval
   `);
   const backoff = new Set<string>();
-  for (const r of (recentErrors as any).rows ?? []) {
+  for (const r of (recentBackoff as any).rows ?? []) {
     backoff.add(String(r.source));
   }
 

@@ -4,6 +4,17 @@
  * We reuse the streaming CSV parser primitives from lib/irs-bmf/parser.ts
  * (consumeCsvChunk / finishCsvStream / newStreamState) — the format is the
  * same RFC-4180-ish quoted CSV.
+ *
+ * SCHEMA-WIDTH CLAMPING (live-caught 2026-07-05 via pipelineHealth): the
+ * Thursday cron had been failing EVERY WEEK — run 1247 died 3.6s in at row
+ * ~7,081 with a Postgres 'value too long for type character varying(N)'.
+ * DOL data quality is dirty: phone fields carry extensions/multiple
+ * numbers, zip/city fields occasionally carry pasted garbage — and one
+ * oversized value aborts the whole year's ingest. Every varchar-bound
+ * field below is now clamped to its exact schema width (see plans table in
+ * lib/db/schema.ts). text-typed columns (names, addresses) are unbounded
+ * and not clamped. Clamping is idempotent and lossless for legitimate
+ * data; it only truncates overflow that Postgres would have rejected.
  */
 
 import type { PlanInsert } from "../db/schema";
@@ -17,11 +28,17 @@ import {
 } from "./columns";
 import type { HeaderKey } from "./columns";
 
+/** Clamp a string to a varchar column width; null passes through. */
+function clamp(s: string | null, max: number): string | null {
+  if (s == null) return null;
+  return s.length > max ? s.slice(0, max) : s;
+}
+
 export function planRowToRecord(
   row: string[],
   headerIndex: Record<string, number>
 ): PlanInsert | null {
-  const ackId = field(row, headerIndex, "ACK_ID");
+  const ackId = clamp(field(row, headerIndex, "ACK_ID"), 40);
   if (!ackId) return null;
 
   const beginDate = fieldDate(row, headerIndex, "FORM_PLAN_YEAR_BEGIN_DATE");
@@ -30,7 +47,7 @@ export function planRowToRecord(
   return {
     ackId,
     formPlanYearBeginDate: beginDate,
-    formTaxPrd: field(row, headerIndex, "FORM_TAX_PRD"),
+    formTaxPrd: clamp(field(row, headerIndex, "FORM_TAX_PRD"), 8),
     typePlanEntityCd: fieldInt(row, headerIndex, "TYPE_PLAN_ENTITY_CD"),
     typeDfePlanEntityCd: fieldInt(row, headerIndex, "TYPE_DFE_PLAN_ENTITY_CD"),
     initialFilingInd: fieldBool(row, headerIndex, "INITIAL_FILING_IND"),
@@ -40,22 +57,22 @@ export function planRowToRecord(
     collectiveBargainInd: fieldBool(row, headerIndex, "COLLECTIVE_BARGAIN_IND"),
     planYear,
     planName: field(row, headerIndex, "PLAN_NAME"),
-    sponsDfePn: field(row, headerIndex, "SPONS_DFE_PN"),
-    sponsDfeEin: normalizeEin(field(row, headerIndex, "SPONS_DFE_EIN")),
+    sponsDfePn: clamp(field(row, headerIndex, "SPONS_DFE_PN"), 8),
+    sponsDfeEin: clamp(normalizeEin(field(row, headerIndex, "SPONS_DFE_EIN")), 12),
     sponsDfeName: field(row, headerIndex, "SPONS_DFE_NAME"),
     sponsDfeDbaName: field(row, headerIndex, "SPONS_DFE_DBA_NAME"),
     sponsDfeMailAddr1: field(row, headerIndex, "SPONS_DFE_MAIL_US_ADDRESS1"),
-    sponsDfeMailCity: field(row, headerIndex, "SPONS_DFE_MAIL_US_CITY"),
-    sponsDfeMailState: field(row, headerIndex, "SPONS_DFE_MAIL_US_STATE")?.toUpperCase() ?? null,
-    sponsDfeMailZip: field(row, headerIndex, "SPONS_DFE_MAIL_US_ZIP"),
-    sponsDfePhone: field(row, headerIndex, "SPONS_DFE_PHONE_NUM"),
+    sponsDfeMailCity: clamp(field(row, headerIndex, "SPONS_DFE_MAIL_US_CITY"), 64),
+    sponsDfeMailState: clamp(field(row, headerIndex, "SPONS_DFE_MAIL_US_STATE")?.toUpperCase() ?? null, 4),
+    sponsDfeMailZip: clamp(field(row, headerIndex, "SPONS_DFE_MAIL_US_ZIP"), 16),
+    sponsDfePhone: clamp(field(row, headerIndex, "SPONS_DFE_PHONE_NUM"), 20),
     adminName: field(row, headerIndex, "ADMIN_NAME"),
-    adminEin: normalizeEin(field(row, headerIndex, "ADMIN_EIN")),
-    adminPhone: field(row, headerIndex, "ADMIN_PHONE_NUM"),
+    adminEin: clamp(normalizeEin(field(row, headerIndex, "ADMIN_EIN")), 12),
+    adminPhone: clamp(field(row, headerIndex, "ADMIN_PHONE_NUM"), 20),
     adminAddr1: field(row, headerIndex, "ADMIN_US_ADDRESS1"),
-    adminCity: field(row, headerIndex, "ADMIN_US_CITY"),
-    adminState: field(row, headerIndex, "ADMIN_US_STATE")?.toUpperCase() ?? null,
-    adminZip: field(row, headerIndex, "ADMIN_US_ZIP"),
+    adminCity: clamp(field(row, headerIndex, "ADMIN_US_CITY"), 64),
+    adminState: clamp(field(row, headerIndex, "ADMIN_US_STATE")?.toUpperCase() ?? null, 4),
+    adminZip: clamp(field(row, headerIndex, "ADMIN_US_ZIP"), 16),
     totActivePartcpCnt: fieldInt(row, headerIndex, "TOT_ACTIVE_PARTCP_CNT"),
     totPartcpBoyCnt: fieldInt(row, headerIndex, "TOT_PARTCP_BOY_CNT"),
     rtrdSepPartcpRcvgCnt: fieldInt(row, headerIndex, "RTRD_SEP_PARTCP_RCVG_CNT"),
