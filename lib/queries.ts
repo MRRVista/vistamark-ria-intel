@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, isNotNull, lte, or, sql, inArray } from "drizzle-orm";
 import { db, isDbReady } from "./db";
 import { firms, firmHistory, advisors, advisorHistory, firmCustodians, ingestRuns, privateFunds } from "./db/schema";
+import { redactUrl } from "./data/http";
 
 export interface SearchRiasParams {
   state?: string;
@@ -158,12 +159,58 @@ export async function topRiasBy(args: { metric: "aum" | "accounts" | "employees"
   return { rows, dbReady: true };
 }
 
+/**
+ * Slim view of an ingest run for diagnostics. Error messages are redacted
+ * (credential-safe) and truncated — they surface on the unauthenticated
+ * selftest, so they must never carry secrets or unbounded upstream bodies.
+ */
+function slimRun(r: any) {
+  if (!r) return null;
+  return {
+    id: r.id ?? null,
+    source: r.source ?? null,
+    status: r.status ?? null,
+    startedAt: r.startedAt ?? null,
+    finishedAt: r.finishedAt ?? null,
+    rowsProcessed: r.firmsProcessed ?? null,
+    ...(r.errorMessage ? { error: redactUrl(String(r.errorMessage)).slice(0, 200) } : {}),
+  };
+}
+
 export async function databaseStatus() {
   if (!isDbReady()) return { dbReady: false, message: "DATABASE_URL is not configured. Connect Neon/Postgres in the Vercel dashboard and redeploy." };
-  const [firmCountRes, lastRunRes, latestSnapshotRes] = await Promise.all([
+  const [firmCountRes, lastOkRes, recentRes, latestSnapshotRes] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(firms),
     db.select().from(ingestRuns).where(eq(ingestRuns.status, "ok")).orderBy(desc(ingestRuns.finishedAt)).limit(1),
+    db.select().from(ingestRuns).orderBy(desc(ingestRuns.startedAt)).limit(40),
     db.select({ date: sql<string>`max(${firmHistory.filingDate})::text` }).from(firmHistory),
   ]);
-  return { dbReady: true, firmCount: firmCountRes[0]?.count ?? 0, lastIngest: lastRunRes[0] ?? null, latestSnapshotDate: latestSnapshotRes[0]?.date ?? null };
+
+  // Latest run per ingest FAMILY (source prefix before '/'), errors first.
+  // This is the fix for the silent-failure blind spot: the old lastIngest
+  // filtered status='ok', so a scheduled ingest that errored every week was
+  // invisible here. Now each family's most recent outcome — including its
+  // errorMessage — is one database_status call away.
+  const latestPerFamily = new Map<string, any>();
+  for (const r of recentRes) {
+    const family = String((r as any).source ?? "unknown").split("/")[0];
+    if (!latestPerFamily.has(family)) latestPerFamily.set(family, slimRun(r));
+  }
+  const at = (x: any) => (x?.startedAt ? new Date(x.startedAt).getTime() : 0);
+  const pipelineHealth = [...latestPerFamily.values()].sort((a, b) => {
+    const ae = a?.status === "error" ? 0 : 1;
+    const be = b?.status === "error" ? 0 : 1;
+    if (ae !== be) return ae - be;
+    return at(b) - at(a);
+  });
+
+  return {
+    dbReady: true,
+    firmCount: firmCountRes[0]?.count ?? 0,
+    pipelineHealth,
+    lastIngest: slimRun(recentRes[0] ?? null),
+    lastSuccessfulIngest: slimRun(lastOkRes[0] ?? null),
+    latestSnapshotDate: latestSnapshotRes[0]?.date ?? null,
+    note: "pipelineHealth = each ingest family's LATEST run over the last 40 runs, errors sorted first — a failing scheduled ingest surfaces its (redacted, truncated) errorMessage here instead of hiding behind an ok-only filter. lastIngest is the most recent run of ANY status; lastSuccessfulIngest preserves the previous ok-only semantics. A family absent from pipelineHealth has never created a run record — its handler is not being reached at all (auth, routing, or the cron never firing).",
+  };
 }
