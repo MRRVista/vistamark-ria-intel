@@ -1,4 +1,4 @@
-<![CDATA[/**
+/**
  * Signed-session helpers shared by the Edge middleware and the Node auth
  * functions. Web Crypto only (available in both runtimes), no dependencies,
  * and no btoa/atob (kept out of this project's tsconfig lib).
@@ -112,4 +112,3 @@ export function readCookie(header: string | null | undefined, name: string): str
   }
   return null;
 }
-]]>
