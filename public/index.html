@@ -60,8 +60,18 @@ code { background: #f1efe8; padding: 1px 6px; border-radius: 4px; font-family: u
 
   <div class="foot">
     Internal — Vistamark Investments LLC &middot; vistaintel.app &middot;
-    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source</a>
+    <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source</a> &middot;
+    Identity: <a href="https://vistacrm.app" target="_blank" title="Authorization resolves through VistaCRM principals">VistaCRM</a> &middot;
+    <span id="who"></span><a href="/api/auth/logout">Sign out</a>
   </div>
 </div>
+<script>
+fetch('/api/auth/me').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+  if (d && d.email) {
+    var kind = d.principal && d.principal.kind ? ' (' + d.principal.kind + ')' : '';
+    document.getElementById('who').textContent = d.email + kind + ' · ';
+  }
+}).catch(function () {});
+</script>
 </body>
 </html>

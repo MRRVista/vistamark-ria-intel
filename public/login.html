@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VistaIntel — Vistamark Investments</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0a0a'/%3E%3Cpath d='M18 20l14 26 14-26' fill='none' stroke='%23D4B772' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --vm-black: #0a0a0a;
+    --vm-gold: #D4B772;
+    --vm-gold-bright: #E8CC8A;
+    --vm-gold-dark: #A89055;
+    --vm-teal: #143D52;
+    --vm-cream: #F5F1E8;
+    --vm-text-muted: rgba(245, 241, 232, 0.55);
+    --vm-text-subtle: rgba(245, 241, 232, 0.35);
+    --vm-border: rgba(212, 183, 114, 0.18);
+    --vm-border-bright: rgba(212, 183, 114, 0.45);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Montserrat', sans-serif;
+    background: var(--vm-black);
+    color: var(--vm-cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .stage {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 30%, rgba(20, 61, 82, 0.4) 0%, transparent 60%),
+      radial-gradient(ellipse at 85% 70%, rgba(212, 183, 114, 0.08) 0%, transparent 55%),
+      linear-gradient(135deg, #0a0a0a 0%, #0d0d0d 50%, #050505 100%);
+    overflow: hidden;
+  }
+  .stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(212, 183, 114, 0.008) 1px, rgba(212, 183, 114, 0.008) 2px);
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  .bullseye {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(212, 183, 114, 0.08);
+    pointer-events: none;
+    animation: pulse 8s ease-in-out infinite;
+  }
+  .bullseye-1 {
+    width: 800px;
+    height: 800px;
+    top: -300px;
+    right: -300px;
+    border-style: dashed;
+    border-color: rgba(212, 183, 114, 0.06);
+  }
+  .bullseye-2 {
+    width: 600px;
+    height: 600px;
+    top: -200px;
+    right: -200px;
+    border-color: rgba(212, 183, 114, 0.1);
+    animation-delay: 1s;
+  }
+  .bullseye-3 {
+    width: 1200px;
+    height: 1200px;
+    bottom: -500px;
+    left: -500px;
+    border-style: dashed;
+    border-color: rgba(20, 61, 82, 0.4);
+    animation-delay: 2s;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.02); }
+  }
+  .side-label {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    transform-origin: center;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    color: var(--vm-text-subtle);
+    text-transform: uppercase;
+    z-index: 5;
+  }
+  .side-label-left { left: -50px; }
+  .side-label-right { right: -50px; transform: translateY(-50%) rotate(90deg); }
+  .container {
+    position: relative;
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 480px;
+    z-index: 10;
+  }
+  .brand-panel {
+    position: relative;
+    padding: 60px 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .brand-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    opacity: 0;
+    animation: fadeInDown 0.8s 0.2s ease-out forwards;
+  }
+  .brand-mark {
+    width: 56px;
+    height: 56px;
+    background: #141414;
+    border: 1px solid var(--vm-border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand-mark svg { width: 28px; height: 28px; }
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+  .brand-text .name {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    color: var(--vm-cream);
+  }
+  .brand-text .sub {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 400;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--vm-gold);
+    margin-top: 4px;
+  }
+  .hero {
+    max-width: 600px;
+    opacity: 0;
+    animation: fadeInUp 1s 0.5s ease-out forwards;
+  }
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.25em;
+    color: var(--vm-gold);
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+  .hero-tag::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--vm-gold);
+  }
+  .hero-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 72px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--vm-cream);
+    margin-bottom: 24px;
+  }
+  .hero-title em {
+    font-style: italic;
+    font-weight: 400;
+    background: linear-gradient(135deg, var(--vm-gold-bright) 0%, var(--vm-gold) 50%, var(--vm-gold-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.7;
+    color: var(--vm-text-muted);
+    max-width: 520px;
+    letter-spacing: 0.01em;
+  }
+  .brand-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    color: var(--vm-text-subtle);
+    text-transform: uppercase;
+    opacity: 0;
+    animation: fadeIn 0.8s 1.2s ease-out forwards;
+  }
+  .brand-footer .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .brand-footer .stat-num {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--vm-gold);
+    letter-spacing: 0;
+  }
+  .auth-panel {
+    position: relative;
+    background: rgba(10, 10, 10, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-left: 1px solid var(--vm-border);
+    padding: 80px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .auth-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -1px;
+    width: 1px;
+    height: 80px;
+    background: linear-gradient(to bottom, var(--vm-gold) 0%, transparent 100%);
+  }
+  .auth-panel::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    height: 80px;
+    background: linear-gradient(to top, var(--vm-gold) 0%, transparent 100%);
+  }
+  .auth-content {
+    opacity: 0;
+    animation: fadeIn 1s 0.8s ease-out forwards;
+  }
+  .auth-eyebrow {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.35em;
+    color: var(--vm-gold);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .auth-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 36px;
+    line-height: 1.1;
+    color: var(--vm-cream);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .auth-title em {
+    font-style: italic;
+    color: var(--vm-gold);
+  }
+  .auth-desc {
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--vm-text-muted);
+    margin-bottom: 28px;
+  }
+  .auth-note {
+    display: none;
+    padding: 12px 16px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 11.5px;
+    font-weight: 300;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .auth-note.error {
+    display: block;
+    background: rgba(150, 40, 40, 0.14);
+    border-color: rgba(190, 80, 80, 0.45);
+    color: #E8B0A8;
+  }
+  .auth-note.info {
+    display: block;
+    background: rgba(20, 61, 82, 0.25);
+    border-color: rgba(20, 61, 82, 0.6);
+    color: var(--vm-text-muted);
+  }
+  .ms-btn {
+    width: 100%;
+    background: var(--vm-cream);
+    color: var(--vm-black);
+    border: 1px solid var(--vm-cream);
+    padding: 16px 24px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .ms-btn:hover {
+    background: var(--vm-gold);
+    border-color: var(--vm-gold);
+    color: var(--vm-black);
+    transform: translateY(-1px);
+  }
+  .ms-btn:active {
+    transform: translateY(0);
+  }
+  .ms-btn-icon {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+  }
+  .ms-btn-icon span:nth-child(1) { background: #F25022; }
+  .ms-btn-icon span:nth-child(2) { background: #7FBA00; }
+  .ms-btn-icon span:nth-child(3) { background: #00A4EF; }
+  .ms-btn-icon span:nth-child(4) { background: #FFB900; }
+  .auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 32px 0;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    color: var(--vm-text-subtle);
+    text-transform: uppercase;
+  }
+  .auth-divider::before,
+  .auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--vm-border);
+  }
+  .auth-security {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(20, 61, 82, 0.2);
+    border: 1px solid rgba(20, 61, 82, 0.4);
+    border-radius: 2px;
+    font-size: 11px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--vm-text-muted);
+    margin-bottom: 32px;
+  }
+  .auth-security-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    fill: var(--vm-gold);
+  }
+  .auth-security strong {
+    color: var(--vm-cream);
+    font-weight: 500;
+  }
+  .auth-footer {
+    margin-top: auto;
+    padding-top: 48px;
+    border-top: 1px solid var(--vm-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: var(--vm-text-subtle);
+    text-transform: uppercase;
+  }
+  .auth-footer a {
+    color: var(--vm-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .auth-footer a:hover {
+    color: var(--vm-gold);
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr; }
+    .brand-panel { padding: 40px 32px; min-height: 50vh; }
+    .auth-panel { padding: 48px 32px; border-left: none; border-top: 1px solid var(--vm-border); }
+    .hero-title { font-size: 48px; }
+    .side-label { display: none; }
+    html, body { overflow-y: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="bullseye bullseye-1"></div>
+  <div class="bullseye bullseye-2"></div>
+  <div class="bullseye bullseye-3"></div>
+</div>
+
+<div class="side-label side-label-left">VistaIntel™ · v0.18</div>
+<div class="side-label side-label-right">Authorized Personnel · Vistamark Investments LLC</div>
+
+<div class="container">
+
+  <section class="brand-panel">
+    <header class="brand-header">
+      <div class="brand-mark">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M18 20l14 26 14-26" fill="none" stroke="#D4B772" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="brand-text">
+        <span class="name">VISTAMARK</span>
+        <span class="sub">INVESTMENTS LLC</span>
+      </div>
+    </header>
+
+    <div class="hero">
+      <div class="hero-tag">RIA &amp; Nonprofit Intelligence Platform</div>
+      <h1 class="hero-title">
+        Vista<br>
+        of <em>Intelligence.</em>
+      </h1>
+      <p class="hero-sub">
+        VistaIntel™ is Vistamark Investments LLC's research intelligence layer — SEC Form ADV, IRS exempt-organization filings, DOL Form 5500, 13F holdings, endowment and federal-award data, normalized into one queryable database for the desk.
+      </p>
+    </div>
+
+    <footer class="brand-footer">
+      <div class="stat">
+        <span class="stat-num">v0.18</span>
+        <span>build · 07.19.2026</span>
+      </div>
+    </footer>
+  </section>
+
+  <section class="auth-panel">
+    <div class="auth-content">
+      <div class="auth-eyebrow">Secure Access</div>
+      <h2 class="auth-title">
+        Sign in to <em>continue.</em>
+      </h2>
+      <p class="auth-desc">
+        Access is restricted to authorized Vistamark personnel. Authentication is handled by your Microsoft 365 account; authorization resolves through VistaCRM, the Vistamark identity hub.
+      </p>
+
+      <div id="auth-note" class="auth-note"></div>
+
+      <button class="ms-btn" onclick="handleSignIn()">
+        <span class="ms-btn-icon">
+          <span></span><span></span><span></span><span></span>
+        </span>
+        Continue with Microsoft
+      </button>
+
+      <div class="auth-divider">Vistamark M365 Tenant</div>
+
+      <div class="auth-security">
+        <svg class="auth-security-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+        </svg>
+        <span>
+          <strong>Encrypted in transit and at rest.</strong> Activity logged for compliance under SEC Rule 204-2 books-and-records requirements. Authorization resolves through VistaCRM principals.
+        </span>
+      </div>
+    </div>
+
+    <footer class="auth-footer">
+      <span>© 2026 Vistamark</span>
+      <a href="mailto:support@vistamarkllc.com">Need access?</a>
+    </footer>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var p = new URLSearchParams(window.location.search);
+    var note = document.getElementById('auth-note');
+    var err = p.get('error');
+    var messages = {
+      domain_not_allowed: 'That Microsoft account is not a vistamarkllc.com identity. Sign in with your Vistamark account.',
+      not_a_principal: 'Your Vistamark account is not registered as a VistaCRM principal. Ask an administrator to add you.',
+      principal_inactive: 'Your VistaCRM principal is inactive. Ask an administrator to reactivate it.',
+      principal_no_read: 'Your VistaCRM principal does not have read access.',
+      crm_unreachable: 'The VistaCRM identity hub is unreachable right now. Try again shortly.',
+      state_mismatch: 'The sign-in session expired. Try again.',
+      token_exchange_failed: 'Microsoft did not complete the sign-in. Try again.',
+      claims_invalid: 'The sign-in could not be validated. Try again.',
+      bad_id_token: 'The sign-in could not be validated. Try again.',
+      not_configured: 'Authentication is not configured on the server.',
+      missing_code: 'The sign-in was cancelled or interrupted. Try again.'
+    };
+    if (err) {
+      note.textContent = messages[err] || ('Sign-in failed (' + err + '). Try again.');
+      note.className = 'auth-note error';
+    } else if (p.get('signedout')) {
+      note.textContent = 'You have been signed out.';
+      note.className = 'auth-note info';
+    }
+  })();
+  function handleSignIn() {
+    var p = new URLSearchParams(window.location.search);
+    var next = p.get('next') || '/';
+    window.location.href = '/api/auth/login?next=' + encodeURIComponent(next);
+  }
+</script>
+
+</body>
+</html>
