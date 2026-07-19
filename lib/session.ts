@@ -1,4 +1,4 @@
-/**
+<![CDATA[/**
  * Signed-session helpers shared by the Edge middleware and the Node auth
  * functions. Web Crypto only (available in both runtimes), no dependencies,
  * and no btoa/atob (kept out of this project's tsconfig lib).
@@ -56,7 +56,10 @@ function b64urlDecode(s: string): Uint8Array {
   return out.subarray(0, o);
 }
 
-async function hmacKey(secret: string): Promise<CryptoKey> {
+// Return type intentionally inferred: the global type name `CryptoKey` is not
+// declared under this project's node-only tsconfig (lib ES2022, types: node),
+// but the type itself flows fine from crypto.subtle.importKey.
+async function hmacKey(secret: string) {
   return crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -109,3 +112,4 @@ export function readCookie(header: string | null | undefined, name: string): str
   }
   return null;
 }
+]]>
