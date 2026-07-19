@@ -3,33 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vistamark Intel</title>
+<title>VistaIntel — Vistamark Investments</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23185FA5'/%3E%3Cpath d='M18 20l14 26 14-26' fill='none' stroke='white' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fb; color: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.card { background: white; border-radius: 12px; padding: 40px 44px; max-width: 560px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px #e2e6eb; }
-h1 { font-size: 28px; margin-bottom: 8px; letter-spacing: -0.3px; }
-.tagline { color: #64748b; font-size: 14px; margin-bottom: 28px; }
-.row { margin-bottom: 24px; }
-.row h3 { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+:root {
+  --bg: #f8f7f5; --surface: #ffffff; --border: rgba(0,0,0,0.10); --border-mid: rgba(0,0,0,0.18);
+  --text: #1a1a1a; --muted: #6b6b6b; --accent: #185FA5; --accent-strong: #0C447C; --accent-bg: #E6F1FB;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.card { background: var(--surface); border-radius: 16px; padding: 40px 44px; max-width: 580px; width: 100%; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 0.5px var(--border); }
+.brand-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.logo-mark { width: 44px; height: 44px; background: var(--accent-bg); border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo-mark svg { width: 24px; height: 24px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.4px; line-height: 1.15; }
+h1 span { color: var(--accent); }
+.firm { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tagline { color: var(--muted); font-size: 14px; line-height: 1.55; margin-bottom: 28px; }
+.row { margin-bottom: 22px; }
+.row h3 { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
 .row p { font-size: 14px; line-height: 1.55; color: #334155; }
-.cta { display: inline-block; background: #0c4a6e; color: white; padding: 10px 22px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; margin-top: 8px; }
-.cta:hover { background: #075985; }
-code { background: #f1f5f9; padding: 1px 6px; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size: 13px; }
-.foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 12px; color: #94a3b8; }
-.foot a { color: #475569; text-decoration: none; }
-.foot a:hover { color: #0c4a6e; }
+.cta { display: inline-block; background: var(--accent); color: white; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; margin-top: 10px; transition: background 0.15s; }
+.cta:hover { background: var(--accent-strong); }
+.cta.ghost { background: var(--surface); color: var(--text); border: 0.5px solid var(--border-mid); }
+.cta.ghost:hover { background: var(--bg); }
+code { background: #f1efe8; padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.foot { margin-top: 26px; padding-top: 16px; border-top: 0.5px solid var(--border); font-size: 12px; color: #94a3b8; }
+.foot a { color: var(--muted); text-decoration: none; }
+.foot a:hover { color: var(--accent); }
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>Vistamark Intel</h1>
-  <p class="tagline">SEC Form ADV + IRS EO BMF + ProPublica 990s, one MCP server.</p>
+  <div class="brand-row">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    </div>
+    <div>
+      <h1>Vista<span>Intel</span></h1>
+      <div class="firm">Vistamark Investments</div>
+    </div>
+  </div>
+  <p class="tagline">RIA &amp; nonprofit intelligence. SEC Form ADV · IRS EO BMF · ProPublica 990s — one database, one MCP server.</p>
 
   <div class="row">
     <h3>Query Console</h3>
     <p>Browse all RIA and nonprofit data interactively. Auto-discovers every MCP tool, generates forms, renders results.</p>
     <a class="cta" href="/query.html">Open Console →</a>
+    <a class="cta ghost" href="/schema.html">Schema Atlas</a>
   </div>
 
   <div class="row">
@@ -38,7 +59,7 @@ code { background: #f1f5f9; padding: 1px 6px; border-radius: 3px; font-family: u
   </div>
 
   <div class="foot">
-    Internal — Vistamark Investments LLC &middot;
+    Internal — Vistamark Investments LLC &middot; vistaintel.app &middot;
     <a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank">Source</a>
   </div>
 </div>
