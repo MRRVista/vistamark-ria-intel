@@ -1,0 +1,5 @@
+# vistaintel.app — research portal of Vistamark Investments LLC.
+# Application pages require staff sign-in via Microsoft Entra ID;
+# crawlers receive the public landing page. Nothing is cloaked.
+User-agent: *
+Allow: /
