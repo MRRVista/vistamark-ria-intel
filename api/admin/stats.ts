@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireAccess } from "../../lib/auth";
+import { requireAccessOrSession } from "../../lib/auth";
 import { neon } from "@neondatabase/serverless";
 
 /**
@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const auth = requireAccess(req);
+  const auth = await requireAccessOrSession(req);
   if (!auth.ok) {
     res.status(401).json({ ok: false, error: auth.reason });
     return;

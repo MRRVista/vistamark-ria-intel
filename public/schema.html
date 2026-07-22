@@ -316,11 +316,13 @@
 </header>
 
 <div class="controls">
-  <div class="control-group">
-    <label>Token</label>
-    <input type="password" id="token" placeholder="ACCESS_TOKEN (then click Connect)" autocomplete="off">
-  </div>
-  <button class="btn" id="connect-btn">Connect</button>
+  <span id="token-controls" style="display:none">
+    <div class="control-group">
+      <label>Token</label>
+      <input type="password" id="token" placeholder="ACCESS_TOKEN (then click Connect)" autocomplete="off">
+    </div>
+    <button class="btn" id="connect-btn">Connect</button>
+  </span>
   <button class="btn ghost" id="refresh-btn" style="display:none">↻ Refresh</button>
   <div class="spacer"></div>
   <div class="control-group">
@@ -361,7 +363,7 @@
 
   <div class="health-banner idle" id="health-banner">
     <span class="health-label">Status</span>
-    <span id="health-text">Static documentation mode. Enter your ACCESS_TOKEN above to fetch live row counts and ingest history.</span>
+    <span id="health-text">Checking your Vistamark sign-in&hellip;</span>
   </div>
 
   <div class="tables" id="tables"></div>
@@ -604,6 +606,7 @@ let state = {
   domain: "all",
   sort: "domain",
   liveStats: null,
+  sessionAuth: false,
   token: localStorage.getItem("vistamark_token") || ""
 };
 
@@ -631,10 +634,11 @@ function fmtRel(iso) {
 }
 
 async function loadLiveStats() {
-  if (!state.token) return;
-  state.token = tokenEl.value.trim();
-  if (!state.token) return;
-  localStorage.setItem("vistamark_token", state.token);
+  if (!state.sessionAuth) {
+    state.token = tokenEl.value.trim();
+    if (!state.token) return;
+    localStorage.setItem("vistamark_token", state.token);
+  }
 
   healthBanner.className = "health-banner idle";
   healthText.textContent = "Fetching live stats...";
@@ -642,9 +646,9 @@ async function loadLiveStats() {
   modeDot.textContent = "○ loading";
 
   try {
-    const res = await fetch("/api/admin/stats", {
-      headers: { "access_token": state.token }
-    });
+    const hdrs = {};
+    if (!state.sessionAuth && state.token) hdrs["access_token"] = state.token;
+    const res = await fetch("/api/admin/stats", { headers: hdrs });
     if (!res.ok) throw new Error("HTTP " + res.status + " " + (await res.text()));
     const data = await res.json();
     state.liveStats = data;
@@ -791,7 +795,21 @@ refreshBtn.addEventListener("click", loadLiveStats);
 tokenEl.addEventListener("keydown", e => { if (e.key === "Enter") loadLiveStats(); });
 
 render();
-if (state.token) loadLiveStats();
+
+/** Session-first: behind the Entra gate the cookie is the credential; the
+ *  token row only reappears when there is no live session. */
+(async function initAuth() {
+  try {
+    const r = await fetch("/api/auth/me", { cache: "no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d.authenticated) { state.sessionAuth = true; loadLiveStats(); return; }
+    }
+  } catch (e) {}
+  document.getElementById("token-controls").style.display = "contents";
+  healthText.textContent = "Static documentation mode. Sign in — or enter an ACCESS_TOKEN above — to fetch live row counts and ingest history.";
+  if (state.token) loadLiveStats();
+})();
 </script>
 </body>
 </html>

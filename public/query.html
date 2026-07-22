@@ -318,11 +318,13 @@
 </header>
 
 <div class="auth-bar">
-  <label for="token">Access Token</label>
-  <input type="password" id="token" placeholder="ACCESS_TOKEN" autocomplete="off">
-  <button class="btn" id="connect-btn">Connect</button>
+  <span id="token-controls" style="display:none">
+    <label for="token">Access Token</label>
+    <input type="password" id="token" placeholder="ACCESS_TOKEN" autocomplete="off">
+    <button class="btn" id="connect-btn">Connect</button>
+  </span>
   <button class="btn ghost" id="logout-btn" style="display:none">Logout</button>
-  <div class="auth-status" id="auth-status">Not connected</div>
+  <div class="auth-status" id="auth-status">Connecting&hellip;</div>
 </div>
 
 <main>
@@ -336,15 +338,15 @@
 
   <section class="workspace" id="workspace">
     <div class="empty-workspace">
-      <h2>Connect to begin</h2>
-      <p>Enter your <code style="color:var(--accent);font-family:var(--mono)">ACCESS_TOKEN</code> above. VistaIntel auto-discovers every MCP tool in <code style="color:var(--accent);font-family:var(--mono)">lib/mcp/tools.ts</code> and renders a form for each one — no per-tool plumbing.</p>
-      <p style="margin-top:20px;font-size:11px;color:var(--ink-faint)">Same endpoint VistaBuilder consumes: <code style="font-family:var(--mono)">POST /api/admin/query</code></p>
+      <h2 id="empty-title">Connecting&hellip;</h2>
+      <p id="empty-desc">You're signed in through your Vistamark Microsoft account — tools load automatically, no token to paste. VistaIntel auto-discovers every MCP tool in <code style="color:var(--accent);font-family:var(--mono)">lib/mcp/tools.ts</code> and renders a form for each one.</p>
+      <p style="margin-top:20px;font-size:11px;color:var(--ink-faint)">Automation (Randall, VistaBuilder, scripts) hits the same endpoint with an <code style="font-family:var(--mono)">access_token</code> header: <code style="font-family:var(--mono)">POST /api/admin/query</code></p>
     </div>
   </section>
 </main>
 
 <footer>
-  <span>VistaIntel · Vistamark Investments LLC · console v0.2</span>
+  <span>VistaIntel · Vistamark Investments LLC · console v0.3</span>
   <span>
     <a href="/schema.html">schema atlas</a>
     &nbsp;·&nbsp;
@@ -365,6 +367,8 @@ const workspace = document.getElementById("workspace");
 
 let state = {
   token: localStorage.getItem("vistamark_token") || "",
+  sessionAuth: false,
+  identity: null,
   tools: [],
   activeTool: null,
   result: null,
@@ -383,12 +387,12 @@ function classifyTool(name) {
 }
 
 async function fetchTools() {
-  if (!state.token) return;
+  if (!state.token && !state.sessionAuth) return;
   authStatus.innerHTML = '<span class="">Connecting...</span>';
   try {
-    const res = await fetch("/api/admin/query", {
-      headers: { "access_token": state.token }
-    });
+    const headers = {};
+    if (state.token) headers["access_token"] = state.token;
+    const res = await fetch("/api/admin/query", { headers });
     if (!res.ok) {
       const txt = await res.text();
       throw new Error("HTTP " + res.status + ": " + txt.slice(0, 200));
@@ -396,8 +400,12 @@ async function fetchTools() {
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.tools)) throw new Error("Unexpected response shape");
     state.tools = data.tools;
-    localStorage.setItem("vistamark_token", state.token);
-    authStatus.innerHTML = `<span class="ok">● Connected</span> · ${data.tools.length} tools`;
+    if (state.token) localStorage.setItem("vistamark_token", state.token);
+    const who = state.sessionAuth && state.identity
+      ? state.identity.email + (state.identity.principal && state.identity.principal.kind ? " (" + state.identity.principal.kind + ")" : "")
+      : "Connected";
+    authStatus.innerHTML = `<span class="ok">● ${who}</span> · ${data.tools.length} tools`;
+    logoutBtn.textContent = state.sessionAuth ? "Sign out" : "Logout";
     logoutBtn.style.display = "inline-block";
     renderToolList();
   } catch (err) {
@@ -544,10 +552,10 @@ async function runTool() {
   try {
     const res = await fetch("/api/admin/query", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "access_token": state.token
-      },
+      headers: Object.assign(
+        { "Content-Type": "application/json" },
+        state.token && !state.sessionAuth ? { "access_token": state.token } : {}
+      ),
       body: JSON.stringify({ tool: state.activeTool, args })
     });
     const data = await res.json();
@@ -739,6 +747,7 @@ tokenEl.addEventListener("keydown", e => {
   }
 });
 logoutBtn.addEventListener("click", () => {
+  if (state.sessionAuth) { window.location.href = "/api/auth/logout"; return; }
   localStorage.removeItem("vistamark_token");
   state.token = "";
   state.tools = [];
@@ -752,7 +761,35 @@ logoutBtn.addEventListener("click", () => {
 });
 
 renderToolList();
-if (state.token) fetchTools();
+
+/**
+ * Session-first auth: the page sits behind the Entra gate, so a live
+ * vi_session cookie is the normal credential — tools load with no token.
+ * The pasted-token row only reappears if the session is gone (expired
+ * mid-visit, or local dev without SSO configured).
+ */
+async function initAuth() {
+  try {
+    const r = await fetch("/api/auth/me", { cache: "no-store" });
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d.authenticated) {
+        state.sessionAuth = true;
+        state.identity = d;
+        fetchTools();
+        return;
+      }
+    }
+  } catch (e) {}
+  document.getElementById("token-controls").style.display = "contents";
+  const et = document.getElementById("empty-title");
+  const ed = document.getElementById("empty-desc");
+  if (et) et.textContent = "Connect to begin";
+  if (ed) ed.innerHTML = 'No live sign-in session — <a href="/api/auth/login?next=/query.html">sign in again</a> or enter an <code style="color:var(--accent);font-family:var(--mono)">ACCESS_TOKEN</code> above.';
+  authStatus.textContent = "Not connected";
+  if (state.token) fetchTools();
+}
+initAuth();
 </script>
 </body>
 </html>
