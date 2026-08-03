@@ -1,7 +1,7 @@
 /**
  * GET /api/cpi — full-history CPI index level, served for consumption by
  * the Vistamark Glide Path Navigator (vistaglidepath.com) historical
- * cohort-replay engine.
+ * cohort-replay engine and by VistaBuilder's real-return layer.
  *
  * Deliberately unauthenticated, same posture as /api/market-brief and
  * /api/selftest: GET only, no arguments, a single PUBLIC macro series
@@ -18,6 +18,13 @@
  * endpoint emits canonical "YYYY-MM" period keys so the join is
  * unambiguous on the consumer side. Newest-first, matching the ordering
  * of _VBM_INDEX_HISTORY.dates.
+ *
+ * KNOWN UPSTREAM GAP: there is no October 2025 observation. BLS
+ * cancelled that release after the 2025 shutdown prevented collection
+ * and stated the data cannot be retroactively collected, so the month is
+ * permanently absent. Consumers that need a contiguous monthly grid must
+ * bridge it explicitly and disclose that they did — do not silently
+ * zero-fill. (November 2025 was also built on less data than usual.)
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getSeries, getObservations } from "../lib/fred/client";
@@ -36,8 +43,18 @@ function allowOrigin(origin: string | undefined): string | null {
   const exact = [
     "vistaglidepath.com",
     "www.vistaglidepath.com",
+    // vistaintel.app is the live domain; the .com entries predate the domain
+    // move and are kept only so older links keep working.
+    "vistaintel.app",
+    "www.vistaintel.app",
     "vistaintel.com",
     "www.vistaintel.com",
+    // VistaBuilder real-return / inflation layer. Both deployments: the
+    // Azure Static Web App (.app) and the Cloudflare Worker (.net).
+    "vistabuilder.app",
+    "www.vistabuilder.app",
+    "vistabuilder.net",
+    "www.vistabuilder.net",
     "localhost",
     "127.0.0.1",
   ];
@@ -107,6 +124,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    // Report any holes in the monthly grid so a consumer never has to
+    // discover them by accident. Currently expected to be ["2025-10"].
+    const present = new Set(months);
+    const missing: string[] = [];
+    {
+      const oldest = months[months.length - 1]!;
+      const newest = months[0]!;
+      let y = parseInt(oldest.slice(0, 4), 10);
+      let m = parseInt(oldest.slice(5, 7), 10);
+      const endY = parseInt(newest.slice(0, 4), 10);
+      const endM = parseInt(newest.slice(5, 7), 10);
+      while (y < endY || (y === endY && m <= endM)) {
+        const key = `${y}-${String(m).padStart(2, "0")}`;
+        if (!present.has(key)) missing.push(key);
+        m += 1;
+        if (m === 13) {
+          y += 1;
+          m = 1;
+        }
+      }
+    }
+
     // Monthly prints, so a 6h edge cache is generous and keeps Navigator
     // traffic off the FRED key entirely.
     res.setHeader("Cache-Control", "public, s-maxage=21600, stale-while-revalidate=86400");
@@ -122,11 +161,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       count: months.length,
       order: "newest-first",
       periodKey: "YYYY-MM",
+      missingMonths: missing,
       months,
       index,
       source: `FRED (Federal Reserve Bank of St. Louis), series ${SERIES_ID}, live`,
       notes:
-        "Index levels as published (not seasonally adjusted). Compute inflation between any two periods as index[a]/index[b]-1. Observations are stamped by FRED on the first of the month and are emitted here as YYYY-MM period keys; align to month-end return series by period, not by date arithmetic.",
+        "Index levels as published (not seasonally adjusted). Compute inflation between any two periods as index[a]/index[b]-1. Observations are stamped by FRED on the first of the month and are emitted here as YYYY-MM period keys; align to month-end return series by period, not by date arithmetic. See missingMonths for holes in the grid — October 2025 was never published (2025 shutdown) and cannot be retroactively collected; bridge it explicitly and disclose, never zero-fill.",
     });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
