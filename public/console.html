@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VistaIntel Console — Vistamark Investments</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A0C0F'/%3E%3Cg fill='none' stroke='%23C9A66B' stroke-width='3'%3E%3Ccircle cx='32' cy='32' r='20'/%3E%3Ccircle cx='32' cy='32' r='11'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='4' fill='%23C9A66B'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0A0C0F; --panel:#13171D; --panel2:#1A1F26; --panel3:#22282F;
+  --line:rgba(201,166,107,.16); --line2:rgba(255,255,255,.07);
+  --gold:#C9A66B; --gold-hi:#E3C88A; --gold-dim:rgba(201,166,107,.10);
+  --text:#E9E6E0; --muted:#8B9099; --faint:#5F6670;
+  --ok:#5FBF8B; --warn:#E0B341; --bad:#E0705C; --gap:#6E8BA8; --idle:#4A5057;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{font-family:Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--ink);color:var(--text);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:18px;padding:14px 22px;
+  border-bottom:1px solid var(--line);background:linear-gradient(180deg,#10141A,#0A0C0F);
+  position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}
+.brand svg{width:34px;height:34px;flex-shrink:0}
+.brand h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:24px;font-weight:600;
+  letter-spacing:.3px;line-height:1}
+.brand h1 span{color:var(--gold)}
+.brand .sub{font-size:9.5px;letter-spacing:1.7px;text-transform:uppercase;color:var(--faint);margin-top:3px}
+.hspace{flex:1}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;
+  border:1px solid var(--line);background:var(--gold-dim);font-size:11px;font-weight:600;
+  letter-spacing:.4px;color:var(--gold-hi);white-space:nowrap}
+.who{font-size:11.5px;color:var(--muted)}
+.who a{color:var(--gold);text-decoration:none;margin-left:9px}
+.who a:hover{text-decoration:underline}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:296px 1fr;min-height:calc(100vh - 64px)}
+aside{border-right:1px solid var(--line);background:#0D1116;
+  display:flex;flex-direction:column;max-height:calc(100vh - 64px);position:sticky;top:64px}
+.tabs{display:flex;padding:12px 12px 0;gap:5px}
+.tab{flex:1;padding:9px 6px;border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:none;
+  background:none;color:var(--muted);font-family:inherit;font-size:11.5px;font-weight:600;
+  letter-spacing:.4px;cursor:pointer;transition:.15s}
+.tab:hover{color:var(--text)}
+.tab.on{background:var(--panel);border-color:var(--line);color:var(--gold-hi)}
+.searchwrap{padding:12px 14px;border-bottom:1px solid var(--line2);border-top:1px solid var(--line)}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 11px;border-radius:7px;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--text);
+  font-family:inherit;font-size:13px;outline:none;transition:.15s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);background:var(--panel3)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+.navscroll{overflow-y:auto;flex:1;padding:8px 0 30px}
+.navscroll::-webkit-scrollbar{width:8px}
+.navscroll::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:4px}
+.dgroup{border-bottom:1px solid var(--line2)}
+.dhead{width:100%;display:flex;align-items:center;gap:9px;padding:10px 14px;background:none;
+  border:none;color:var(--text);font-family:inherit;font-size:12.5px;font-weight:600;
+  text-align:left;cursor:pointer;transition:.15s}
+.dhead:hover{background:var(--gold-dim)}
+.chev{color:var(--faint);font-size:9px;transition:transform .18s;flex-shrink:0}
+.dgroup.open .chev{transform:rotate(90deg)}
+.dcount{margin-left:auto;font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+.dsrc{padding:0 14px 9px 32px;font-size:10.5px;color:var(--faint);line-height:1.45;display:none}
+.dgroup.open .dsrc{display:block}
+.dtools{display:none;padding-bottom:6px}
+.dgroup.open .dtools{display:block}
+.titem{width:100%;display:flex;align-items:center;gap:9px;padding:6px 14px 6px 32px;background:none;
+  border:none;border-left:2px solid transparent;color:var(--muted);font-family:var(--mono);
+  font-size:11.5px;text-align:left;cursor:pointer;transition:.12s}
+.titem:hover{background:var(--gold-dim);color:var(--text)}
+.titem.on{background:var(--gold-dim);border-left-color:var(--gold);color:var(--gold-hi)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot.live{background:var(--ok)}
+.dot.slow{background:var(--warn)}
+.dot.degraded{background:var(--bad)}
+.dot.empty{background:var(--gap)}
+.dot.unprobed{background:none;border:1.5px solid var(--idle)}
+
+/* ---------- main ---------- */
+main{padding:26px 30px 60px;overflow-x:hidden;max-width:1180px}
+.panel{display:none}
+.panel.on{display:block}
+h2{font-family:'Cormorant Garamond',Georgia,serif;font-size:27px;font-weight:600;letter-spacing:.2px}
+h2 code{font-family:var(--mono);font-size:20px;color:var(--gold-hi);background:none;padding:0}
+.lede{color:var(--muted);font-size:13px;margin-top:7px;max-width:78ch;line-height:1.6}
+.badges{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
+.badge{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  padding:4px 9px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);background:var(--panel2)}
+.badge.live{color:var(--ok);border-color:rgba(95,191,139,.35)}
+.badge.slow{color:var(--warn);border-color:rgba(224,179,65,.35)}
+.badge.degraded{color:var(--bad);border-color:rgba(224,112,92,.35)}
+.badge.empty{color:var(--gap);border-color:rgba(110,139,168,.35)}
+.badge.gold{color:var(--gold-hi);border-color:var(--line)}
+.note{border-left:3px solid var(--warn);background:rgba(224,179,65,.07);padding:11px 14px;
+  border-radius:0 7px 7px 0;font-size:12.5px;color:#D9CFC0;margin:14px 0;line-height:1.6}
+.note.gap{border-left-color:var(--gap);background:rgba(110,139,168,.08)}
+.note.bad{border-left-color:var(--bad);background:rgba(224,112,92,.07)}
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:11px;padding:20px;margin-top:20px}
+.card h3{font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:16px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:15px}
+.field label{display:block;font-size:11px;font-weight:600;letter-spacing:.3px;color:var(--muted);margin-bottom:5px}
+.field label .req{color:var(--bad);margin-left:3px}
+.field .hint{font-size:10.5px;color:var(--faint);margin-top:4px;line-height:1.45}
+.chk{display:flex;align-items:center;gap:9px;padding-top:20px}
+.chk input{width:auto}
+button.go{margin-top:18px;padding:10px 22px;border-radius:8px;border:1px solid var(--gold);
+  background:var(--gold);color:#0A0C0F;font-family:inherit;font-size:13px;font-weight:700;
+  letter-spacing:.3px;cursor:pointer;transition:.15s}
+button.go:hover{background:var(--gold-hi)}
+button.go:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:none;color:var(--gold);border:1px solid var(--line)}
+button.ghost:hover{background:var(--gold-dim)}
+.tblwrap{overflow-x:auto;border:1px solid var(--line2);border-radius:9px;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--panel2);color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.6px;
+  text-transform:uppercase;text-align:left;padding:9px 12px;white-space:nowrap;
+  border-bottom:1px solid var(--line);position:sticky;top:0}
+td{padding:8px 12px;border-bottom:1px solid var(--line2);white-space:nowrap;
+  max-width:340px;overflow:hidden;text-overflow:ellipsis}
+tbody tr:hover{background:var(--gold-dim)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+td.mono,th.mono{font-family:var(--mono);font-size:11px}
+pre{font-family:var(--mono);font-size:11.5px;line-height:1.6;background:#0B0E12;
+  border:1px solid var(--line2);border-radius:9px;padding:15px;overflow:auto;max-height:520px;
+  color:#C7CBD1;white-space:pre-wrap;word-break:break-word}
+details{margin-top:14px}
+summary{cursor:pointer;font-size:11.5px;font-weight:600;color:var(--gold);letter-spacing:.3px;padding:5px 0}
+summary:hover{color:var(--gold-hi)}
+.meta{font-size:11px;color:var(--faint);margin-top:9px;font-variant-numeric:tabular-nums}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line2);
+  border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty-state{color:var(--faint);font-size:13px;padding:56px 20px;text-align:center;line-height:1.7}
+
+/* ---------- status board ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:11px;margin-top:20px}
+.tile{background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:15px}
+.tile .n{font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;line-height:1}
+.tile .l{font-size:9.5px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--muted);margin-top:6px}
+.tile.live .n{color:var(--ok)} .tile.slow .n{color:var(--warn)}
+.tile.degraded .n{color:var(--bad)} .tile.empty .n{color:var(--gap)}
+.tile.unprobed .n{color:var(--idle)} .tile.total .n{color:var(--gold-hi)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;padding:14px 16px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:10px;font-size:11.5px;color:var(--muted)}
+.legend div{display:flex;align-items:center;gap:8px}
+
+/* ---------- ask ---------- */
+.askctrl{display:flex;gap:11px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+.askctrl .field{min-width:158px}
+.thread{display:flex;flex-direction:column;gap:15px;margin-bottom:20px}
+.msg{max-width:88%;padding:13px 16px;border-radius:11px;font-size:13.5px;line-height:1.65}
+.msg.u{align-self:flex-end;background:var(--gold-dim);border:1px solid var(--line);color:var(--gold-hi)}
+.msg.a{align-self:flex-start;background:var(--panel);border:1px solid var(--line2)}
+.msg.e{align-self:flex-start;background:rgba(224,112,92,.09);border:1px solid rgba(224,112,92,.34);color:#F0C4BB}
+.msg strong{color:var(--gold-hi);font-weight:600}
+.msg code{font-family:var(--mono);font-size:12px;background:#0B0E12;padding:1.5px 5px;border-radius:4px;color:var(--gold-hi)}
+.msg ul{margin:8px 0 8px 20px}
+.msg li{margin:3px 0}
+.trace{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;padding-top:11px;border-top:1px solid var(--line2)}
+.tchip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:5px;
+  background:var(--panel2);border:1px solid var(--line2);color:var(--muted)}
+.tchip.bad{color:var(--bad);border-color:rgba(224,112,92,.35)}
+.composer{display:flex;gap:11px;align-items:flex-end}
+.composer textarea{resize:vertical;min-height:74px;font-size:13.5px}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr}
+  aside{position:static;max-height:none;border-right:none;border-bottom:1px solid var(--line)}
+  main{padding:20px 16px 50px}
+  .msg{max-width:100%}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="/">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="none" stroke="#C9A66B" stroke-width="3"><circle cx="32" cy="32" r="21"/><circle cx="32" cy="32" r="12"/></g>
+      <circle cx="32" cy="32" r="4.5" fill="#C9A66B"/>
+    </svg>
+    <div>
+      <h1>Vista<span>Intel</span></h1>
+      <div class="sub">Vistamark Investments</div>
+    </div>
+  </a>
+  <div class="hspace"></div>
+  <span class="pill" id="pillTools">— tools</span>
+  <span class="pill" id="pillDomains">— domains</span>
+  <span class="pill" id="pillDb">db —</span>
+  <span class="who"><span id="who"></span><a href="/api/auth/logout">Sign out</a></span>
+</header>
+
+<div class="shell">
+  <aside>
+    <div class="tabs">
+      <button class="tab on" data-tab="explore">Explore</button>
+      <button class="tab" data-tab="ask">Ask Randall</button>
+      <button class="tab" data-tab="status">Status</button>
+    </div>
+    <div class="searchwrap">
+      <input type="text" id="filter" placeholder="Filter 57 tools…" autocomplete="off">
+    </div>
+    <div class="navscroll" id="nav"><div class="empty-state"><span class="spin"></span></div></div>
+  </aside>
+
+  <main>
+    <!-- EXPLORE -->
+    <section class="panel on" id="p-explore">
+      <div id="toolView">
+        <div class="empty-state">
+          Pick a tool from a domain on the left.<br>
+          <span style="color:var(--faint)">57 tools across 16 data domains — SEC, IRS, DOL, Treasury, FRED, IPEDS.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ASK -->
+    <section class="panel" id="p-ask">
+      <h2>Ask Randall Stephens</h2>
+      <p class="lede">Natural-language layer over all 57 tools. Randall picks the tools, runs them
+        server-side, and answers from live data. Every call it makes is shown in the trace.</p>
+      <div id="askBanner"></div>
+      <div class="card">
+        <div class="askctrl">
+          <div class="field">
+            <label>Provider</label>
+            <select id="askProvider"></select>
+          </div>
+          <div class="field">
+            <label>Tool scope</label>
+            <select id="askScope"><option value="">All 57 tools</option></select>
+          </div>
+          <div class="field">
+            <label>Max tool rounds</label>
+            <select id="askRounds">
+              <option>3</option><option selected>5</option><option>8</option>
+            </select>
+          </div>
+          <div class="field chk">
+            <input type="checkbox" id="askRelay"><label for="askRelay" style="margin:0">Randall MCP relay</label>
+          </div>
+        </div>
+        <div class="thread" id="thread"></div>
+        <div class="composer">
+          <textarea id="askInput" placeholder="e.g. Boutique fee-only RIAs in Illinois under $500M AUM with no more than 5 IARs — rank by planning-led service mix."></textarea>
+          <button class="go" id="askGo">Ask</button>
+        </div>
+        <div class="meta" id="askMeta"></div>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <section class="panel" id="p-status">
+      <h2>Tool &amp; Pipeline Status</h2>
+      <p class="lede">Every tool, what stores its data, and whether it last ran. Storage backing is the
+        triage field: a <em>postgres</em> tool returning nothing is an ingest problem; a
+        <em>live-api</em> tool returning nothing is an upstream problem.</p>
+      <div class="tiles" id="tiles"></div>
+      <div class="legend">
+        <div><span class="dot live"></span> Live — returned real data</div>
+        <div><span class="dot slow"></span> Slow — exceeded probe budget, not an outage</div>
+        <div><span class="dot degraded"></span> Degraded — ran but returned null/blank fields</div>
+        <div><span class="dot empty"></span> Not ingested — table never populated</div>
+        <div><span class="dot unprobed"></span> Unprobed — status genuinely unknown</div>
+      </div>
+      <div id="driftBox"></div>
+      <div class="card">
+        <h3>All tools</h3>
+        <div class="tblwrap"><table id="matrix"></table></div>
+        <div class="meta" id="probeMeta"></div>
+      </div>
+      <div class="card" id="pipeCard">
+        <h3>Ingest pipeline health</h3>
+        <div id="pipeBox" class="meta">Loading…</div>
+      </div>
+      <details>
+        <summary>Run full selftest (36 live checks, ~8s)</summary>
+        <div style="margin-top:12px">
+          <button class="go ghost" id="stBtn">Run selftest</button>
+          <div id="stOut"></div>
+        </div>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ============================ state ============================ */
+var CAT = null, ASKCAP = null, CURRENT = null, HISTORY = [];
+var PROBE_LABEL = {live:"Live", slow:"Slow", degraded:"Degraded", empty:"Not ingested", unprobed:"Unprobed"};
+var BACKING_LABEL = {postgres:"Postgres", "live-api":"Live API", hybrid:"Hybrid"};
+
+function el(tag, cls, txt){var e=document.createElement(tag); if(cls)e.className=cls;
+  if(txt!==undefined&&txt!==null)e.textContent=String(txt); return e;}
+function esc(s){var d=document.createElement("div"); d.textContent=String(s==null?"":s); return d.innerHTML;}
+function fmt(n){ if(n===null||n===undefined)return "—";
+  if(typeof n==="number")return n.toLocaleString("en-US"); return String(n);}
+
+/* ============================ boot ============================ */
+fetch("/api/auth/me").then(function(r){return r.ok?r.json():null;}).then(function(d){
+  if(d&&d.email){var k=d.principal&&d.principal.kind?" ("+d.principal.kind+")":"";
+    document.getElementById("who").textContent=d.email+k+" · ";}
+}).catch(function(){});
+
+fetch("/api/catalog?health=1",{credentials:"same-origin"})
+ .then(function(r){ if(r.status===401) throw new Error("Not signed in — reload and sign in with your Vistamark account.");
+   if(!r.ok) throw new Error("Catalog failed: HTTP "+r.status); return r.json(); })
+ .then(function(d){ CAT=d; renderNav(); renderStatus(); })
+ .catch(function(e){
+   document.getElementById("nav").innerHTML='<div class="empty-state" style="color:var(--bad)">'+esc(e.message)+'</div>';
+ });
+
+fetch("/api/ask",{credentials:"same-origin"})
+ .then(function(r){return r.ok?r.json():null;}).then(function(d){ ASKCAP=d; renderAskCaps(); })
+ .catch(function(){});
+
+/* ============================ tabs ============================ */
+Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
+  t.onclick=function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"),function(x){x.classList.remove("on");});
+    t.classList.add("on");
+    document.getElementById("p-"+t.dataset.tab).classList.add("on");
+  };
+});
+
+/* ============================ sidebar nav ============================ */
+function renderNav(){
+  var nav=document.getElementById("nav"); nav.innerHTML="";
+  var q=(document.getElementById("filter").value||"").toLowerCase().trim();
+
+  document.getElementById("pillTools").textContent=CAT.counts.tools+" tools";
+  document.getElementById("pillDomains").textContent=CAT.counts.domains+" domains";
+  var dbp=document.getElementById("pillDb");
+  if(CAT.health&&CAT.health.ok){
+    dbp.textContent="db "+(CAT.health.dbReady?"ready":"down")+" · "+fmt(CAT.health.firmCount)+" firms";
+  } else { dbp.textContent="db unknown"; }
+
+  var shown=0;
+  CAT.domains.forEach(function(d){
+    var tools=d.tools.filter(function(t){
+      if(!q) return true;
+      return t.name.toLowerCase().indexOf(q)>-1 ||
+             d.label.toLowerCase().indexOf(q)>-1 ||
+             (t.description||"").toLowerCase().indexOf(q)>-1;
+    });
+    if(tools.length===0) return;
+    shown+=tools.length;
+
+    var g=el("div","dgroup"); if(q) g.classList.add("open");
+    var h=el("button","dhead");
+    h.appendChild(el("span","chev","\u25B6"));
+    h.appendChild(el("span",null,d.label));
+    h.appendChild(el("span","dcount",tools.length));
+    h.onclick=function(){g.classList.toggle("open");};
+    g.appendChild(h);
+    g.appendChild(el("div","dsrc",d.source));
+
+    var box=el("div","dtools");
+    tools.forEach(function(t){
+      var b=el("button","titem");
+      b.appendChild(el("span","dot "+t.probe));
+      b.appendChild(el("span",null,t.name));
+      if(!t.registered){ b.style.opacity=".45"; b.title="Not registered on the server"; }
+      b.onclick=function(){
+        Array.prototype.forEach.call(document.querySelectorAll(".titem"),function(x){x.classList.remove("on");});
+        b.classList.add("on");
+        document.querySelector('.tab[data-tab="explore"]').click();
+        showTool(t,d);
+      };
+      box.appendChild(b);
+    });
+    g.appendChild(box);
+    nav.appendChild(g);
+  });
+
+  if(shown===0) nav.appendChild(el("div","empty-state","No tools match \u201C"+q+"\u201D"));
+}
+document.getElementById("filter").oninput=function(){ if(CAT) renderNav(); };
+
+/* ============================ explore panel ============================ */
+function showTool(t,d){
+  CURRENT=t;
+  var v=document.getElementById("toolView"); v.innerHTML="";
+
+  var h=el("h2"); var c=el("code",null,t.name); h.appendChild(c); v.appendChild(h);
+  v.appendChild(el("p","lede",t.description||"No description registered."));
+
+  var bs=el("div","badges");
+  bs.appendChild(el("span","badge gold",d.label));
+  bs.appendChild(el("span","badge",BACKING_LABEL[t.backing]||t.backing));
+  bs.appendChild(el("span","badge "+t.probe,PROBE_LABEL[t.probe]||t.probe));
+  v.appendChild(bs);
+
+  if(t.note){
+    var cls = t.probe==="empty" ? "note gap" : (t.probe==="degraded" ? "note bad" : "note");
+    v.appendChild(el("div",cls,t.note));
+  }
+  if(!t.registered){
+    v.appendChild(el("div","note bad","This tool is in the catalog but is not registered on the server — calls will 404."));
+  }
+
+  /* form generated from inputSchema so it can never drift from the handler */
+  var card=el("div","card"); card.appendChild(el("h3","Parameters"));
+  var schema=t.inputSchema||{};
+  var props=schema.properties||{};
+  var required=schema.required||[];
+  var keys=Object.keys(props);
+
+  if(keys.length===0){
+    card.appendChild(el("p","meta","This tool takes no parameters."));
+  } else {
+    var grid=el("div","fgrid");
+    keys.forEach(function(k){
+      var p=props[k]||{};
+      var f=el("div","field");
+      var isBool = p.type==="boolean";
+      if(isBool){
+        f.className="field chk";
+        var cb=document.createElement("input"); cb.type="checkbox"; cb.id="f_"+k;
+        if(p.default===true) cb.checked=true;
+        var lb=el("label",null,k); lb.setAttribute("for","f_"+k); lb.style.margin="0";
+        f.appendChild(cb); f.appendChild(lb);
+      } else {
+        var lab=el("label",null,k);
+        if(required.indexOf(k)>-1) lab.appendChild(el("span","req","*"));
+        f.appendChild(lab);
+        var inp;
+        if(Array.isArray(p.enum)&&p.enum.length){
+          inp=document.createElement("select");
+          if(required.indexOf(k)===-1) inp.appendChild(el("option","",""));
+          p.enum.forEach(function(o){ var op=el("option",null,String(o)); op.value=String(o); inp.appendChild(op); });
+          if(p.default!==undefined) inp.value=String(p.default);
+        } else if(p.type==="number"||p.type==="integer"){
+          inp=document.createElement("input"); inp.type="number";
+          if(p.default!==undefined) inp.value=p.default;
+          if(p.minimum!==undefined) inp.min=p.minimum;
+          if(p.maximum!==undefined) inp.max=p.maximum;
+        } else {
+          inp=document.createElement("input"); inp.type="text";
+          if(p.default!==undefined) inp.value=p.default;
+          if(p.type==="array") inp.placeholder="comma-separated";
+        }
+        inp.id="f_"+k;
+        inp.dataset.jtype=p.type||"string";
+        f.appendChild(inp);
+        if(p.description) f.appendChild(el("div","hint",p.description));
+      }
+      grid.appendChild(f);
+    });
+    card.appendChild(grid);
+  }
+
+  var run=el("button","go","Run "+t.name); run.id="runBtn";
+  card.appendChild(run);
+  v.appendChild(card);
+  var out=el("div"); out.id="out"; v.appendChild(out);
+
+  run.onclick=function(){ runTool(t,props,required,run,out); };
+}
+
+function collectArgs(props,required){
+  var args={}, missing=[];
+  Object.keys(props).forEach(function(k){
+    var p=props[k]||{};
+    var e=document.getElementById("f_"+k);
+    if(!e) return;
+    if(p.type==="boolean"){ if(e.checked) args[k]=true; return; }
+    var raw=(e.value||"").trim();
+    if(raw===""){ if(required.indexOf(k)>-1) missing.push(k); return; }
+    if(p.type==="number"||p.type==="integer"){
+      var n=Number(raw); if(!isNaN(n)) args[k]= p.type==="integer"?Math.trunc(n):n;
+    } else if(p.type==="array"){
+      args[k]=raw.split(",").map(function(s){return s.trim();}).filter(Boolean);
+    } else { args[k]=raw; }
+  });
+  return {args:args,missing:missing};
+}
+
+function runTool(t,props,required,btn,out){
+  var col=collectArgs(props,required);
+  if(col.missing.length){
+    out.innerHTML='<div class="note bad">Missing required: '+esc(col.missing.join(", "))+'</div>';
+    return;
+  }
+  btn.disabled=true; btn.textContent="Running…";
+  out.innerHTML='<div class="meta"><span class="spin"></span> Calling '+esc(t.name)+'…</div>';
+  var t0=Date.now();
+
+  fetch("/api/admin/query",{
+    method:"POST", credentials:"same-origin",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({tool:t.name,args:col.args})
+  }).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent="Run "+t.name;
+    if(!d.ok){
+      out.innerHTML='<div class="note bad"><strong>Tool error</strong><br>'+esc(d.error||"unknown")+'</div>';
+      return;
+    }
+    renderResult(out,d,t,Date.now()-t0);
+  }).catch(function(e){
+    btn.disabled=false; btn.textContent="Run "+t.name;
+    out.innerHTML='<div class="note bad">Request failed: '+esc(e.message)+'</div>';
+  });
+}
+
+/* find the first array-of-objects in the payload so results table themselves */
+function findRows(obj){
+  if(!obj||typeof obj!=="object") return null;
+  var pref=["rows","entities","banks","filings","organizations","plans","awards",
+            "recipients","bdcs","series","variables","holdings","observations","matches"];
+  for(var i=0;i<pref.length;i++){
+    var v=obj[pref[i]];
+    if(Array.isArray(v)&&v.length&&typeof v[0]==="object") return {key:pref[i],rows:v};
+  }
+  var ks=Object.keys(obj);
+  for(var j=0;j<ks.length;j++){
+    var vv=obj[ks[j]];
+    if(Array.isArray(vv)&&vv.length&&typeof vv[0]==="object") return {key:ks[j],rows:vv};
+  }
+  return null;
+}
+
+function renderResult(out,d,t,ms){
+  out.innerHTML="";
+  var res=d.result;
+  var card=el("div","card"); card.appendChild(el("h3","Result"));
+
+  /* An empty result from a never-ingested table is NOT a finding — say so
+     here, at the point of confusion, not only on the status board. */
+  var found=findRows(res);
+  var isEmpty = !found && res && (res.total===0 || (Array.isArray(res.rows)&&res.rows.length===0));
+  if(isEmpty && t.probe==="empty"){
+    card.appendChild(el("div","note gap",
+      "Empty because this source has never been ingested — not because nothing exists. "+(t.note||"")));
+  }
+
+  if(found){
+    var rows=found.rows;
+    var cols=[]; rows.slice(0,25).forEach(function(r){
+      Object.keys(r).forEach(function(k){ if(cols.indexOf(k)===-1&&cols.length<14) cols.push(k); });
+    });
+    var tb=el("table");
+    var thead=el("thead"); var htr=el("tr");
+    cols.forEach(function(c){ htr.appendChild(el("th",null,c)); });
+    thead.appendChild(htr); tb.appendChild(thead);
+    var tbody=el("tbody");
+    rows.slice(0,200).forEach(function(r){
+      var tr=el("tr");
+      cols.forEach(function(c){
+        var v=r[c];
+        var td;
+        if(typeof v==="number"){ td=el("td","num",fmt(v)); }
+        else if(v===null||v===undefined){ td=el("td",null,"—"); td.style.color="var(--faint)"; }
+        else if(typeof v==="object"){ td=el("td","mono",JSON.stringify(v).slice(0,80)); }
+        else { td=el("td",null,String(v)); td.title=String(v); }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    tb.appendChild(tbody);
+    var w=el("div","tblwrap"); w.appendChild(tb); card.appendChild(w);
+    card.appendChild(el("div","meta",
+      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in \u201C"+found.key+"\u201D"+
+      (found.rows.length>200?" (first 200 shown)":"")+
+      (cols.length>=14?" · columns capped at 14 — see raw JSON":"")));
+  } else {
+    card.appendChild(el("pre",null,JSON.stringify(res,null,2)));
+  }
+
+  var det=el("details"); det.appendChild(el("summary","Raw JSON"));
+  det.appendChild(el("pre",null,JSON.stringify(res,null,2)));
+  card.appendChild(det);
+  card.appendChild(el("div","meta","server "+fmt(d.duration_ms)+" ms · round trip "+fmt(ms)+" ms"));
+  out.appendChild(card);
+}
+
+/* ============================ status panel ============================ */
+function renderStatus(){
+  var p=CAT.counts.probe;
+  var tiles=document.getElementById("tiles"); tiles.innerHTML="";
+  [["total","Total tools",p.total],["live","Live",p.live],["slow","Slow",p.slow],
+   ["degraded","Degraded",p.degraded],["empty","Not ingested",p.empty],
+   ["unprobed","Unprobed",p.unprobed]].forEach(function(x){
+    var t=el("div","tile "+x[0]); t.appendChild(el("div","n",x[2])); t.appendChild(el("div","l",x[1]));
+    tiles.appendChild(t);
+  });
+
+  var db=document.getElementById("driftBox"); db.innerHTML="";
+  if(CAT.drift&&!CAT.drift.ok){
+    var m=[];
+    if(CAT.drift.uncatalogued.length) m.push("Uncatalogued (in registry, not in taxonomy): "+CAT.drift.uncatalogued.join(", "));
+    if(CAT.drift.missingFromRegistry.length) m.push("Missing from registry (in taxonomy, not on server): "+CAT.drift.missingFromRegistry.join(", "));
+    db.appendChild(el("div","note bad","Catalog drift — "+m.join(" · ")));
+  }
+
+  var tb=document.getElementById("matrix"); tb.innerHTML="";
+  var thead=el("thead"); var htr=el("tr");
+  ["","Tool","Domain","Backing","Status","Detail"].forEach(function(h){ htr.appendChild(el("th",null,h)); });
+  thead.appendChild(htr); tb.appendChild(thead);
+  var body=el("tbody");
+  CAT.domains.forEach(function(d){
+    d.tools.forEach(function(t){
+      var tr=el("tr");
+      var d0=el("td"); d0.appendChild(el("span","dot "+t.probe)); tr.appendChild(d0);
+      tr.appendChild(el("td","mono",t.name));
+      tr.appendChild(el("td",null,d.label));
+      tr.appendChild(el("td",null,BACKING_LABEL[t.backing]||t.backing));
+      tr.appendChild(el("td",null,PROBE_LABEL[t.probe]||t.probe));
+      var dt=el("td",null,t.note?t.note:"—");
+      dt.style.whiteSpace="normal"; dt.style.maxWidth="440px";
+      dt.style.fontSize="11px"; dt.style.color=t.note?"var(--muted)":"var(--faint)";
+      tr.appendChild(dt);
+      body.appendChild(tr);
+    });
+  });
+  tb.appendChild(body);
+
+  var ps=CAT.probeSource||{};
+  document.getElementById("probeMeta").textContent =
+    "Snapshot from "+(ps.endpoint||"selftest")+" at "+(ps.ranAt||"unknown")+
+    " — "+(ps.passed||0)+" passed / "+(ps.failed||0)+" failed of "+(ps.checksRun||0)+
+    " checks. Status values are a starting hint; run the selftest below for live truth.";
+
+  var pb=document.getElementById("pipeBox"); pb.innerHTML="";
+  if(CAT.health&&CAT.health.ok&&Array.isArray(CAT.health.pipelineHealth)&&CAT.health.pipelineHealth.length){
+    var t2=el("table"); var th2=el("thead"); var r2=el("tr");
+    ["Source","Status","Started","Rows","Error"].forEach(function(h){ r2.appendChild(el("th",null,h)); });
+    th2.appendChild(r2); t2.appendChild(th2);
+    var b2=el("tbody");
+    CAT.health.pipelineHealth.forEach(function(h){
+      var tr=el("tr");
+      tr.appendChild(el("td","mono",h.source));
+      var st=el("td",null,h.status);
+      st.style.color = h.status==="failed" ? "var(--bad)" :
+                       h.status==="skipped" ? "var(--warn)" :
+                       h.status==="running" ? "var(--gap)" : "var(--ok)";
+      tr.appendChild(st);
+      tr.appendChild(el("td",null,(h.startedAt||"").replace("T"," ").slice(0,19)));
+      tr.appendChild(el("td","num",fmt(h.rowsProcessed)));
+      var er=el("td",null,h.error||"—");
+      er.style.whiteSpace="normal"; er.style.maxWidth="420px"; er.style.fontSize="11px";
+      er.style.color=h.error?"var(--muted)":"var(--faint)";
+      tr.appendChild(er);
+      b2.appendChild(tr);
+    });
+    t2.appendChild(b2);
+    var w2=el("div","tblwrap"); w2.appendChild(t2); pb.appendChild(w2);
+    pb.appendChild(el("div","meta","Latest run per ingest family, errors first. A family absent here has never created a run record — its handler is not being reached at all."));
+  } else {
+    pb.textContent = (CAT.health&&CAT.health.error) ? ("Health overlay unavailable: "+CAT.health.error)
+                                                   : "No pipeline health returned.";
+  }
+}
+
+document.getElementById("stBtn").onclick=function(){
+  var b=this, o=document.getElementById("stOut");
+  b.disabled=true; b.textContent="Running 36 checks…";
+  o.innerHTML='<div class="meta" style="margin-top:12px"><span class="spin"></span> This takes about 8 seconds…</div>';
+  fetch("/api/selftest",{credentials:"same-origin"}).then(function(r){return r.json();}).then(function(d){
+    b.disabled=false; b.textContent="Re-run selftest";
+    o.innerHTML="";
+    o.appendChild(el("div","meta",d.passed+" passed · "+d.failed+" failed of "+d.checksRun+
+      " checks in "+fmt(d.totalMs)+" ms (per-check budget "+fmt(d.perCheckTimeoutMs)+" ms)"));
+    var t=el("table"); var th=el("thead"); var tr0=el("tr");
+    ["","Check","Tool","ms","Detail"].forEach(function(h){ tr0.appendChild(el("th",null,h)); });
+    th.appendChild(tr0); t.appendChild(th);
+    var bd=el("tbody");
+    (d.checks||[]).slice().sort(function(a,c){return (a.ok?1:0)-(c.ok?1:0);}).forEach(function(ck){
+      var tr=el("tr");
+      var dd=el("td"); dd.appendChild(el("span","dot "+(ck.ok?"live":"degraded"))); tr.appendChild(dd);
+      tr.appendChild(el("td","mono",ck.name));
+      tr.appendChild(el("td","mono",ck.tool));
+      tr.appendChild(el("td","num",fmt(ck.ms)));
+      var det=el("td",null,ck.ok?(ck.note||"ok"):(ck.error||"failed"));
+      det.style.whiteSpace="normal"; det.style.maxWidth="420px"; det.style.fontSize="11px";
+      det.style.color=ck.ok?"var(--faint)":"var(--bad)";
+      tr.appendChild(det);
+      bd.appendChild(tr);
+    });
+    t.appendChild(bd);
+    var w=el("div","tblwrap"); w.style.marginTop="12px"; w.appendChild(t); o.appendChild(w);
+  }).catch(function(e){
+    b.disabled=false; b.textContent="Run selftest";
+    o.innerHTML='<div class="note bad">'+esc(e.message)+'</div>';
+  });
+};
+
+/* ============================ ask panel ============================ */
+function renderAskCaps(){
+  var sel=document.getElementById("askProvider"), banner=document.getElementById("askBanner");
+  sel.innerHTML=""; banner.innerHTML="";
+  if(!ASKCAP){ banner.innerHTML='<div class="note bad">Could not read /api/ask capabilities.</div>'; return; }
+
+  var p=ASKCAP.providers||{};
+  var any=false;
+  [["anthropic","Anthropic"],["openrouter","OpenRouter"]].forEach(function(x){
+    var cfg=p[x[0]]||{};
+    var o=el("option",null,x[1]+(cfg.configured?" · "+(cfg.model||""):" (no key)"));
+    o.value=x[0]; if(!cfg.configured) o.disabled=true; else any=true;
+    sel.appendChild(o);
+  });
+  if(!any){
+    banner.innerHTML='<div class="note bad"><strong>No LLM provider configured.</strong><br>'+
+      'Set <code>ANTHROPIC_API_KEY</code> and/or <code>OPENROUTER_API_KEY</code> in the Vercel '+
+      'project environment, then redeploy. Everything else on this page works without them.</div>';
+    document.getElementById("askGo").disabled=true;
+  }
+  if(!(ASKCAP.randallRelay&&ASKCAP.randallRelay.configured)){
+    var r=document.getElementById("askRelay");
+    r.disabled=true;
+    r.parentNode.title="Set RANDALL_MCP_URL to enable the Randall MCP relay";
+    r.parentNode.style.opacity=".5";
+  }
+
+  var scope=document.getElementById("askScope");
+  (ASKCAP.domains||[]).forEach(function(d){
+    var o=el("option",null,d.label+" ("+d.toolCount+")"); o.value=d.id; scope.appendChild(o);
+  });
+}
+
+/* deliberately minimal + escape-first: model output is untrusted text */
+function mdlite(s){
+  var h=esc(s);
+  h=h.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  h=h.replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>");
+  var lines=h.split("\n"), out=[], inUl=false;
+  lines.forEach(function(l){
+    if(/^\s*[-*]\s+/.test(l)){
+      if(!inUl){out.push("<ul>");inUl=true;}
+      out.push("<li>"+l.replace(/^\s*[-*]\s+/,"")+"</li>");
+    } else {
+      if(inUl){out.push("</ul>");inUl=false;}
+      out.push(l.trim()===""?"<br>":"<div>"+l+"</div>");
+    }
+  });
+  if(inUl)out.push("</ul>");
+  return out.join("");
+}
+
+function addMsg(kind,text,calls){
+  var th=document.getElementById("thread");
+  var m=el("div","msg "+kind);
+  m.innerHTML=mdlite(text);
+  if(calls&&calls.length){
+    var tr=el("div","trace");
+    calls.forEach(function(c){
+      var chip=el("span","tchip"+(c.ok?"":" bad"),
+        c.name+" · "+c.ms+"ms"+(c.truncated?" · trunc":"")+(c.ok?"":" · ERR"));
+      if(c.error) chip.title=c.error;
+      tr.appendChild(chip);
+    });
+    m.appendChild(tr);
+  }
+  th.appendChild(m);
+  m.scrollIntoView({behavior:"smooth",block:"end"});
+  return m;
+}
+
+document.getElementById("askGo").onclick=doAsk;
+document.getElementById("askInput").onkeydown=function(e){
+  if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){e.preventDefault();doAsk();}
+};
+
+function doAsk(){
+  var inp=document.getElementById("askInput");
+  var q=(inp.value||"").trim();
+  if(!q) return;
+  var btn=document.getElementById("askGo");
+  var scope=document.getElementById("askScope").value;
+
+  addMsg("u",q);
+  inp.value="";
+  btn.disabled=true; btn.textContent="Thinking…";
+  var pending=addMsg("a","<span class='spin'></span> Selecting tools…");
+  pending.innerHTML='<span class="spin"></span> Selecting tools…';
+  var t0=Date.now();
+
+  var payload={
+    question:q,
+    provider:document.getElementById("askProvider").value,
+    maxRounds:Number(document.getElementById("askRounds").value),
+    history:HISTORY.slice(-10)
+  };
+  if(scope) payload.domains=[scope];
+  if(document.getElementById("askRelay").checked) payload.target="randall";
+
+  fetch("/api/ask",{
+    method:"POST", credentials:"same-origin",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify(payload)
+  }).then(function(r){ return r.json().then(function(j){ return {status:r.status,body:j}; }); })
+  .then(function(o){
+    btn.disabled=false; btn.textContent="Ask";
+    pending.remove();
+    var d=o.body;
+    if(o.status!==200||d.error){
+      addMsg("e","**"+(o.status===503?"Not configured":"Error "+o.status)+"** — "+(d.error||"unknown")+
+        (d.remedy?"\n\n"+d.remedy:""));
+      return;
+    }
+    addMsg("a",d.answer||"(empty answer)",d.toolCalls);
+    HISTORY.push({role:"user",content:q});
+    HISTORY.push({role:"assistant",content:d.answer||""});
+    var w=(d.warnings&&d.warnings.length)?" · "+d.warnings.join(" · "):"";
+    document.getElementById("askMeta").textContent=
+      d.provider+" · "+d.model+" · "+d.rounds+" round"+(d.rounds===1?"":"s")+
+      " · "+d.toolsExposed+" tools exposed · "+(d.toolCalls?d.toolCalls.length:0)+" calls · "+
+      fmt(d.usage?d.usage.inputTokens:0)+" in / "+fmt(d.usage?d.usage.outputTokens:0)+" out tokens · "+
+      fmt(Date.now()-t0)+" ms"+(d.randallRelay?" · Randall relay on":"")+w;
+  }).catch(function(e){
+    btn.disabled=false; btn.textContent="Ask";
+    pending.remove();
+    addMsg("e","Request failed: "+e.message);
+  });
+}
+</script>
+</body>
+</html>
