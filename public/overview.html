@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VistaIntel — Vistamark Investments LLC</title>
+<meta name="description" content="VistaIntel — internal RIA and nonprofit intelligence platform of Vistamark Investments LLC.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%23000'/%3E%3Cpath d='M14 20h10l8 16 8-16h10L34 46h-4z' fill='%23C8A55C'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#080B0F; --ink2:#0B1015; --panel:#101720; --panel2:#151D27; --panel3:#1D2630;
+  --line:rgba(200,165,92,.18); --line2:rgba(255,255,255,.06);
+  --gold:#C8A55C; --gold-hi:#E8D9AE; --cream:#EDE4CF; --gold-dim:rgba(200,165,92,.09);
+  --text:#E4E7EA; --muted:#8794A1; --faint:#5A6672;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --serif:'Cormorant Garamond',Georgia,serif;
+}
+body{font-family:Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--ink);color:var(--text);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column}
+
+.eyebrow{display:flex;align-items:center;gap:12px;font-size:10px;font-weight:600;
+  letter-spacing:2.4px;text-transform:uppercase;color:var(--gold)}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--gold);flex-shrink:0}
+.display{font-family:var(--serif);font-weight:500;letter-spacing:.2px;line-height:1.08}
+.display em{font-style:italic;color:var(--gold-hi)}
+
+/* ---------- header (matches console) ---------- */
+header{display:flex;align-items:center;gap:20px;padding:15px 24px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#0D141B 0%,#080B0F 100%);flex-wrap:wrap}
+.lockup{display:flex;align-items:center;gap:13px;text-decoration:none;color:inherit}
+.lockup .mark{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:block;
+  box-shadow:0 0 0 1px rgba(200,165,92,.30), 0 2px 14px rgba(0,0,0,.6)}
+.lockup .wm{font-size:14px;font-weight:500;letter-spacing:3.4px;color:var(--cream);line-height:1.1}
+.lockup .sm{font-size:8.5px;font-weight:500;letter-spacing:2.2px;color:var(--gold);margin-top:3px}
+.vrule{width:1px;height:34px;background:var(--line);flex-shrink:0}
+.product{line-height:1.15}
+.product .nm{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--cream)}
+.product .nm em{font-style:italic;color:var(--gold)}
+.product .tg{font-size:8.5px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--faint);margin-top:2px}
+.hspace{flex:1}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:2px;
+  border:1px solid var(--line);background:var(--gold-dim);font-size:10px;font-weight:600;
+  letter-spacing:1.1px;text-transform:uppercase;color:var(--gold-hi);white-space:nowrap}
+.who{font-size:11px;color:var(--muted);letter-spacing:.3px}
+.who a{color:var(--gold);text-decoration:none;margin-left:9px}
+.who a:hover{color:var(--gold-hi)}
+
+/* ---------- page ---------- */
+main{flex:1;width:100%;max-width:1080px;margin:0 auto;padding:52px 34px 80px}
+.hero h1{font-size:52px;margin:16px 0 0}
+.lede{color:var(--muted);font-size:14px;margin-top:16px;max-width:74ch;line-height:1.7}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin:24px 0 0}
+.chip{font-size:9.5px;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;
+  padding:4px 10px;border-radius:2px;border:1px solid var(--line2);color:var(--muted);background:var(--panel2)}
+.chip.gold{color:var(--gold-hi);border-color:var(--line);background:var(--gold-dim)}
+
+.rule{height:1px;background:var(--line);margin:44px 0 0}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:32px}
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:3px;padding:24px 24px 26px;
+  display:flex;flex-direction:column}
+.card.primary{border-color:var(--line);background:linear-gradient(180deg,#141C26 0%,#101720 100%)}
+.card h3{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--cream);letter-spacing:.2px}
+.card h3 em{font-style:italic;color:var(--gold)}
+.card p{color:var(--muted);font-size:13px;line-height:1.65;margin-top:10px;flex:1}
+.card .kicker{font-size:9.5px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:9px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:2px;
+  border:1px solid var(--line);background:var(--gold-dim);color:var(--gold-hi);
+  text-decoration:none;font-size:10.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;
+  transition:.15s;cursor:pointer}
+.btn:hover{background:rgba(200,165,92,.17);color:var(--cream);border-color:var(--gold)}
+.btn.solid{background:var(--gold);border-color:var(--gold);color:#0A0D11}
+.btn.solid:hover{background:var(--gold-hi);border-color:var(--gold-hi);color:#0A0D11}
+.btn.ghost{background:none;border-color:var(--line2);color:var(--muted)}
+.btn.ghost:hover{color:var(--cream);border-color:var(--line)}
+
+code{font-family:var(--mono);font-size:12px;color:var(--gold-hi);
+  background:var(--panel2);border:1px solid var(--line2);border-radius:2px;padding:1px 6px}
+
+.domains{margin-top:36px}
+.domains h4{font-size:9.5px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--faint)}
+.dlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.dlist span{font-size:10.5px;color:var(--muted);font-family:var(--mono);
+  border:1px solid var(--line2);border-radius:2px;padding:3px 9px;background:var(--ink2)}
+
+footer{border-top:1px solid var(--line);padding:20px 34px 26px;font-size:10px;
+  letter-spacing:1.4px;text-transform:uppercase;color:var(--faint);
+  display:flex;gap:8px 18px;flex-wrap:wrap;align-items:center}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--gold)}
+footer em{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--gold);letter-spacing:0;text-transform:none}
+
+@media(max-width:760px){
+  header{gap:12px;padding:13px 16px}
+  .vrule,.product{display:none}
+  main{padding:34px 18px 60px}
+  .hero h1{font-size:38px}
+  footer{padding:18px 18px 24px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="lockup" href="/">
+    <svg class="mark" viewBox="0 0 1024 1024" role="img" aria-label="Vistamark Investments LLC"><defs><linearGradient id="vmg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2E0AE"/><stop offset=".45" stop-color="#D9B96B"/><stop offset="1" stop-color="#A87C3A"/></linearGradient></defs><circle cx="512" cy="512" r="512" fill="#000"/><path d="M621 747.5 L530 746.5 L509.5 715 L500.5 696 L464.5 638 L389.5 507 L381.5 497 L369.5 472 L360.5 460 L341.5 425 L338 422.5 L293 422.5 L291.5 428 L301.5 446 L311.5 459 L312.5 464 L336.5 500 L348.5 523 L376.5 566 L377.5 571 L450.5 692 L453.5 694 L478.5 739 L481.5 741 L480 746.5 L408 746.5 L371.5 690 L366.5 678 L311.5 590 L306.5 578 L267.5 516 L253.5 489 L243.5 476 L212.5 421 L184.5 378 L177.5 364 L179.5 360 L377 359.5 L395.5 387 L439.5 465 L454.5 487 L462.5 504 L473.5 519 L478.5 531 L485.5 539 L490.5 551 L512.5 585 L515.5 594 L547.5 645 L548.5 650 L571.5 686 L572.5 691 L577 692.5 L600.5 653 L603.5 644 L607.5 641 L621.5 614 L637.5 590 L638.5 584 L643.5 579 L684.5 506 L716.5 455 L720.5 444 L732.5 428 L731 423.5 L685 423.5 L679.5 429 L652.5 475 L651.5 480 L632.5 509 L630.5 516 L598.5 567 L594.5 578 L580.5 600 L578 602.5 L574 601.5 L543.5 548 L539.5 545 L540.5 534 L567.5 492 L641.5 362 L645 358.5 L844 359.5 L844.5 365 L841.5 371 L795.5 449 L788.5 465 L780.5 474 L780.5 478 L773.5 487 L769.5 497 L734.5 553 L690.5 632 L679.5 647 L627.5 740 L621 747.5 Z" fill="url(#vmg)"/></svg>
+    <div>
+      <div class="wm">VISTAMARK</div>
+      <div class="sm">INVESTMENTS LLC</div>
+    </div>
+  </a>
+  <div class="vrule"></div>
+  <div class="product">
+    <div class="nm">Vista<em>Intel</em></div>
+    <div class="tg">Platform Overview</div>
+  </div>
+  <div class="hspace"></div>
+  <span class="pill" id="pillTools">57 tools</span>
+  <span class="pill" id="pillDomains">16 domains</span>
+  <span class="who"><span id="who"></span><a href="/api/auth/logout">Sign out</a></span>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="eyebrow">Internal Intelligence Platform</div>
+    <h1 class="display">Vista<em>Intel.</em></h1>
+    <p class="lede">RIA and nonprofit intelligence for Vistamark Investments — 57 tools across 16 data
+      domains, normalized into one Postgres database and exposed through one MCP server. SEC Form ADV
+      and EDGAR, IRS Exempt Organizations, DOL Form 5500, IPEDS and NACUBO endowments, FDIC, OFR,
+      GLEIF, Treasury and FRED.</p>
+    <div class="chips">
+      <span class="chip gold" id="chipDb">24,028 firms</span>
+      <span class="chip">Entra SSO</span>
+      <span class="chip">VistaCRM identity</span>
+      <span class="chip">MCP · JSON-RPC 2.0</span>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <div class="grid">
+    <div class="card primary">
+      <div class="kicker">Primary surface</div>
+      <h3>Tool <em>Console.</em></h3>
+      <p>Domain-grouped navigation across all 57 tools, a live status board showing what has actually
+        ingested, and Ask&nbsp;Randall — a natural-language layer that selects and runs the tools for
+        you, showing every call in the trace. Rides your Microsoft sign-in.</p>
+      <div class="actions">
+        <a class="btn solid" href="/console.html">Open Console &rarr;</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Reference</div>
+      <h3>Schema <em>Atlas.</em></h3>
+      <p>Every table, column and relationship in the VistaIntel database — what each source populates,
+        how the entities join, and which tools read from where.</p>
+      <div class="actions">
+        <a class="btn" href="/schema.html">Schema Atlas</a>
+        <a class="btn ghost" href="/query.html">Legacy Console</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="kicker">Machine access</div>
+      <h3>MCP <em>Endpoint.</em></h3>
+      <p>JSON-RPC 2.0 at <code>/api/mcp</code>. Send <code>Authorization: Bearer &lt;ACCESS_TOKEN&gt;</code>
+        or the <code>access_token</code> header. For Claude.ai and automation only — the Console and
+        Atlas use your sign-in instead.</p>
+      <div class="actions">
+        <a class="btn ghost" href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank" rel="noopener">Source</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="domains">
+    <h4>Data domains</h4>
+    <div class="dlist" id="dlist">
+      <span>RIA / Form ADV</span><span>Nonprofits</span><span>Retirement Plans</span>
+      <span>Endowments</span><span>NACUBO Benchmarks</span><span>Public Pensions</span>
+      <span>SBA PPP Loans</span><span>Federal Awards</span><span>13F Holdings</span>
+      <span>Banks / FDIC</span><span>Systemic Risk / OFR</span><span>SEC EDGAR</span>
+      <span>Entity Resolution</span><span>Private Credit / BDC</span><span>Macro &amp; Rates</span>
+      <span>Treasury Statement</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span><em>V</em>&nbsp; Vistamark Investments LLC — Internal</span>
+  <span>vistaintel.app</span>
+  <span><a href="https://github.com/MRRVista/vistamark-ria-intel" target="_blank" rel="noopener">Source</a></span>
+  <span>Identity: <a href="https://vistacrm.app" target="_blank" rel="noopener" title="Authorization resolves through VistaCRM principals">VistaCRM</a></span>
+  <div class="hspace"></div>
+  <span id="whoFoot"></span>
+</footer>
+
+<script>
+fetch("/api/auth/me").then(function(r){return r.ok?r.json():null;}).then(function(d){
+  if(d&&d.email){
+    var kind=d.principal&&d.principal.kind?" ("+d.principal.kind+")":"";
+    document.getElementById("who").textContent=d.email+kind+" ·";
+    document.getElementById("whoFoot").textContent=d.email+kind;
+  }
+}).catch(function(){});
+
+fetch("/api/catalog?health=1").then(function(r){return r.ok?r.json():null;}).then(function(d){
+  if(!d) return;
+  if(d.counts&&d.counts.tools) document.getElementById("pillTools").textContent=d.counts.tools+" tools";
+  if(d.counts&&d.counts.domains) document.getElementById("pillDomains").textContent=d.counts.domains+" domains";
+  if(d.health&&d.health.ok&&d.health.firmCount){
+    document.getElementById("chipDb").textContent=Number(d.health.firmCount).toLocaleString()+" firms";
+  }
+  if(d.domains&&d.domains.length){
+    var box=document.getElementById("dlist"); box.innerHTML="";
+    d.domains.forEach(function(x){
+      var s=document.createElement("span"); s.textContent=x.label||x.key||""; box.appendChild(s);
+    });
+  }
+}).catch(function(){});
+</script>
+</body>
+</html>
