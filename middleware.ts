@@ -11,17 +11,22 @@
  * Anonymous-surface posture (Safe Browsing remediation, 07.20.2026): the
  * domain was flagged as deceptive the day SSO shipped — a day-old domain
  * whose every path 302s to a sign-in screen is the classic phishing-kit
- * signature. Anonymous requests to '/' and '/index.html' therefore get
- * the branded landing/sign-in page served IN PLACE with a 200 (no
- * redirect hop), so the homepage is real first-party content. The two
- * app pages keep the 302 + ?next= round-trip so post-login returns
- * still work. Data exposure is unchanged: query/schema and every
- * token-gated API stay locked exactly as before.
+ * signature. Anonymous requests to '/' therefore get the branded
+ * landing/sign-in page served IN PLACE with a 200 (no redirect hop), so
+ * the homepage is real first-party content. The app pages keep the 302 +
+ * ?next= round-trip so post-login returns still work. Data exposure is
+ * unchanged: query/schema and every token-gated API stay locked exactly
+ * as before.
+ *
+ * Topology (08.20.2026): '/' now rewrites to /console.html — the dark/gold
+ * console is the front door. The former light-palette landing card lives
+ * at /overview.html, rebranded, reachable from the console's Overview tab.
+ * /index.html 301s to '/' for anything still holding the old URL.
  */
 import { verifySession, readCookie, SESSION_COOKIE } from "./lib/session";
 
 export const config = {
-  matcher: ["/", "/index.html", "/query.html", "/schema.html"],
+  matcher: ["/", "/console.html", "/overview.html", "/query.html", "/schema.html"],
 };
 
 export default async function middleware(request: Request): Promise<Response | undefined> {
@@ -34,7 +39,7 @@ export default async function middleware(request: Request): Promise<Response | u
 
   // Homepage for anonymous visitors: serve the landing/sign-in page as a
   // 200 at the requested path instead of redirecting to a login URL.
-  if (url.pathname === "/" || url.pathname === "/index.html") {
+  if (url.pathname === "/") {
     try {
       const landing = await fetch(new URL("/login.html", url));
       if (landing.ok) {
@@ -53,7 +58,7 @@ export default async function middleware(request: Request): Promise<Response | u
 
   // App pages (and homepage fallback): redirect with a return path.
   const login = new URL("/login.html", url);
-  const next = url.pathname === "/index.html" ? "/" : url.pathname;
+  const next = url.pathname === "/console.html" ? "/" : url.pathname;
   if (next !== "/login.html") login.searchParams.set("next", next);
   return Response.redirect(login, 302);
 }
