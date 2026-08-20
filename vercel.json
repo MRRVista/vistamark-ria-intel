@@ -26,6 +26,12 @@
     { "path": "/api/cron/refresh-ipeds", "schedule": "0 6 * * *" },
     { "path": "/api/cron/refresh-nacubo", "schedule": "0 12 15 2 *" }
   ],
+  "redirects": [
+    { "source": "/index.html", "destination": "/", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/console.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
