@@ -58,12 +58,16 @@ header{display:flex;align-items:center;gap:20px;padding:15px 24px;
 .shell{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 74px)}
 aside{border-right:1px solid var(--line);background:var(--ink2);
   display:flex;flex-direction:column;max-height:calc(100vh - 74px);position:sticky;top:74px}
-.tabs{display:flex;padding:14px 14px 0;gap:4px}
-.tab{flex:1;padding:9px 6px;border:1px solid transparent;border-bottom:none;
-  background:none;color:var(--muted);font-family:inherit;font-size:10px;font-weight:600;
-  letter-spacing:1.3px;text-transform:uppercase;cursor:pointer;transition:.15s}
+.tabs{display:flex;padding:14px 14px 0;gap:3px}
+.tab{flex:1;padding:9px 4px;border:1px solid transparent;border-bottom:none;
+  background:none;color:var(--muted);font-family:inherit;font-size:9.5px;font-weight:600;
+  letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:.15s;
+  text-align:center;text-decoration:none;white-space:nowrap;line-height:1.7}
 .tab:hover{color:var(--cream)}
 .tab.on{background:var(--panel);border-color:var(--line);color:var(--gold-hi)}
+/* leaves the console for the branded overview page */
+.tab.link{color:var(--faint)}
+.tab.link:hover{color:var(--gold-hi)}
 .searchwrap{padding:13px 16px;border-bottom:1px solid var(--line2);border-top:1px solid var(--line)}
 input[type=text],input[type=number],select,textarea{width:100%;padding:9px 11px;border-radius:2px;
   border:1px solid var(--line2);background:var(--panel2);color:var(--text);
@@ -202,6 +206,8 @@ summary:hover{color:var(--gold-hi)}
   main{padding:22px 16px 56px}
   .msg{max-width:100%}
   .vrule,.product{display:none}
+  .tabs{padding:12px 10px 0;gap:2px}
+  .tab{font-size:9px;letter-spacing:.5px;padding:9px 2px}
   h2.display{font-size:27px}
 }
 </style>
@@ -234,6 +240,7 @@ summary:hover{color:var(--gold-hi)}
       <button class="tab on" data-tab="explore">Explore</button>
       <button class="tab" data-tab="ask">Ask Randall</button>
       <button class="tab" data-tab="status">Status</button>
+      <a class="tab link" href="/overview.html" title="Back to the VistaIntel overview">Overview</a>
     </div>
     <div class="searchwrap">
       <input type="text" id="filter" placeholder="Filter 57 tools…" autocomplete="off">
@@ -403,7 +410,7 @@ jfetch("/api/ask").then(function(res){
 }).catch(function(){ renderAskCaps(); });
 
 /* ============================ tabs ============================ */
-Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
+Array.prototype.forEach.call(document.querySelectorAll(".tab[data-tab]"),function(t){
   t.onclick=function(){
     Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
     Array.prototype.forEach.call(document.querySelectorAll(".panel"),function(x){x.classList.remove("on");});
