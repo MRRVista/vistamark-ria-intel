@@ -444,7 +444,7 @@ function renderNav(){
 
     var g=el("div","dgroup"); if(q) g.classList.add("open");
     var h=el("button","dhead");
-    h.appendChild(el("span","chev","▶"));
+    h.appendChild(el("span","chev","\\u25B6"));
     h.appendChild(el("span",null,d.label));
     h.appendChild(el("span","dcount",tools.length));
     h.onclick=function(){g.classList.toggle("open");};
@@ -469,7 +469,7 @@ function renderNav(){
     nav.appendChild(g);
   });
 
-  if(shown===0) nav.appendChild(el("div","empty-state","No tools match “"+q+"”"));
+  if(shown===0) nav.appendChild(el("div","empty-state","No tools match \\u201C"+q+"\\u201D"));
 }
 document.getElementById("filter").oninput=function(){ if(CAT) renderNav(); };
 
@@ -655,7 +655,7 @@ function renderResult(out,d,t,ms){
     tb.appendChild(tbody);
     var w=el("div","tblwrap"); w.appendChild(tb); card.appendChild(w);
     card.appendChild(el("div","meta",
-      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in “"+found.key+"”"+
+      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in \\u201C"+found.key+"\\u201D"+
       (found.rows.length>200?" (first 200 shown)":"")+
       (cols.length>=14?" · columns capped at 14 — see raw JSON":"")));
   } else {
