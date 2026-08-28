@@ -1,9 +1,9 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 57 MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 64 MCP tools.
  *
  * WHY THIS EXISTS
  * ---------------
- * `lib/mcp/tools.ts` is a flat array of 57 tools. That is the right shape for
+ * `lib/mcp/tools.ts` is a flat array of 64 tools. That is the right shape for
  * an MCP client (which wants tools/list) and the wrong shape for a human
  * (who wants "show me the endowment tools"). This module adds the layer the
  * flat registry deliberately omits: which data DOMAIN a tool belongs to,
@@ -287,6 +287,20 @@ export const DOMAINS: CatalogDomain[] = [
       { name: "treasury_debt_outstanding", backing: "live-api", probe: "unprobed" },
       { name: "treasury_daily_cash", backing: "live-api", probe: "live" },
       { name: "treasury_daily_flows", backing: "live-api", probe: "live" },
+    ],
+  },
+  {
+    id: "markets",
+    label: "Market Data / EODHD",
+    source: "EODHD — global prices, fundamentals, news, screener (live, keyed)",
+    tools: [
+      { name: "eodhd_search", backing: "live-api", probe: "unprobed", note: "New family — requires EODHD_API_TOKEN in Vercel env. Probes pending the first selftest re-sync after the token lands." },
+      { name: "eodhd_eod_prices", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_quote", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_dividends_splits", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_fundamentals", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_news", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_screener", backing: "live-api", probe: "unprobed" },
     ],
   },
   {
