@@ -99,6 +99,15 @@ import {
   ppdPlanProfile,
   ppdListVariables,
 } from "../pensions/tools";
+import {
+  eodhdSearch,
+  eodhdEodPrices,
+  eodhdQuote,
+  eodhdDividendsSplits,
+  eodhdFundamentals,
+  eodhdNews,
+  eodhdScreener,
+} from "../eodhd/tools";
 
 export interface ToolDef {
   name: string;
@@ -401,6 +410,51 @@ const PENSION_TOOLS: ToolDef[] = [
   },
 ];
 
+const EODHD_TOOLS: ToolDef[] = [
+  {
+    name: "eodhd_search",
+    description: "Resolve a ticker or company/fund name to its EODHD symbol (eodhd.com search API, live, keyed). Searches across global exchanges — equities, ETFs, mutual funds, indices. Returns code, exchange, combined SYMBOL.EXCHANGE (e.g. AAPL.US, VOD.LSE), name, type, country, currency, ISIN, and previous close. Start here when unsure of a symbol; every other eodhd_* tool takes the SYMBOL.EXCHANGE form (bare US tickers auto-normalize to .US).",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "number", default: 10, maximum: 50 } }, required: ["query"] },
+    handler: eodhdSearch,
+  },
+  {
+    name: "eodhd_eod_prices",
+    description: "Historical end-of-day OHLCV for any listed security (EODHD, live, keyed) — the price-history workhorse the public-data stack lacked. Symbol as TICKER.EXCHANGE (bare US tickers get .US). Optional from/to (YYYY-MM-DD), period d/w/m (default d), limit (default 60, max 1000). Returns newest-first bars with open/high/low/close, split/dividend-ADJUSTED close, and volume. Pairs with the macro layer: chart a client holding against fred_get_series rates, or hand a series to VistaBuilder-style analytics.",
+    inputSchema: { type: "object", properties: { symbol: { type: "string" }, from: { type: "string" }, to: { type: "string" }, period: { type: "string", enum: ["d", "w", "m"], default: "d" }, limit: { type: "number", default: 60, maximum: 1000 } }, required: ["symbol"] },
+    handler: eodhdEodPrices,
+  },
+  {
+    name: "eodhd_quote",
+    description: "Delayed real-time quotes (~15 min) for up to 15 symbols in one call (EODHD, live, keyed). Symbols as TICKER.EXCHANGE (bare US tickers get .US). Returns last, open/high/low, previous close, absolute and % change, volume, and the quote timestamp (Unix UTC + ISO). The intraday check for tickers the FRED daily-close series can't reach — individual stocks, ETFs, foreign listings.",
+    inputSchema: { type: "object", properties: { symbols: { type: "array", items: { type: "string" } } }, required: ["symbols"] },
+    handler: eodhdQuote,
+  },
+  {
+    name: "eodhd_dividends_splits",
+    description: "Dividend and split history for one security (EODHD, live, keyed). Symbol as TICKER.EXCHANGE. Optional from/to date scoping. Dividends: ex-date, declaration/record/payment dates, period, adjusted and unadjusted per-share value, currency — newest first. Splits: date + ratio (e.g. '4.000000/1.000000'). Errors on either side surface independently (dividendsError/splitsError) without failing the other. Useful for income-portfolio review and cost-basis sanity checks.",
+    inputSchema: { type: "object", properties: { symbol: { type: "string" }, from: { type: "string" }, to: { type: "string" }, limit: { type: "number", default: 40, maximum: 200 } }, required: ["symbol"] },
+    handler: eodhdDividendsSplits,
+  },
+  {
+    name: "eodhd_fundamentals",
+    description: "Company/ETF/fund fundamentals from EODHD (live, keyed) — the packaged alternative to assembling edgar_financial_concept calls: valuation ratios, margins, analyst targets, holders, and full statements in one place, covering non-US listings EDGAR can't reach. Symbol as TICKER.EXCHANGE. `sections` is a comma list (default 'General,Highlights,Valuation'); other roots: SharesStats, Technicals, SplitsDividends, AnalystRatings, Holders, InsiderTransactions, ESGScores, outstandingShares, Earnings, Financials — sub-paths via '::', e.g. Financials::Balance_Sheet::yearly. ETFs/funds: ETF_Data / MutualFund_Data (holdings, allocations, expense ratio). REQUEST NARROWLY — the unfiltered payload runs to hundreds of KB. Figures as reported by EODHD; for as-filed SEC XBRL use the edgar_* tools.",
+    inputSchema: { type: "object", properties: { symbol: { type: "string" }, sections: { type: "string", default: "General,Highlights,Valuation" } }, required: ["symbol"] },
+    handler: eodhdFundamentals,
+  },
+  {
+    name: "eodhd_news",
+    description: "Financial news with sentiment scores (EODHD news API, live, keyed). Filter by symbol (TICKER.EXCHANGE) and/or topic tag (e.g. 'mergers and acquisitions', 'dividend payments', 'class action'), plus from/to dates; at least one of symbol/topic is required. Returns date, title, ~400-char snippet, link, tagged symbols/topics, and per-article sentiment (polarity -1..+1 with pos/neu/neg breakdown). Client-holding monitoring and prospect-event awareness; pair with edgar_fulltext_search for the primary-source filing behind a headline.",
+    inputSchema: { type: "object", properties: { symbol: { type: "string" }, topic: { type: "string" }, from: { type: "string" }, to: { type: "string" }, limit: { type: "number", default: 10, maximum: 50 }, offset: { type: "number", default: 0 } } },
+    handler: eodhdNews,
+  },
+  {
+    name: "eodhd_screener",
+    description: "Cross-market stock screener (EODHD, live, keyed). Filter by exchange code (e.g. 'us', 'lse'), sector, industry, market-cap range (listing currency), minimum dividend yield (fraction — 0.03 = 3%), minimum EPS, and optional EODHD signals (comma list, e.g. '200d_new_hi', 'bookvalue_neg', 'wallstreet_lo'). Sort by market_capitalization (default), dividend_yield, earnings_share, or refund_1d_p (1-day % move). Returns symbol, name, sector/industry, market cap, EPS, yield, last close, and day change. The listed-universe complement to search_rias/irs_eo_search-style screening — find the SECURITIES, then drill in with eodhd_fundamentals or the edgar_* tools.",
+    inputSchema: { type: "object", properties: { exchange: { type: "string" }, sector: { type: "string" }, industry: { type: "string" }, minMarketCap: { type: "number" }, maxMarketCap: { type: "number" }, minDividendYield: { type: "number" }, minEarningsShare: { type: "number" }, signals: { type: "string" }, sortBy: { type: "string", enum: ["market_capitalization", "dividend_yield", "earnings_share", "refund_1d_p"], default: "market_capitalization" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 25, maximum: 100 }, offset: { type: "number", default: 0 } } },
+    handler: eodhdScreener,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -416,5 +470,6 @@ export const TOOLS: ToolDef[] = [
   ...GLEIF_TOOLS,
   ...BDC_TOOLS,
   ...PENSION_TOOLS,
+  ...EODHD_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

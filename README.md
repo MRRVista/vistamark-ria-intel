@@ -1,6 +1,6 @@
 # Vistamark Intel
 
-A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **57 tools across 15 dataset families.** Queried in production by Randall, Vistamark's AI associate.
+A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **64 tools across 16 dataset families.** Queried in production by Randall, Vistamark's AI associate.
 
 ## Data domains
 
@@ -26,13 +26,14 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 - **BDC universe** — curated listed-BDC (BIZD-style) list with EDGAR-backed profiles and screens.
 - **Public Plans Database** — the ~230 largest U.S. state/local pension plans, multi-year funding history.
 - **USAspending** — federal awards by recipient + top-recipient screens.
+- **EODHD** (keyed) — global market data: symbol search, EOD price history (adjusted), delayed real-time quotes (batch ≤15), dividends/splits, fundamentals (section-filtered), news with sentiment, cross-market screener.
 
 ## Endpoints
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /api/mcp` | `ACCESS_TOKEN` header | MCP JSON-RPC (initialize, tools/list, tools/call) |
-| `GET /api/selftest` | none | Read-only diagnostic battery (36 checks). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
+| `GET /api/selftest` | none | Read-only diagnostic battery (39 checks). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
 | `GET /api/market-brief` | none | The morning composite, served for the vistamark-m365 pre-market digest cron. Aggregated public macro data only — same exposure posture as selftest. |
 
 ## Setup
@@ -45,6 +46,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | `ACCESS_TOKEN` | yes | Required header on every MCP request |
 | `CRON_SECRET` | yes | Authenticates manual cron/admin triggers |
 | `FRED_API_KEY` | yes (macro tools) | Free key — https://fred.stlouisfed.org |
+| `EODHD_API_TOKEN` | yes (eodhd_* tools) | EODHD API token — https://eodhd.com |
 | `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2) |
 | `EIA_API_KEY` / `BLS_API_KEY` / `DATA_GOV_API_KEY` | future | Reserved for the keyed-API expansion tier |
 
@@ -75,9 +77,9 @@ curl -X POST "$BASE/api/admin/refresh-nacubo" -H "Authorization: Bearer $CRON_SE
 
 `database_status` reports per-pipeline health: each ingest family's latest run, errors sorted first with redacted error messages — a failing scheduled ingest surfaces there instead of failing silently. A family absent from `pipelineHealth` has never created a run record, meaning its handler is not being reached.
 
-## MCP tools (57 total)
+## MCP tools (64 total)
 
-RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3)
+RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`)
 
 Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 

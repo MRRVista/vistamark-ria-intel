@@ -57,6 +57,9 @@ const CHECKS: Check[] = [
   { name: "ppd-listvars", tool: "ppd_list_variables", args: { nameContains: "assets", limit: 4 }, note: "endpoint truth probe — the API's own catalog of exact variable names; if this errors too, the query grammar assumption is wrong" },
   { name: "ppd-search", tool: "ppd_plan_search", args: { state: "IL", limit: 2 }, note: "expect IL public plans (IMRF, Illinois Teachers, SURS, Chicago funds); plan rows lead the payload" },
   { name: "ppd-profile", tool: "ppd_plan_profile", args: { name: "California", limit: 3 }, note: "unit sanity probe — a large CA plan's market assets should land in the hundreds of billions USD; if it reads ~$500M the thousands->USD conversion is wrong" },
+  { name: "eodhd-search", tool: "eodhd_search", args: { query: "Apple", limit: 2 }, note: "EODHD symbol-resolution probe — expect AAPL.US among the matches; an EODHD_API_TOKEN-not-configured error means the env var has not landed in Vercel yet" },
+  { name: "eodhd-eod", tool: "eodhd_eod_prices", args: { symbol: "AAPL", limit: 3 }, note: "EODHD price-history probe — bare ticker should normalize to AAPL.US; expect 3 newest-first daily bars with adjustedClose and volume" },
+  { name: "eodhd-quote", tool: "eodhd_quote", args: { symbols: ["SPY", "AAPL.US"] }, note: "EODHD delayed-quote probe — expect two quotes with last, previousClose, changePct, and a recent timestamp (delayed ~15m; stale over weekends is normal)" },
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
 ];

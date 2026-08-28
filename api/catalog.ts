@@ -8,7 +8,7 @@ import { DOMAINS, PROBE_SOURCE, probeSummary, reconcile } from "../lib/mcp/catal
  * GET /api/catalog?health=1 — same, plus live ingest pipelineHealth
  *
  * This is the console's bootstrap call. It exists so the UI can render the
- * full 57-tool navigation AND generate input forms from one request, instead
+ * full 64-tool navigation AND generate input forms from one request, instead
  * of doing tools/list over JSON-RPC and then re-deriving groupings client-side.
  *
  * Auth rides requireAccessOrSession: an Entra session cookie (browser) or an
