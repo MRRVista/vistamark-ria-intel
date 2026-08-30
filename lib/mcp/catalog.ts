@@ -58,14 +58,17 @@ export interface CatalogDomain {
 /** Provenance for every `probe` value below. Update when re-syncing. */
 export const PROBE_SOURCE = {
   endpoint: "/api/selftest",
-  ranAt: "2026-08-19T10:20:16.671Z",
-  checksRun: 36,
-  passed: 33,
-  failed: 3,
+  ranAt: "2026-08-30T22:19:59.823Z",
+  checksRun: 39,
+  passed: 39,
+  failed: 0,
   note:
-    "3 failures were all per-check TIMEOUTS at the 7000ms selftest budget on " +
-    "FRED composite tools, not upstream outages — fred_batch_latest passed at " +
-    "4663ms in the same run, so FRED itself was reachable.",
+    "Clean run. The three FRED composites that timed out in the 08.19 sync " +
+    "now finish in ~2.6s against the 7000ms budget, so they move slow -> live. " +
+    "EODHD probes are live for the first time (token landed). Passing is NOT " +
+    "the same as healthy: dol_plan_search still answers rows:[] on total:224947, " +
+    "and ppd_plan_profile/bdc_profile still return all-null metrics, so those " +
+    "stay degraded despite ok=true.",
 } as const;
 
 export const DOMAINS: CatalogDomain[] = [
@@ -255,34 +258,12 @@ export const DOMAINS: CatalogDomain[] = [
     label: "Macro & Rates",
     source: "FRED + Treasury Fiscal Data incl. Daily Treasury Statement (live)",
     tools: [
-      {
-        name: "morning_market_brief",
-        backing: "live-api",
-        probe: "slow",
-        note:
-          "Exceeded the 7000ms selftest budget. This is the widest composite in " +
-          "the server — it fans out across FRED, DTS, curve and OFR FSI. Slow " +
-          "under a probe budget is expected; it is not an upstream outage.",
-      },
-      {
-        name: "macro_market_signals",
-        backing: "live-api",
-        probe: "slow",
-        note:
-          "Exceeded the 7000ms selftest budget — 22 FRED indicators fanned out " +
-          "across six pillars in one call.",
-      },
+      { name: "morning_market_brief", backing: "live-api", probe: "live" },
+      { name: "macro_market_signals", backing: "live-api", probe: "live" },
       { name: "fred_batch_latest", backing: "live-api", probe: "live" },
       { name: "fred_series_search", backing: "live-api", probe: "unprobed" },
       { name: "fred_get_series", backing: "live-api", probe: "unprobed" },
-      {
-        name: "fred_yield_curve",
-        backing: "live-api",
-        probe: "slow",
-        note:
-          "Exceeded the 7000ms selftest budget. Pulls the full maturity ladder " +
-          "as parallel FRED series.",
-      },
+      { name: "fred_yield_curve", backing: "live-api", probe: "live" },
       { name: "treasury_avg_rates", backing: "live-api", probe: "live" },
       { name: "treasury_debt_outstanding", backing: "live-api", probe: "unprobed" },
       { name: "treasury_daily_cash", backing: "live-api", probe: "live" },
@@ -294,10 +275,18 @@ export const DOMAINS: CatalogDomain[] = [
     label: "Market Data / EODHD",
     source: "EODHD — global prices, fundamentals, news, screener (live, keyed)",
     tools: [
-      { name: "eodhd_search", backing: "live-api", probe: "unprobed", note: "New family — requires EODHD_API_TOKEN in Vercel env. Probes pending the first selftest re-sync after the token lands." },
-      { name: "eodhd_eod_prices", backing: "live-api", probe: "unprobed" },
-      { name: "eodhd_quote", backing: "live-api", probe: "unprobed" },
-      { name: "eodhd_dividends_splits", backing: "live-api", probe: "unprobed" },
+      { name: "eodhd_search", backing: "live-api", probe: "live" },
+      { name: "eodhd_eod_prices", backing: "live-api", probe: "live" },
+      { name: "eodhd_quote", backing: "live-api", probe: "live" },
+      {
+        name: "eodhd_dividends_splits",
+        backing: "live-api",
+        probe: "unprobed",
+        note:
+          "The token is live and the family is proven by the three probed tools; " +
+          "these four simply have no selftest coverage yet. Unprobed here means " +
+          "uncovered, not broken.",
+      },
       { name: "eodhd_fundamentals", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_news", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_screener", backing: "live-api", probe: "unprobed" },
