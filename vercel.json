@@ -11,6 +11,7 @@
     "api/admin/query.ts": { "maxDuration": 60 },
     "api/ask.ts": { "maxDuration": 300 },
     "api/catalog.ts": { "maxDuration": 60 },
+    "api/vistacharts.ts": { "maxDuration": 30 },
     "api/selftest.ts": { "maxDuration": 60 },
     "api/cron/ingest-adv.ts": { "maxDuration": 300 },
     "api/cron/refresh-irs-bmf.ts": { "maxDuration": 300 },
