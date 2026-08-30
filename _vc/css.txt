@@ -1,0 +1,24 @@
+
+/* ---------- VistaCharts ---------- */
+.chartctrl{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+.chartctrl .field{min-width:180px}
+.periods{display:flex;gap:0;flex-wrap:wrap;border:1px solid var(--line2);border-radius:2px;overflow:hidden;width:max-content}
+.periods button{padding:8px 15px;border:none;border-right:1px solid var(--line2);background:var(--panel2);
+  color:var(--muted);font-family:inherit;font-size:10px;font-weight:600;letter-spacing:1.2px;
+  text-transform:uppercase;cursor:pointer;transition:.15s}
+.periods button:last-child{border-right:none}
+.periods button:hover{color:var(--cream);background:var(--panel3)}
+.periods button.on{background:var(--gold-dim);color:var(--gold-hi);box-shadow:inset 0 -2px 0 var(--gold)}
+.chartbox{position:relative;margin-top:4px;min-height:200px}
+.chartbox svg{display:block;width:100%;height:auto;touch-action:pan-y}
+.chartlegend{display:flex;gap:20px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:11.5px}
+.chartlegend .lg{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.chartlegend .sw{width:16px;height:2px;flex-shrink:0;border-radius:1px}
+.chartlegend .lg b{color:var(--text);font-weight:600;letter-spacing:.4px}
+.chartlegend .lg .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.readout{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line2);font-size:11.5px;color:var(--faint);
+  font-variant-numeric:tabular-nums;min-height:18px}
+.readout .rk{color:var(--muted);font-family:var(--mono)}
+.up{color:var(--ok)}
+.down{color:var(--bad)}

@@ -1,0 +1,44 @@
+
+    <!-- VISTACHARTS -->
+    <section class="panel" id="p-charts">
+      <div class="eyebrow">Relative Performance</div>
+      <h2 class="display">Vista<em>Charts.</em></h2>
+      <p class="lede">Total-return history for any listed security against a benchmark, over
+        3 months to 10 years. Series are dividend- and split-adjusted, rebased to zero at the
+        start of the window, and intersected on common trading days so the comparison is honest.</p>
+
+      <div class="card">
+        <div class="chartctrl">
+          <div class="field">
+            <label for="chTicker">Ticker</label>
+            <input type="text" id="chTicker" list="chTickerList" value="AAPL"
+                   placeholder="AAPL" autocomplete="off" spellcheck="false">
+            <datalist id="chTickerList"></datalist>
+          </div>
+          <div class="field">
+            <label for="chBench">Benchmark</label>
+            <input type="text" id="chBench" list="chBenchList" value="SPY"
+                   placeholder="SPY — or blank for none" autocomplete="off" spellcheck="false">
+            <datalist id="chBenchList"></datalist>
+          </div>
+          <button class="go" id="chGo" style="margin-top:0">Render</button>
+        </div>
+        <div class="periods" id="chPeriods"></div>
+
+        <div id="chBanner"></div>
+        <div class="chartlegend" id="chLegend"></div>
+        <div class="chartbox" id="chBox"></div>
+        <div class="readout" id="chReadout"></div>
+        <div class="meta" id="chMeta"></div>
+      </div>
+
+      <div class="card" id="chStatsCard" style="display:none">
+        <h3>Return &amp; risk</h3>
+        <div class="tblwrap"><table id="chStats"></table></div>
+        <div class="meta">Volatility and tracking error are annualised from daily returns (&radic;252).
+          Annualised return is shown only for windows longer than about 13 months — annualising a
+          shorter window converts noise into a headline.</div>
+      </div>
+
+      <div class="stamp"><em>V</em>0.19 BUILD &middot; VistaCharts &middot; EODHD total return</div>
+    </section>
