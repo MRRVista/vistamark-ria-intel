@@ -1063,6 +1063,12 @@ function chYLab(t,span){
   return v.toFixed(span<0.12?1:0)+"%";
 }
 
+/* Whether the selected window annualises. relativeStats() annualises excess
+   and alpha past the same ~400-day threshold riskStats() uses for CAGR, so a
+   non-null series annualized is an exact proxy. It matters on MAX: an excess
+   of +10.91% sitting beside cumulative totals of +74,491% and +3,090% reads
+   as cumulative unless the label says otherwise. */
+function chAnnu(d){ return d.series.some(function(s){ return s.annualized!==null; }); }
 /* Axis ticks on human numbers (\u20261%, 2%, 5%, 10%\u2026) rather than range/N. */
 function chTicks(lo,hi,target){
   var span=hi-lo; if(!(span>0)) return [lo];
@@ -1243,7 +1249,7 @@ function chDraw(d){
   });
   if(d.relative && d.relative.excessReturn!==null){
     var ex=el("div","lg");
-    ex.appendChild(el("b",null,"Excess"));
+    ex.appendChild(el("b",null,chAnnu(d)?"Excess (ann.)":"Excess"));
     ex.appendChild(el("span","v "+chCls(d.relative.excessReturn),chPct(d.relative.excessReturn)));
     lg.appendChild(ex);
   }
@@ -1366,7 +1372,8 @@ function chStats(d){
       var td=el("td","num "+(cls||""),txt[1]); td.colSpan=d.series.length;
       tr.appendChild(td); tb.appendChild(tr);
     };
-    span2(["Excess return vs "+d.series[1].symbol,chPct(rel.excessReturn)],chCls(rel.excessReturn));
+    span2(["Excess return vs "+d.series[1].symbol+(chAnnu(d)?" (ann.)":""),
+           chPct(rel.excessReturn)],chCls(rel.excessReturn));
     span2(["Alpha (ann.)",chPct(rel.alpha)],chCls(rel.alpha));
     span2(["Beta to "+d.series[1].symbol,chNum(rel.beta)]);
     span2(["Correlation",chNum(rel.correlation)]);
