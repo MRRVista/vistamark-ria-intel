@@ -225,6 +225,47 @@ summary:hover{color:var(--gold-hi)}
 .up{color:var(--ok)}
 .down{color:var(--bad)}
 
+/* VistaCharts takes the full width. The filter and domain rail serve Explore;
+   300px of RIA data domains buys nothing beside a chart. The tabs live in the
+   same column, so the rail flattens into a top bar rather than disappearing —
+   the same transformation the narrow-viewport block below already makes. */
+/* Symbol typeahead. Replaces two datalists that could only filter the dozen
+   presets baked into the page - and matched on the option LABEL, so typing
+   "R" surfaced VTI, VWO and AGG. */
+.combo{position:relative}
+/* Wider than the field on purpose: a symbol, an instrument name and a type
+   chip do not fit in a 180px input, and a truncated name ("Direxion D...")
+   is the one thing this menu exists to show. */
+.cmenu{position:absolute;top:calc(100% + 3px);left:0;right:auto;z-index:40;display:none;
+  width:392px;max-width:76vw;
+  background:var(--panel2);border:1px solid var(--line);border-radius:2px;
+  max-height:302px;overflow-y:auto;box-shadow:0 12px 28px rgba(0,0,0,.55)}
+.cmenu.on{display:block}
+.cmenu::-webkit-scrollbar{width:8px}
+.cmenu::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:4px}
+.copt{display:flex;align-items:baseline;gap:11px;padding:8px 12px;cursor:pointer;
+  border-bottom:1px solid var(--line2)}
+.copt:last-child{border-bottom:none}
+.copt:hover,.copt.sel{background:var(--gold-dim)}
+.copt .sym{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--gold-hi);
+  flex:0 0 auto;min-width:62px}
+.copt .nm{flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copt .tp{margin-left:auto;flex:0 0 auto;font-size:8.5px;font-weight:600;letter-spacing:1px;
+  text-transform:uppercase;color:var(--faint)}
+.cnone{padding:10px 12px;font-size:11.5px;color:var(--faint)}
+.cbusy{padding:10px 12px;font-size:11.5px;color:var(--faint)}
+
+.shell.chartsmode{grid-template-columns:1fr}
+.shell.chartsmode aside{position:static;max-height:none;border-right:none;
+  border-bottom:1px solid var(--line)}
+.shell.chartsmode .searchwrap,
+.shell.chartsmode .navscroll,
+.shell.chartsmode .railstamp{display:none}
+.shell.chartsmode .tabs{padding:12px 26px 0}
+.shell.chartsmode .tab{flex:0 0 auto;padding:9px 18px}
+.shell.chartsmode main{max-width:1500px}
+
 @media(max-width:900px){
   .shell{grid-template-columns:1fr}
   aside{position:static;max-height:none;border-right:none;border-bottom:1px solid var(--line)}
@@ -306,15 +347,23 @@ summary:hover{color:var(--gold-hi)}
         <div class="chartctrl">
           <div class="field">
             <label for="chTicker">Ticker</label>
-            <input type="text" id="chTicker" list="chTickerList" value="AAPL"
-                   placeholder="AAPL" autocomplete="off" spellcheck="false">
-            <datalist id="chTickerList"></datalist>
+            <div class="combo">
+              <input type="text" id="chTicker" value="AAPL" role="combobox"
+                     placeholder="Symbol or name"
+                     autocomplete="off" spellcheck="false"
+                     aria-autocomplete="list" aria-expanded="false" aria-controls="chTickerMenu">
+              <div class="cmenu" id="chTickerMenu" role="listbox"></div>
+            </div>
           </div>
           <div class="field">
             <label for="chBench">Benchmark</label>
-            <input type="text" id="chBench" list="chBenchList" value="SPY"
-                   placeholder="SPY — or blank for none" autocomplete="off" spellcheck="false">
-            <datalist id="chBenchList"></datalist>
+            <div class="combo">
+              <input type="text" id="chBench" value="SPY" role="combobox"
+                     placeholder="Symbol, name, or blank"
+                     autocomplete="off" spellcheck="false"
+                     aria-autocomplete="list" aria-expanded="false" aria-controls="chBenchMenu">
+              <div class="cmenu" id="chBenchMenu" role="listbox"></div>
+            </div>
           </div>
           <button class="go" id="chGo" style="margin-top:0">Render</button>
         </div>
@@ -506,6 +555,10 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab[data-tab]"),functio
     Array.prototype.forEach.call(document.querySelectorAll(".panel"),function(x){x.classList.remove("on");});
     t.classList.add("on");
     document.getElementById("p-"+t.dataset.tab).classList.add("on");
+    /* Explore's rail is noise on the chart panel; flatten it to a tab bar. */
+    var shell=document.querySelector(".shell");
+    if(t.dataset.tab==="charts") shell.classList.add("chartsmode");
+    else shell.classList.remove("chartsmode");
   };
 });
 
@@ -1026,8 +1079,15 @@ function doAsk(){
 var CH = { period:"1Y", data:null, loaded:false, req:0 };
 
 var CH_PERIODS = ["3M","YTD","1Y","3Y","5Y","10Y","MAX"];
-var CH_TICKERS = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","BRK-B","JPM","XOM","UNH",
-                  "VTI","VOO","QQQ","SCHD","VIG","VYM","ARKK","BND"];
+var CH_TICKERS = [
+  ["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["AMZN","Amazon"],
+  ["GOOGL","Alphabet"],["META","Meta Platforms"],["BRK-B","Berkshire Hathaway B"],
+  ["JPM","JPMorgan Chase"],["XOM","Exxon Mobil"],["UNH","UnitedHealth"],
+  ["VTI","Vanguard Total Stock Market"],["VOO","Vanguard S&P 500"],
+  ["QQQ","Invesco Nasdaq 100"],["SCHD","Schwab US Dividend Equity"],
+  ["VIG","Vanguard Dividend Appreciation"],["VYM","Vanguard High Dividend Yield"],
+  ["ARKK","ARK Innovation"],["BND","Vanguard Total Bond Market"]
+];
 var CH_BENCHES = [
   ["SPY","S&P 500"],["VTI","US total market"],["QQQ","Nasdaq 100"],["IWM","US small cap"],
   ["ACWI","MSCI ACWI \u2014 global"],["VEA","Developed ex-US"],["VWO","Emerging markets"],
@@ -1079,13 +1139,122 @@ function chTicks(lo,hi,target){
   return out;
 }
 
+/* ------------------------------------------------------------- typeahead
+   Symbol lookup against /api/funds?q= - EODHD search, already behind the same
+   auth as the chart itself, so no new server surface and no new billing
+   surface. Any listed instrument resolves by name or partial code: "MSF"
+   finds MSFT, a fund family name finds its funds, an index name finds the
+   index. The curated presets still show on an empty box, because a blank menu
+   is a worse starting point than a short list of real benchmarks.
+
+   US instruments trade as the bare code; everything else needs the exchange
+   suffix, which is exactly what the chart passes upstream. */
+function chCombo(inputId,menuId,presets){
+  var inp=document.getElementById(inputId);
+  var menu=document.getElementById(menuId);
+  var rows=[], sel=-1, seq=0, timer=null;
+
+  function close(){
+    menu.classList.remove("on"); menu.innerHTML="";
+    rows=[]; sel=-1; inp.setAttribute("aria-expanded","false");
+  }
+  function open(){ menu.classList.add("on"); inp.setAttribute("aria-expanded","true"); }
+
+  function paint(){
+    menu.innerHTML="";
+    rows.forEach(function(r,i){
+      var o=el("div","copt"+(i===sel?" sel":""));
+      o.setAttribute("role","option");
+      o.appendChild(el("span","sym",r.value));
+      o.appendChild(el("span","nm",r.name||""));
+      if(r.tag) o.appendChild(el("span","tp",r.tag));
+      /* mousedown, not click: blur fires first on click and would close the
+         menu out from under the selection. */
+      o.onmousedown=function(e){ e.preventDefault(); pick(i); };
+      menu.appendChild(o);
+    });
+    if(!rows.length) menu.appendChild(el("div","cnone","No match. Try a symbol or a name."));
+    open();
+  }
+
+  function busy(){
+    menu.innerHTML="";
+    var b=el("div","cbusy"); b.appendChild(el("span","spin"));
+    b.appendChild(el("span",null," Searching\u2026"));
+    menu.appendChild(b); open();
+  }
+
+  function pick(i){
+    var r=rows[i]; if(!r) return;
+    inp.value=r.value; close(); chLoad();
+  }
+
+  function showPresets(){
+    rows=presets.map(function(p){ return {value:p[0],name:p[1],tag:null}; });
+    sel=-1; paint();
+  }
+
+  function search(q){
+    var my=++seq;
+    busy();
+    jfetch("/api/funds?limit=25&q="+encodeURIComponent(q)).then(function(res){
+      if(my!==seq) return;                 /* a newer keystroke already won */
+      /* A failed lookup is not an empty result. Saying "no match" when the
+         upstream 502'd sends the user hunting for a symbol that exists. */
+      if(!res.ok||!res.data){
+        rows=[]; sel=-1; menu.innerHTML="";
+        menu.appendChild(el("div","cnone","Lookup failed \u2014 "+failMsg(res)));
+        open(); return;
+      }
+      var list=res.data.results||[];
+      rows=[];
+      list.forEach(function(h){
+        var code=h.code||h.symbol||"";
+        if(!code) return;
+        var v=(h.exchange&&h.exchange!=="US")?(code+"."+h.exchange):code;
+        rows.push({value:v,name:h.name||"",tag:h.type||null});
+      });
+      sel=rows.length?0:-1;
+      paint();
+    }).catch(function(){ if(my===seq) close(); });   /* a failed lookup must not break typing */
+  }
+
+  inp.addEventListener("input",function(){
+    if(timer) clearTimeout(timer);
+    var q=inp.value.trim();
+    if(!q){ seq++; showPresets(); return; }
+    timer=setTimeout(function(){ search(q); },220);
+  });
+  inp.addEventListener("focus",function(){ if(!inp.value.trim()) showPresets(); });
+  inp.addEventListener("blur",function(){ setTimeout(close,140); });
+  inp.addEventListener("keydown",function(e){
+    var isOpen=menu.classList.contains("on");
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+      if(!isOpen){ showPresets(); return; }
+      e.preventDefault();
+      if(!rows.length) return;
+      sel=sel+(e.key==="ArrowDown"?1:-1);
+      if(sel<0) sel=rows.length-1;
+      if(sel>rows.length-1) sel=0;
+      paint();
+      var n=menu.children[sel];
+      if(n&&n.scrollIntoView) n.scrollIntoView({block:"nearest"});
+      return;
+    }
+    if(e.key==="Enter"){
+      e.preventDefault();
+      if(isOpen&&sel>=0&&rows.length) pick(sel);
+      else { close(); chLoad(); }
+      return;
+    }
+    if(e.key==="Escape"){ close(); }
+  });
+}
+
 /* ---------------------------------------------------------------- controls */
 (function chInit(){
-  var tl=document.getElementById("chTickerList");
-  CH_TICKERS.forEach(function(t){ var o=el("option"); o.value=t; tl.appendChild(o); });
-  var bl=document.getElementById("chBenchList");
-  CH_BENCHES.forEach(function(b){ var o=el("option"); o.value=b[0]; o.label=b[0]+" \u2014 "+b[1];
-    o.textContent=b[1]; bl.appendChild(o); });
+  chCombo("chTicker","chTickerMenu",CH_TICKERS);
+  chCombo("chBench","chBenchMenu",CH_BENCHES);
 
   var box=document.getElementById("chPeriods");
   CH_PERIODS.forEach(function(p){
@@ -1100,11 +1269,8 @@ function chTicks(lo,hi,target){
   });
 
   document.getElementById("chGo").onclick=chLoad;
-  ["chTicker","chBench"].forEach(function(id){
-    document.getElementById(id).addEventListener("keydown",function(e){
-      if(e.key==="Enter"){ e.preventDefault(); chLoad(); }
-    });
-  });
+  /* Enter is owned by the combo below: it commits the highlighted match if the
+     menu is open, and renders otherwise. */
 
   var tab=document.querySelector('.tab[data-tab="charts"]');
   if(tab) tab.addEventListener("click",function(){ if(!CH.loaded) chLoad(); });
