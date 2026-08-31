@@ -296,9 +296,11 @@ summary:hover{color:var(--gold-hi)}
     <section class="panel" id="p-charts">
       <div class="eyebrow">Relative Performance</div>
       <h2 class="display">Vista<em>Charts.</em></h2>
-      <p class="lede">Total-return history for any listed security against a benchmark, over
-        3 months to 10 years. Series are dividend- and split-adjusted, rebased to zero at the
-        start of the window, and intersected on common trading days so the comparison is honest.</p>
+      <p class="lede">Total-return history for any listed security against a benchmark, from
+        3 months to max available history. Series are dividend- and split-adjusted, rebased to
+        zero at the start of the window, and intersected on common trading days so the comparison
+        is honest. Trailing and calendar-year tables are measured over full common history,
+        whatever window the chart shows.</p>
 
       <div class="card">
         <div class="chartctrl">
@@ -325,15 +327,28 @@ summary:hover{color:var(--gold-hi)}
         <div class="meta" id="chMeta"></div>
       </div>
 
+      <div class="card" id="chTrailCard" style="display:none">
+        <h3>Trailing returns</h3>
+        <div class="tblwrap"><table id="chTrail"></table></div>
+        <div class="meta" id="chTrailMeta"></div>
+      </div>
+
+      <div class="card" id="chYearsCard" style="display:none">
+        <h3>Calendar years</h3>
+        <div class="tblwrap"><table id="chYears"></table></div>
+        <div class="meta" id="chYearsMeta"></div>
+      </div>
+
       <div class="card" id="chStatsCard" style="display:none">
-        <h3>Return &amp; risk</h3>
+        <h3>Return &amp; risk &mdash; selected window</h3>
         <div class="tblwrap"><table id="chStats"></table></div>
         <div class="meta">Volatility and tracking error are annualised from daily returns (&radic;252).
           Annualised return is shown only for windows longer than about 13 months — annualising a
-          shorter window converts noise into a headline.</div>
+          shorter window converts noise into a headline. Sharpe, Sortino and alpha assume a 0%
+          risk-free rate; capture ratios are computed on monthly returns.</div>
       </div>
 
-      <div class="stamp"><em>V</em>0.19 BUILD &middot; VistaCharts &middot; EODHD total return</div>
+      <div class="stamp"><em>V</em>0.20 BUILD &middot; VistaCharts &middot; EODHD total return</div>
     </section>
 
     <!-- ASK -->
@@ -519,7 +534,7 @@ function renderNav(){
 
     var g=el("div","dgroup"); if(q) g.classList.add("open");
     var h=el("button","dhead");
-    h.appendChild(el("span","chev","\u25B6"));
+    h.appendChild(el("span","chev","▶"));
     h.appendChild(el("span",null,d.label));
     h.appendChild(el("span","dcount",tools.length));
     h.onclick=function(){g.classList.toggle("open");};
@@ -544,7 +559,7 @@ function renderNav(){
     nav.appendChild(g);
   });
 
-  if(shown===0) nav.appendChild(el("div","empty-state","No tools match \u201C"+q+"\u201D"));
+  if(shown===0) nav.appendChild(el("div","empty-state","No tools match “"+q+"”"));
 }
 document.getElementById("filter").oninput=function(){ if(CAT) renderNav(); };
 
@@ -730,7 +745,7 @@ function renderResult(out,d,t,ms){
     tb.appendChild(tbody);
     var w=el("div","tblwrap"); w.appendChild(tb); card.appendChild(w);
     card.appendChild(el("div","meta",
-      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in \u201C"+found.key+"\u201D"+
+      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in “"+found.key+"”"+
       (found.rows.length>200?" (first 200 shown)":"")+
       (cols.length>=14?" · columns capped at 14 — see raw JSON":"")));
   } else {
@@ -1010,7 +1025,7 @@ function doAsk(){
 --------------------------------------------------------------------------- */
 var CH = { period:"1Y", data:null, loaded:false, req:0 };
 
-var CH_PERIODS = ["3M","YTD","1Y","3Y","5Y","10Y"];
+var CH_PERIODS = ["3M","YTD","1Y","3Y","5Y","10Y","MAX"];
 var CH_TICKERS = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","BRK-B","JPM","XOM","UNH",
                   "VTI","VOO","QQQ","SCHD","VIG","VYM","ARKK","BND"];
 var CH_BENCHES = [
@@ -1021,9 +1036,9 @@ var CH_BENCHES = [
 ];
 var CH_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function chPct(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "\u2014";
-  var v=x*100; return (v>=0?"+":"\u2212")+Math.abs(v).toFixed(dp===undefined?2:dp)+"%"; }
-function chNum(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "\u2014";
+function chPct(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
+  var v=x*100; return (v>=0?"+":"−")+Math.abs(v).toFixed(dp===undefined?2:dp)+"%"; }
+function chNum(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
   return x.toFixed(dp===undefined?2:dp); }
 function chCls(x){ return (x===null||x===undefined||!isFinite(x))?"":(x>=0?"up":"down"); }
 function chDate(iso,longform){
@@ -1033,7 +1048,19 @@ function chDate(iso,longform){
 }
 function chDateShort(iso,wide){
   var p=String(iso).split("-"); var m=CH_MONTHS[parseInt(p[1],10)-1]||"";
-  return wide ? m+" \u2019"+p[0].slice(2) : m+" "+parseInt(p[2],10);
+  return wide ? m+" ’"+p[0].slice(2) : m+" "+parseInt(p[2],10);
+}
+
+/* Y-axis label. A MAX window on a long-lived stock can run to five-digit
+   cumulative percentages; "30k%" keeps the gutter legible where "30000%"
+   would spill out of it. */
+function chYLab(t,span){
+  var v=t*100;
+  if(Math.abs(v)>=1000){
+    var k=v/1000;
+    return (Math.abs(k)>=10?k.toFixed(0):k.toFixed(1).replace(/\.0$/,""))+"k%";
+  }
+  return v.toFixed(span<0.12?1:0)+"%";
 }
 
 /* Axis ticks on human numbers (…1%, 2%, 5%, 10%…) rather than range/N. */
@@ -1051,7 +1078,7 @@ function chTicks(lo,hi,target){
   var tl=document.getElementById("chTickerList");
   CH_TICKERS.forEach(function(t){ var o=el("option"); o.value=t; tl.appendChild(o); });
   var bl=document.getElementById("chBenchList");
-  CH_BENCHES.forEach(function(b){ var o=el("option"); o.value=b[0]; o.label=b[0]+" \u2014 "+b[1];
+  CH_BENCHES.forEach(function(b){ var o=el("option"); o.value=b[0]; o.label=b[0]+" — "+b[1];
     o.textContent=b[1]; bl.appendChild(o); });
 
   var box=document.getElementById("chPeriods");
@@ -1089,10 +1116,12 @@ function chLoad(){
   document.getElementById("chLegend").innerHTML="";
   document.getElementById("chReadout").innerHTML="";
   document.getElementById("chStatsCard").style.display="none";
+  document.getElementById("chTrailCard").style.display="none";
+  document.getElementById("chYearsCard").style.display="none";
   document.getElementById("chBox").innerHTML=
     '<div class="empty-state" style="padding:60px 0"><span class="spin"></span> '+
     'Loading '+esc(ticker.toUpperCase())+(bench?" vs "+esc(bench.toUpperCase()):"")+
-    " \u00b7 "+esc(CH.period)+"\u2026</div>";
+    " · "+esc(CH.period)+"…</div>";
   document.getElementById("chMeta").textContent="";
 
   var url="/api/vistacharts?ticker="+encodeURIComponent(ticker)+
@@ -1103,7 +1132,7 @@ function chLoad(){
     if(myReq!==CH.req) return;              /* a newer request already won */
     if(!res.ok||!res.data) throw new Error(failMsg(res));
     CH.data=res.data;
-    chDraw(res.data); chStats(res.data);
+    chDraw(res.data); chStats(res.data); chTables(res.data); chNotes(res.data);
   }).catch(function(e){ if(myReq===CH.req) chFail(e.message); });
 }
 
@@ -1112,7 +1141,17 @@ function chFail(msg){
   document.getElementById("chBanner").innerHTML=
     '<div class="note bad">'+esc(msg)+"</div>";
   document.getElementById("chStatsCard").style.display="none";
+  document.getElementById("chTrailCard").style.display="none";
+  document.getElementById("chYearsCard").style.display="none";
   document.getElementById("chMeta").textContent="";
+}
+
+function chNotes(d){
+  if(!d.notes || !d.notes.length) return;
+  var b=document.getElementById("chBanner");
+  d.notes.forEach(function(n){
+    var div=el("div","note gap",n); b.appendChild(div);
+  });
 }
 
 /* -------------------------------------------------------------------- draw */
@@ -1146,7 +1185,7 @@ function chDraw(d){
          '" stroke-width="1"/>';
     svg+='<text x="'+(padL-9)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" '+
          'font-family="ui-monospace,Menlo,monospace" font-size="10.5" fill="'+
-         (zero?"#8794A1":"#5A6672")+'">'+(t*100).toFixed(Math.abs(hi-lo)<0.12?1:0)+'%</text>';
+         (zero?"#8794A1":"#5A6672")+'">'+chYLab(t,hi-lo)+'</text>';
   });
 
   /* x labels */
@@ -1210,8 +1249,8 @@ function chDraw(d){
   }
 
   document.getElementById("chMeta").textContent=
-    d.periodLabel+" \u00b7 "+chDate(d.from,true)+" \u2192 "+chDate(d.to,true)+" \u00b7 "+
-    fmt(d.tradingDays)+" common trading days \u00b7 total return, dividend + split adjusted \u00b7 EODHD";
+    d.periodLabel+" · "+chDate(d.from,true)+" → "+chDate(d.to,true)+" · "+
+    fmt(d.tradingDays)+" common trading days · total return, dividend + split adjusted · EODHD";
 
   chScrub(d,{W:W,padL:padL,plotW:plotW,n:n,X:X,Y:Y,colors:COLORS});
   chReadoutAt(d,n-1);
@@ -1298,30 +1337,109 @@ function chStats(d){
   if(d.series.some(function(s){return s.annualized!==null;}))
     row("Annualised (CAGR)",pcts("annualized"),chCls);
   row("Volatility (ann.)",d.series.map(function(s){
-    return {raw:null,txt:s.volatility===null?"\u2014":(s.volatility*100).toFixed(2)+"%"};}));
+    return {raw:null,txt:s.volatility===null||s.volatility===undefined?"—":
+            (s.volatility*100).toFixed(2)+"%"};}));
+  row("Sharpe ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sharpe)};}));
+  row("Sortino ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sortino)};}));
   row("Max drawdown",pcts("maxDrawdown"),chCls);
+  row("Drawdown window",d.series.map(function(s){
+    if(!s.drawdownPeak||!s.drawdownTrough) return {raw:null,txt:"—"};
+    return {raw:null,txt:chDate(s.drawdownPeak,true)+" → "+chDate(s.drawdownTrough,true)+
+            (s.drawdownRecovered?" · rec. "+chDate(s.drawdownRecovered,true):
+             " · not recovered")};}));
   row("Best day",d.series.map(function(s){
     return {raw:s.best?s.best.value:null,
-            txt:s.best?chPct(s.best.value)+"  "+chDate(s.best.date):"\u2014"};}),chCls);
+            txt:s.best?chPct(s.best.value)+"  "+chDate(s.best.date):"—"};}),chCls);
   row("Worst day",d.series.map(function(s){
     return {raw:s.worst?s.worst.value:null,
-            txt:s.worst?chPct(s.worst.value)+"  "+chDate(s.worst.date):"\u2014"};}),chCls);
+            txt:s.worst?chPct(s.worst.value)+"  "+chDate(s.worst.date):"—"};}),chCls);
+  row("Positive days",d.series.map(function(s){
+    return {raw:null,txt:s.positiveDays===null||s.positiveDays===undefined?"—":
+            (s.positiveDays*100).toFixed(0)+"%"};}));
 
   var rel=d.relative;
   if(rel){
+    var ratio=function(x){ return x===null||x===undefined||!isFinite(x)?"—":
+      (x*100).toFixed(0)+"%"; };
     var span2=function(txt,cls){
       var tr=el("tr"); tr.appendChild(el("td",null,txt[0]));
       var td=el("td","num "+(cls||""),txt[1]); td.colSpan=d.series.length;
       tr.appendChild(td); tb.appendChild(tr);
     };
     span2(["Excess return vs "+d.series[1].symbol,chPct(rel.excessReturn)],chCls(rel.excessReturn));
+    span2(["Alpha (ann.)",chPct(rel.alpha)],chCls(rel.alpha));
     span2(["Beta to "+d.series[1].symbol,chNum(rel.beta)]);
     span2(["Correlation",chNum(rel.correlation)]);
-    span2(["Tracking error (ann.)",rel.trackingError===null?"\u2014":
+    span2(["R²",chNum(rel.rSquared)]);
+    span2(["Tracking error (ann.)",rel.trackingError===null||rel.trackingError===undefined?"—":
            (rel.trackingError*100).toFixed(2)+"%"]);
+    span2(["Information ratio",chNum(rel.informationRatio)]);
+    span2(["Up capture (monthly)",ratio(rel.upCapture)]);
+    span2(["Down capture (monthly)",ratio(rel.downCapture)]);
   }
   t.appendChild(tb);
   card.style.display="";
+}
+
+/* --------------------------------------------------- multi-period tables */
+function chTables(d){
+  /* A cached pre-0.20 payload has no trailing/calendarYears - degrade to
+     the chart rather than throwing mid-render. */
+  if(!d.trailing || !d.calendarYears){
+    document.getElementById("chTrailCard").style.display="none";
+    document.getElementById("chYearsCard").style.display="none";
+    return;
+  }
+  var two=d.series.length>1;
+  var tSym=d.series[0].symbol, bSym=two?d.series[1].symbol:null;
+
+  function head(first){
+    var h=el("thead"), r=el("tr");
+    r.appendChild(el("th",null,first));
+    var th1=el("th",null,tSym); th1.style.textAlign="right"; r.appendChild(th1);
+    if(two){
+      var th2=el("th",null,bSym); th2.style.textAlign="right"; r.appendChild(th2);
+      var th3=el("th",null,"+/−"); th3.style.textAlign="right"; r.appendChild(th3);
+    }
+    h.appendChild(r); return h;
+  }
+  function tr(label,a,b){
+    var r=el("tr"); r.appendChild(el("td",null,label));
+    r.appendChild(el("td","num "+chCls(a),chPct(a)));
+    if(two){
+      r.appendChild(el("td","num "+chCls(b),chPct(b)));
+      var ex=(a!==null&&a!==undefined&&b!==null&&b!==undefined&&isFinite(a)&&isFinite(b))
+             ? a-b : null;
+      r.appendChild(el("td","num "+chCls(ex),chPct(ex)));
+    }
+    return r;
+  }
+
+  var tt=document.getElementById("chTrail"); tt.innerHTML="";
+  tt.appendChild(head("Window"));
+  var tb=el("tbody");
+  d.trailing.forEach(function(t){
+    tb.appendChild(tr(t.window+(t.annualized?" (ann.)":""),t.return,t.benchmark));
+  });
+  tt.appendChild(tb);
+  document.getElementById("chTrailMeta").textContent=
+    "Measured back from "+chDate(d.asOf,true)+" over full common history, since "+
+    chDate(d.historyFrom,true)+". Windows over ~13 months are annualised; "+
+    "— means the window opens before the data does.";
+  document.getElementById("chTrailCard").style.display="";
+
+  var ty=document.getElementById("chYears"); ty.innerHTML="";
+  ty.appendChild(head("Year"));
+  var yb=el("tbody"), partial=false;
+  d.calendarYears.slice().reverse().forEach(function(y){
+    partial=partial||y.partial;
+    yb.appendChild(tr(y.year+(y.partial?"*":""),y.return,y.benchmark));
+  });
+  ty.appendChild(yb);
+  document.getElementById("chYearsMeta").textContent=
+    (partial?"* partial year. ":"")+
+    "Total returns, dividends reinvested; each full year measures Dec 31 to Dec 31.";
+  document.getElementById("chYearsCard").style.display="";
 }
 </script>
 </body>
