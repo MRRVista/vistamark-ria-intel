@@ -1211,8 +1211,25 @@ function chCombo(inputId,menuId,presets){
       list.forEach(function(h){
         var code=h.code||h.symbol||"";
         if(!code) return;
-        var v=(h.exchange&&h.exchange!=="US")?(code+"."+h.exchange):code;
-        rows.push({value:v,name:h.name||"",tag:h.type||null});
+        var us=(h.exchange==="US");
+        rows.push({
+          value: us?code:(code+"."+(h.exchange||"")),
+          code: code.toUpperCase(), us: us,
+          name: h.name||"", tag: h.type||null
+        });
+      });
+      /* EODHD returns every listing of a name, ordered so the German venues
+         lead: live, "MSF" answered MSF.XETRA, MSF.F, MSF.STU, MSF.HM... with
+         MSFT eighth. Vistamark's universe is US-listed, so US venues sort
+         first, then an exact code match, then the shortest code - the closest
+         thing to what was actually typed. Non-US listings stay reachable
+         immediately below rather than being filtered out. */
+      var qq=q.toUpperCase();
+      rows.sort(function(a,b){
+        if(a.us!==b.us) return a.us?-1:1;
+        var ax=(a.code===qq)?0:1, bx=(b.code===qq)?0:1;
+        if(ax!==bx) return ax-bx;
+        return a.code.length-b.code.length;
       });
       sel=rows.length?0:-1;
       paint();
