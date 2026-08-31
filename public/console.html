@@ -433,11 +433,11 @@ var BACKING_LABEL = {postgres:"Postgres", "live-api":"Live API", hybrid:"Hybrid"
 function el(tag, cls, txt){var e=document.createElement(tag); if(cls)e.className=cls;
   if(txt!==undefined&&txt!==null)e.textContent=String(txt); return e;}
 function esc(s){var d=document.createElement("div"); d.textContent=String(s==null?"":s); return d.innerHTML;}
-function fmt(n){ if(n===null||n===undefined)return "—";
+function fmt(n){ if(n===null||n===undefined)return "\u2014";
   if(typeof n==="number")return n.toLocaleString("en-US"); return String(n);}
 
 /* ---------------------------------------------------------------------------
-   jfetch — read the body as TEXT first, then attempt JSON.
+   jfetch \u2014 read the body as TEXT first, then attempt JSON.
 
    Calling response.json() directly is what produced
    "Unexpected token 'A', \"An error o\"... is not valid JSON": when a Vercel
@@ -458,7 +458,7 @@ function jfetch(url, opts){
   });
 }
 
-/* Turn any failure — JSON error body, HTML error page, timeout — into one
+/* Turn any failure \u2014 JSON error body, HTML error page, timeout \u2014 into one
    sentence a human can act on. */
 function failMsg(res){
   if(res.parseErr){
@@ -483,7 +483,7 @@ jfetch("/api/auth/me").then(function(res){
   var d = res.data;
   if(res.ok && d && d.email){
     var k = d.principal && d.principal.kind ? " ("+d.principal.kind+")" : "";
-    document.getElementById("who").textContent = d.email+k+" · ";
+    document.getElementById("who").textContent = d.email+k+" \u00b7 ";
   }
 }).catch(function(){});
 
@@ -518,7 +518,7 @@ function renderNav(){
   document.getElementById("pillDomains").textContent=CAT.counts.domains+" domains";
   var dbp=document.getElementById("pillDb");
   if(CAT.health&&CAT.health.ok){
-    dbp.textContent="db "+(CAT.health.dbReady?"ready":"down")+" · "+fmt(CAT.health.firmCount)+" firms";
+    dbp.textContent="db "+(CAT.health.dbReady?"ready":"down")+" \u00b7 "+fmt(CAT.health.firmCount)+" firms";
   } else { dbp.textContent="db unknown"; }
 
   var shown=0;
@@ -534,7 +534,7 @@ function renderNav(){
 
     var g=el("div","dgroup"); if(q) g.classList.add("open");
     var h=el("button","dhead");
-    h.appendChild(el("span","chev","▶"));
+    h.appendChild(el("span","chev","\u25b6"));
     h.appendChild(el("span",null,d.label));
     h.appendChild(el("span","dcount",tools.length));
     h.onclick=function(){g.classList.toggle("open");};
@@ -559,7 +559,7 @@ function renderNav(){
     nav.appendChild(g);
   });
 
-  if(shown===0) nav.appendChild(el("div","empty-state","No tools match “"+q+"”"));
+  if(shown===0) nav.appendChild(el("div","empty-state","No tools match \u201c"+q+"\u201d"));
 }
 document.getElementById("filter").oninput=function(){ if(CAT) renderNav(); };
 
@@ -581,7 +581,7 @@ function showTool(t,d){
     v.appendChild(el("div",cls,t.note));
   }
   if(!t.registered){
-    v.appendChild(el("div","note bad","This tool is in the catalog but is not registered on the server — calls will 404."));
+    v.appendChild(el("div","note bad","This tool is in the catalog but is not registered on the server \u2014 calls will 404."));
   }
 
   /* form generated from inputSchema so it can never drift from the handler */
@@ -664,8 +664,8 @@ function runTool(t,props,required,btn,out){
     out.innerHTML='<div class="note bad">Missing required: '+esc(col.missing.join(", "))+'</div>';
     return;
   }
-  btn.disabled=true; btn.textContent="Running…";
-  out.innerHTML='<div class="meta"><span class="spin"></span> Calling '+esc(t.name)+'…</div>';
+  btn.disabled=true; btn.textContent="Running\u2026";
+  out.innerHTML='<div class="meta"><span class="spin"></span> Calling '+esc(t.name)+'\u2026</div>';
   var t0=Date.now();
 
   jfetch("/api/admin/query",{
@@ -711,13 +711,13 @@ function renderResult(out,d,t,ms){
   var res=d.result;
   var card=el("div","card"); card.appendChild(el("h3","Result"));
 
-  /* An empty result from a never-ingested table is NOT a finding — say so
+  /* An empty result from a never-ingested table is NOT a finding \u2014 say so
      here, at the point of confusion, not only on the status board. */
   var found=findRows(res);
   var isEmpty = !found && res && (res.total===0 || (Array.isArray(res.rows)&&res.rows.length===0));
   if(isEmpty && t.probe==="empty"){
     card.appendChild(el("div","note gap",
-      "Empty because this source has never been ingested — not because nothing exists. "+(t.note||"")));
+      "Empty because this source has never been ingested \u2014 not because nothing exists. "+(t.note||"")));
   }
 
   if(found){
@@ -735,7 +735,7 @@ function renderResult(out,d,t,ms){
       cols.forEach(function(c){
         var v=r[c], td;
         if(typeof v==="number"){ td=el("td","num",fmt(v)); }
-        else if(v===null||v===undefined){ td=el("td",null,"—"); td.style.color="var(--faint)"; }
+        else if(v===null||v===undefined){ td=el("td",null,"\u2014"); td.style.color="var(--faint)"; }
         else if(typeof v==="object"){ td=el("td","mono",JSON.stringify(v).slice(0,80)); }
         else { td=el("td",null,String(v)); td.title=String(v); }
         tr.appendChild(td);
@@ -745,9 +745,9 @@ function renderResult(out,d,t,ms){
     tb.appendChild(tbody);
     var w=el("div","tblwrap"); w.appendChild(tb); card.appendChild(w);
     card.appendChild(el("div","meta",
-      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in “"+found.key+"”"+
+      found.rows.length+" row"+(found.rows.length===1?"":"s")+" in \u201c"+found.key+"\u201d"+
       (found.rows.length>200?" (first 200 shown)":"")+
-      (cols.length>=14?" · columns capped at 14 — see raw JSON":"")));
+      (cols.length>=14?" \u00b7 columns capped at 14 \u2014 see raw JSON":"")));
   } else {
     card.appendChild(el("pre",null,JSON.stringify(res,null,2)));
   }
@@ -755,7 +755,7 @@ function renderResult(out,d,t,ms){
   var det=el("details"); det.appendChild(el("summary","Raw JSON"));
   det.appendChild(el("pre",null,JSON.stringify(res,null,2)));
   card.appendChild(det);
-  card.appendChild(el("div","meta","server "+fmt(d.duration_ms)+" ms · round trip "+fmt(ms)+" ms"));
+  card.appendChild(el("div","meta","server "+fmt(d.duration_ms)+" ms \u00b7 round trip "+fmt(ms)+" ms"));
   out.appendChild(card);
 }
 
@@ -775,7 +775,7 @@ function renderStatus(){
     var m=[];
     if(CAT.drift.uncatalogued.length) m.push("Uncatalogued (in registry, not in taxonomy): "+CAT.drift.uncatalogued.join(", "));
     if(CAT.drift.missingFromRegistry.length) m.push("Missing from registry (in taxonomy, not on server): "+CAT.drift.missingFromRegistry.join(", "));
-    db.appendChild(el("div","note bad","Catalog drift — "+m.join(" · ")));
+    db.appendChild(el("div","note bad","Catalog drift \u2014 "+m.join(" \u00b7 ")));
   }
 
   var tb=document.getElementById("matrix"); tb.innerHTML="";
@@ -791,7 +791,7 @@ function renderStatus(){
       tr.appendChild(el("td",null,d.label));
       tr.appendChild(el("td",null,BACKING_LABEL[t.backing]||t.backing));
       tr.appendChild(el("td",null,PROBE_LABEL[t.probe]||t.probe));
-      var dt=el("td",null,t.note?t.note:"—");
+      var dt=el("td",null,t.note?t.note:"\u2014");
       dt.style.whiteSpace="normal"; dt.style.maxWidth="440px";
       dt.style.fontSize="11px"; dt.style.color=t.note?"var(--muted)":"var(--faint)";
       tr.appendChild(dt);
@@ -803,7 +803,7 @@ function renderStatus(){
   var ps=CAT.probeSource||{};
   document.getElementById("probeMeta").textContent =
     "Snapshot from "+(ps.endpoint||"selftest")+" at "+(ps.ranAt||"unknown")+
-    " — "+(ps.passed||0)+" passed / "+(ps.failed||0)+" failed of "+(ps.checksRun||0)+
+    " \u2014 "+(ps.passed||0)+" passed / "+(ps.failed||0)+" failed of "+(ps.checksRun||0)+
     " checks. These are a starting hint; run the selftest below for live truth.";
 
   var pb=document.getElementById("pipeBox"); pb.innerHTML="";
@@ -822,7 +822,7 @@ function renderStatus(){
       tr.appendChild(st);
       tr.appendChild(el("td",null,(h.startedAt||"").replace("T"," ").slice(0,19)));
       tr.appendChild(el("td","num",fmt(h.rowsProcessed)));
-      var er=el("td",null,h.error||"—");
+      var er=el("td",null,h.error||"\u2014");
       er.style.whiteSpace="normal"; er.style.maxWidth="420px"; er.style.fontSize="11px";
       er.style.color=h.error?"var(--muted)":"var(--faint)";
       tr.appendChild(er);
@@ -830,7 +830,7 @@ function renderStatus(){
     });
     t2.appendChild(b2);
     var w2=el("div","tblwrap"); w2.appendChild(t2); pb.appendChild(w2);
-    pb.appendChild(el("div","meta","Latest run per ingest family, errors first. A family absent here has never created a run record — its handler is not being reached at all."));
+    pb.appendChild(el("div","meta","Latest run per ingest family, errors first. A family absent here has never created a run record \u2014 its handler is not being reached at all."));
   } else {
     pb.textContent = (CAT.health&&CAT.health.error) ? ("Health overlay unavailable: "+CAT.health.error)
                                                    : "No pipeline health returned.";
@@ -839,14 +839,14 @@ function renderStatus(){
 
 document.getElementById("stBtn").onclick=function(){
   var b=this, o=document.getElementById("stOut");
-  b.disabled=true; b.textContent="Running 36 checks…";
-  o.innerHTML='<div class="meta" style="margin-top:14px"><span class="spin"></span> About 8 seconds…</div>';
+  b.disabled=true; b.textContent="Running 36 checks\u2026";
+  o.innerHTML='<div class="meta" style="margin-top:14px"><span class="spin"></span> About 8 seconds\u2026</div>';
   jfetch("/api/selftest").then(function(res){
     b.disabled=false; b.textContent="Re-run selftest";
     if(!res.data){ o.innerHTML='<div class="note bad">'+esc(failMsg(res))+'</div>'; return; }
     var d=res.data;
     o.innerHTML="";
-    o.appendChild(el("div","meta",d.passed+" passed · "+d.failed+" failed of "+d.checksRun+
+    o.appendChild(el("div","meta",d.passed+" passed \u00b7 "+d.failed+" failed of "+d.checksRun+
       " checks in "+fmt(d.totalMs)+" ms (per-check budget "+fmt(d.perCheckTimeoutMs)+" ms)"));
     var t=el("table"); var th=el("thead"); var tr0=el("tr");
     ["","Check","Tool","ms","Detail"].forEach(function(h){ tr0.appendChild(el("th",null,h)); });
@@ -884,7 +884,7 @@ function renderAskCaps(){
   var p=ASKCAP.providers||{}, any=false;
   [["anthropic","Anthropic"],["openrouter","OpenRouter"]].forEach(function(x){
     var cfg=p[x[0]]||{};
-    var o=el("option",null,x[1]+(cfg.configured?" · "+(cfg.model||""):" (no key)"));
+    var o=el("option",null,x[1]+(cfg.configured?" \u00b7 "+(cfg.model||""):" (no key)"));
     o.value=x[0]; if(!cfg.configured) o.disabled=true; else any=true;
     sel.appendChild(o);
   });
@@ -938,7 +938,7 @@ function addMsg(kind,text,calls){
     var tr=el("div","trace");
     calls.forEach(function(c){
       var chip=el("span","tchip"+(c.ok?"":" bad"),
-        c.name+" · "+c.ms+"ms"+(c.truncated?" · trunc":"")+(c.ok?"":" · ERR"));
+        c.name+" \u00b7 "+c.ms+"ms"+(c.truncated?" \u00b7 trunc":"")+(c.ok?"":" \u00b7 ERR"));
       if(c.error) chip.title=c.error;
       tr.appendChild(chip);
     });
@@ -961,19 +961,19 @@ function doAsk(){
   var btn=document.getElementById("askGo");
   var scope=document.getElementById("askScope").value;
   var provider=document.getElementById("askProvider").value;
-  if(!provider){ addMsg("e","No provider selected — no API key is configured."); return; }
+  if(!provider){ addMsg("e","No provider selected \u2014 no API key is configured."); return; }
 
   addMsg("u",q);
   inp.value="";
-  btn.disabled=true; btn.textContent="Working…";
+  btn.disabled=true; btn.textContent="Working\u2026";
   var pending=addMsg("a","placeholder");
   var t0=Date.now();
 
-  /* Agentic runs legitimately take 30–90s. Show a live counter so a long run
+  /* Agentic runs legitimately take 30\u201390s. Show a live counter so a long run
      is visibly working rather than looking hung. */
   function tick(){
     var s=Math.round((Date.now()-t0)/1000);
-    pending.innerHTML='<span class="spin"></span> Randall is working… '+s+'s';
+    pending.innerHTML='<span class="spin"></span> Randall is working\u2026 '+s+'s';
   }
   tick();
   var timer=setInterval(tick,1000);
@@ -993,25 +993,25 @@ function doAsk(){
     body:JSON.stringify(payload)
   }).then(function(res){
     done();
-    if(!res.data){ addMsg("e","**Request failed** — "+failMsg(res)); return; }
+    if(!res.data){ addMsg("e","**Request failed** \u2014 "+failMsg(res)); return; }
     var d=res.data;
     if(!res.ok||d.error){
-      addMsg("e","**"+(res.status===503?"Not configured":"Error "+res.status)+"** — "+
+      addMsg("e","**"+(res.status===503?"Not configured":"Error "+res.status)+"** \u2014 "+
         (d.error||failMsg(res))+(d.remedy?"\n\n"+d.remedy:""));
       return;
     }
     addMsg("a",d.answer||"(empty answer)",d.toolCalls);
     HISTORY.push({role:"user",content:q});
     HISTORY.push({role:"assistant",content:d.answer||""});
-    var w=(d.warnings&&d.warnings.length)?" · "+d.warnings.join(" · "):"";
+    var w=(d.warnings&&d.warnings.length)?" \u00b7 "+d.warnings.join(" \u00b7 "):"";
     document.getElementById("askMeta").textContent=
-      d.provider+" · "+d.model+" · "+d.rounds+" round"+(d.rounds===1?"":"s")+
-      " · "+d.toolsExposed+" tools exposed · "+(d.toolCalls?d.toolCalls.length:0)+" calls · "+
-      fmt(d.usage?d.usage.inputTokens:0)+" in / "+fmt(d.usage?d.usage.outputTokens:0)+" out tokens · "+
-      fmt(Date.now()-t0)+" ms"+(d.randallRelay?" · Randall relay on":"")+w;
+      d.provider+" \u00b7 "+d.model+" \u00b7 "+d.rounds+" round"+(d.rounds===1?"":"s")+
+      " \u00b7 "+d.toolsExposed+" tools exposed \u00b7 "+(d.toolCalls?d.toolCalls.length:0)+" calls \u00b7 "+
+      fmt(d.usage?d.usage.inputTokens:0)+" in / "+fmt(d.usage?d.usage.outputTokens:0)+" out tokens \u00b7 "+
+      fmt(Date.now()-t0)+" ms"+(d.randallRelay?" \u00b7 Randall relay on":"")+w;
   }).catch(function(e){
     done();
-    addMsg("e","**Request failed** — "+e.message);
+    addMsg("e","**Request failed** \u2014 "+e.message);
   });
 }
 
@@ -1019,7 +1019,7 @@ function doAsk(){
    Rebased total-return chart, ticker vs benchmark, drawn as inline SVG.
 
    No chart library on purpose. The console ships zero third-party JS today
-   and the whole panel is one path element per series plus axes — pulling in
+   and the whole panel is one path element per series plus axes \u2014 pulling in
    a charting dependency to draw two lines would cost more than it buys and
    would be the only remote script on a page that is otherwise self-contained.
 --------------------------------------------------------------------------- */
@@ -1030,15 +1030,15 @@ var CH_TICKERS = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","BRK-B","JPM","XOM"
                   "VTI","VOO","QQQ","SCHD","VIG","VYM","ARKK","BND"];
 var CH_BENCHES = [
   ["SPY","S&P 500"],["VTI","US total market"],["QQQ","Nasdaq 100"],["IWM","US small cap"],
-  ["ACWI","MSCI ACWI — global"],["VEA","Developed ex-US"],["VWO","Emerging markets"],
+  ["ACWI","MSCI ACWI \u2014 global"],["VEA","Developed ex-US"],["VWO","Emerging markets"],
   ["AGG","US aggregate bond"],["TLT","Long Treasury"],["VNQ","US REITs"],
   ["GLD","Gold"],["DBC","Broad commodities"]
 ];
 var CH_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function chPct(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
-  var v=x*100; return (v>=0?"+":"−")+Math.abs(v).toFixed(dp===undefined?2:dp)+"%"; }
-function chNum(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
+function chPct(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "\u2014";
+  var v=x*100; return (v>=0?"+":"\u2212")+Math.abs(v).toFixed(dp===undefined?2:dp)+"%"; }
+function chNum(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "\u2014";
   return x.toFixed(dp===undefined?2:dp); }
 function chCls(x){ return (x===null||x===undefined||!isFinite(x))?"":(x>=0?"up":"down"); }
 function chDate(iso,longform){
@@ -1048,7 +1048,7 @@ function chDate(iso,longform){
 }
 function chDateShort(iso,wide){
   var p=String(iso).split("-"); var m=CH_MONTHS[parseInt(p[1],10)-1]||"";
-  return wide ? m+" ’"+p[0].slice(2) : m+" "+parseInt(p[2],10);
+  return wide ? m+" \u2019"+p[0].slice(2) : m+" "+parseInt(p[2],10);
 }
 
 /* Y-axis label. A MAX window on a long-lived stock can run to five-digit
@@ -1063,7 +1063,7 @@ function chYLab(t,span){
   return v.toFixed(span<0.12?1:0)+"%";
 }
 
-/* Axis ticks on human numbers (…1%, 2%, 5%, 10%…) rather than range/N. */
+/* Axis ticks on human numbers (\u20261%, 2%, 5%, 10%\u2026) rather than range/N. */
 function chTicks(lo,hi,target){
   var span=hi-lo; if(!(span>0)) return [lo];
   var raw=span/(target||5), mag=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)), norm=raw/mag;
@@ -1078,7 +1078,7 @@ function chTicks(lo,hi,target){
   var tl=document.getElementById("chTickerList");
   CH_TICKERS.forEach(function(t){ var o=el("option"); o.value=t; tl.appendChild(o); });
   var bl=document.getElementById("chBenchList");
-  CH_BENCHES.forEach(function(b){ var o=el("option"); o.value=b[0]; o.label=b[0]+" — "+b[1];
+  CH_BENCHES.forEach(function(b){ var o=el("option"); o.value=b[0]; o.label=b[0]+" \u2014 "+b[1];
     o.textContent=b[1]; bl.appendChild(o); });
 
   var box=document.getElementById("chPeriods");
@@ -1121,7 +1121,7 @@ function chLoad(){
   document.getElementById("chBox").innerHTML=
     '<div class="empty-state" style="padding:60px 0"><span class="spin"></span> '+
     'Loading '+esc(ticker.toUpperCase())+(bench?" vs "+esc(bench.toUpperCase()):"")+
-    " · "+esc(CH.period)+"…</div>";
+    " \u00b7 "+esc(CH.period)+"\u2026</div>";
   document.getElementById("chMeta").textContent="";
 
   var url="/api/vistacharts?ticker="+encodeURIComponent(ticker)+
@@ -1200,7 +1200,7 @@ function chDraw(d){
          esc(lab)+'</text>';
   }
 
-  /* series — benchmark first so the ticker line sits on top */
+  /* series \u2014 benchmark first so the ticker line sits on top */
   var order=d.series.map(function(s,i){return i;}).sort(function(a,b){return b-a;});
   order.forEach(function(si){
     var s=d.series[si], pts=s.points, path="";
@@ -1249,8 +1249,8 @@ function chDraw(d){
   }
 
   document.getElementById("chMeta").textContent=
-    d.periodLabel+" · "+chDate(d.from,true)+" → "+chDate(d.to,true)+" · "+
-    fmt(d.tradingDays)+" common trading days · total return, dividend + split adjusted · EODHD";
+    d.periodLabel+" \u00b7 "+chDate(d.from,true)+" \u2192 "+chDate(d.to,true)+" \u00b7 "+
+    fmt(d.tradingDays)+" common trading days \u00b7 total return, dividend + split adjusted \u00b7 EODHD";
 
   chScrub(d,{W:W,padL:padL,plotW:plotW,n:n,X:X,Y:Y,colors:COLORS});
   chReadoutAt(d,n-1);
@@ -1337,29 +1337,29 @@ function chStats(d){
   if(d.series.some(function(s){return s.annualized!==null;}))
     row("Annualised (CAGR)",pcts("annualized"),chCls);
   row("Volatility (ann.)",d.series.map(function(s){
-    return {raw:null,txt:s.volatility===null||s.volatility===undefined?"—":
+    return {raw:null,txt:s.volatility===null||s.volatility===undefined?"\u2014":
             (s.volatility*100).toFixed(2)+"%"};}));
   row("Sharpe ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sharpe)};}));
   row("Sortino ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sortino)};}));
   row("Max drawdown",pcts("maxDrawdown"),chCls);
   row("Drawdown window",d.series.map(function(s){
-    if(!s.drawdownPeak||!s.drawdownTrough) return {raw:null,txt:"—"};
-    return {raw:null,txt:chDate(s.drawdownPeak,true)+" → "+chDate(s.drawdownTrough,true)+
-            (s.drawdownRecovered?" · rec. "+chDate(s.drawdownRecovered,true):
-             " · not recovered")};}));
+    if(!s.drawdownPeak||!s.drawdownTrough) return {raw:null,txt:"\u2014"};
+    return {raw:null,txt:chDate(s.drawdownPeak,true)+" \u2192 "+chDate(s.drawdownTrough,true)+
+            (s.drawdownRecovered?" \u00b7 rec. "+chDate(s.drawdownRecovered,true):
+             " \u00b7 not recovered")};}));
   row("Best day",d.series.map(function(s){
     return {raw:s.best?s.best.value:null,
-            txt:s.best?chPct(s.best.value)+"  "+chDate(s.best.date):"—"};}),chCls);
+            txt:s.best?chPct(s.best.value)+"  "+chDate(s.best.date):"\u2014"};}),chCls);
   row("Worst day",d.series.map(function(s){
     return {raw:s.worst?s.worst.value:null,
-            txt:s.worst?chPct(s.worst.value)+"  "+chDate(s.worst.date):"—"};}),chCls);
+            txt:s.worst?chPct(s.worst.value)+"  "+chDate(s.worst.date):"\u2014"};}),chCls);
   row("Positive days",d.series.map(function(s){
-    return {raw:null,txt:s.positiveDays===null||s.positiveDays===undefined?"—":
+    return {raw:null,txt:s.positiveDays===null||s.positiveDays===undefined?"\u2014":
             (s.positiveDays*100).toFixed(0)+"%"};}));
 
   var rel=d.relative;
   if(rel){
-    var ratio=function(x){ return x===null||x===undefined||!isFinite(x)?"—":
+    var ratio=function(x){ return x===null||x===undefined||!isFinite(x)?"\u2014":
       (x*100).toFixed(0)+"%"; };
     var span2=function(txt,cls){
       var tr=el("tr"); tr.appendChild(el("td",null,txt[0]));
@@ -1370,8 +1370,8 @@ function chStats(d){
     span2(["Alpha (ann.)",chPct(rel.alpha)],chCls(rel.alpha));
     span2(["Beta to "+d.series[1].symbol,chNum(rel.beta)]);
     span2(["Correlation",chNum(rel.correlation)]);
-    span2(["R²",chNum(rel.rSquared)]);
-    span2(["Tracking error (ann.)",rel.trackingError===null||rel.trackingError===undefined?"—":
+    span2(["R\u00b2",chNum(rel.rSquared)]);
+    span2(["Tracking error (ann.)",rel.trackingError===null||rel.trackingError===undefined?"\u2014":
            (rel.trackingError*100).toFixed(2)+"%"]);
     span2(["Information ratio",chNum(rel.informationRatio)]);
     span2(["Up capture (monthly)",ratio(rel.upCapture)]);
@@ -1399,7 +1399,7 @@ function chTables(d){
     var th1=el("th",null,tSym); th1.style.textAlign="right"; r.appendChild(th1);
     if(two){
       var th2=el("th",null,bSym); th2.style.textAlign="right"; r.appendChild(th2);
-      var th3=el("th",null,"+/−"); th3.style.textAlign="right"; r.appendChild(th3);
+      var th3=el("th",null,"+/\u2212"); th3.style.textAlign="right"; r.appendChild(th3);
     }
     h.appendChild(r); return h;
   }
@@ -1425,7 +1425,7 @@ function chTables(d){
   document.getElementById("chTrailMeta").textContent=
     "Measured back from "+chDate(d.asOf,true)+" over full common history, since "+
     chDate(d.historyFrom,true)+". Windows over ~13 months are annualised; "+
-    "— means the window opens before the data does.";
+    "\u2014 means the window opens before the data does.";
   document.getElementById("chTrailCard").style.display="";
 
   var ty=document.getElementById("chYears"); ty.innerHTML="";
