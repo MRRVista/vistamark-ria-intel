@@ -1,9 +1,9 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 64 MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 73 MCP tools.
  *
  * WHY THIS EXISTS
  * ---------------
- * `lib/mcp/tools.ts` is a flat array of 64 tools. That is the right shape for
+ * `lib/mcp/tools.ts` is a flat array of 73 tools. That is the right shape for
  * an MCP client (which wants tools/list) and the wrong shape for a human
  * (who wants "show me the endowment tools"). This module adds the layer the
  * flat registry deliberately omits: which data DOMAIN a tool belongs to,
@@ -290,6 +290,22 @@ export const DOMAINS: CatalogDomain[] = [
       { name: "eodhd_fundamentals", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_news", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_screener", backing: "live-api", probe: "unprobed" },
+    ],
+  },
+  {
+    id: "prospects",
+    label: "Prospects / Zip Codes",
+    source: "First-party prospect database — purchased lists, assessor/voter exports, web forms, Randall, CRM (ingested via /api/prospects; PII, token-or-session gated)",
+    tools: [
+      { name: "prospects_zip_summary", backing: "postgres", probe: "unprobed", note: "Shipped 2026-09-03 with migration 0006 (prospect_zips seeded with 60521). Selftest covers zip-summary and a 60521 search; re-sync probes after the first production run." },
+      { name: "prospects_search", backing: "postgres", probe: "unprobed" },
+      { name: "prospect_lookup", backing: "postgres", probe: "unprobed" },
+      { name: "prospects_upsert", backing: "postgres", probe: "unprobed", note: "Write tool — never probed by selftest on purpose." },
+      { name: "prospects_import_csv", backing: "postgres", probe: "unprobed", note: "Write tool — never probed by selftest on purpose." },
+      { name: "prospect_update", backing: "postgres", probe: "unprobed", note: "Write tool — never probed by selftest on purpose." },
+      { name: "prospect_zip_targets", backing: "postgres", probe: "unprobed" },
+      { name: "prospects_export_crm", backing: "postgres", probe: "unprobed", note: "Read with an optional write (markSynced); selftest never passes markSynced." },
+      { name: "prospect_imports", backing: "postgres", probe: "unprobed" },
     ],
   },
   {

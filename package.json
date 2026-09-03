@@ -1,8 +1,8 @@
 {
   "name": "vistamark-ria-intel",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
-  "description": "Vistamark Intel — Form ADV + IRS EO BMF + ProPublica + DOL Form 5500 + IPEDS endowments + NACUBO benchmarks + SBA PPP loans + USAspending federal awards + SEC Form 13F holdings + FDIC bank financials + OFR systemic-risk/funding + SEC EDGAR company intel (full-text search, Form D & cross-market XBRL frames) + GLEIF LEI entity resolution + BDC (listed business development companies) + PPD public pensions + FRED/Treasury macro with curated market-signals layer + Daily Treasury Statement (daily TGA cash + fiscal flows incl. withheld-tax payroll signal) + one-call morning market brief (GET /api/market-brief for cron), + EODHD global market data (prices, quotes, fundamentals, news+sentiment, screener; keyed), normalized Postgres + live APIs, MCP server for Randall. Entra SSO gated through VistaCRM principals.",
+  "description": "Vistamark Intel — Form ADV + IRS EO BMF + ProPublica + DOL Form 5500 + IPEDS endowments + NACUBO benchmarks + SBA PPP loans + USAspending federal awards + SEC Form 13F holdings + FDIC bank financials + OFR systemic-risk/funding + SEC EDGAR company intel (full-text search, Form D & cross-market XBRL frames) + GLEIF LEI entity resolution + BDC (listed business development companies) + PPD public pensions + FRED/Treasury macro with curated market-signals layer + Daily Treasury Statement (daily TGA cash + fiscal flows incl. withheld-tax payroll signal) + one-call morning market brief (GET /api/market-brief for cron), + EODHD global market data (prices, quotes, fundamentals, news+sentiment, screener; keyed), + first-party zip-code prospect database (households + individuals with consent + wealth signals; CSV/XLSX/JSON intake, VistaCRM feed), normalized Postgres + live APIs, MCP server for Randall. Entra SSO gated through VistaCRM principals.",
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "vercel dev",
