@@ -13,6 +13,9 @@ import {
   uniqueIndex,
   primaryKey,
   pgEnum,
+  jsonb,
+  smallint,
+  char,
 } from "drizzle-orm/pg-core";
 
 export const registrationStatusEnum = pgEnum("registration_status", [
@@ -522,3 +525,180 @@ export type F13fFiling = typeof f13fFilings.$inferSelect;
 export type F13fFilingInsert = typeof f13fFilings.$inferInsert;
 export type F13fHolding = typeof f13fHoldings.$inferSelect;
 export type F13fHoldingInsert = typeof f13fHoldings.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Prospects (v0.21.0) — first-party zip-code prospecting database. PII: only
+// ever read behind requireAccessOrSession. See migrations/0006_prospects.sql.
+// ---------------------------------------------------------------------------
+
+export const prospectZips = pgTable("prospect_zips", {
+  zip5: char("zip5", { length: 5 }).primaryKey(),
+  city: text("city"),
+  state: varchar("state", { length: 2 }),
+  county: text("county"),
+  label: text("label"),
+  priority: smallint("priority").notNull().default(1),
+  active: boolean("active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const prospectImports = pgTable("prospect_imports", {
+  id: serial("id").primaryKey(),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  via: varchar("via", { length: 16 }).notNull(),
+  source: text("source").notNull(),
+  sourceDetail: text("source_detail"),
+  filename: text("filename"),
+  submittedBy: text("submitted_by"),
+  restrictZips: boolean("restrict_zips").notNull().default(false),
+  dryRun: boolean("dry_run").notNull().default(false),
+  rowsReceived: integer("rows_received").notNull().default(0),
+  rowsInserted: integer("rows_inserted").notNull().default(0),
+  rowsUpdated: integer("rows_updated").notNull().default(0),
+  rowsSkipped: integer("rows_skipped").notNull().default(0),
+  rowsRejected: integer("rows_rejected").notNull().default(0),
+  columnMap: jsonb("column_map").$type<Record<string, string>>(),
+  zipCounts: jsonb("zip_counts").$type<Record<string, number>>(),
+  errors: jsonb("errors").$type<Array<{ row: number; error: string }>>(),
+  status: varchar("status", { length: 16 }).notNull().default("running"),
+});
+
+export const prospectHouseholds = pgTable(
+  "prospect_households",
+  {
+    id: serial("id").primaryKey(),
+    addressKey: text("address_key").notNull().unique(),
+    addressLine1: text("address_line1").notNull(),
+    addressLine2: text("address_line2"),
+    city: text("city"),
+    state: varchar("state", { length: 2 }),
+    zip5: char("zip5", { length: 5 }).notNull(),
+    zip4: char("zip4", { length: 4 }),
+    county: text("county"),
+    latitude: numeric("latitude", { precision: 9, scale: 6 }),
+    longitude: numeric("longitude", { precision: 9, scale: 6 }),
+    householdName: text("household_name"),
+    homeValue: bigint("home_value", { mode: "number" }),
+    homeValueSource: text("home_value_source"),
+    homeValueAsOf: date("home_value_as_of"),
+    yearBuilt: integer("year_built"),
+    sqFt: integer("sq_ft"),
+    lotAcres: numeric("lot_acres", { precision: 8, scale: 3 }),
+    ownerOccupied: boolean("owner_occupied"),
+    purchaseDate: date("purchase_date"),
+    purchasePrice: bigint("purchase_price", { mode: "number" }),
+    estHouseholdIncome: bigint("est_household_income", { mode: "number" }),
+    estNetWorthBand: varchar("est_net_worth_band", { length: 32 }),
+    householdSize: smallint("household_size"),
+    wealthScore: smallint("wealth_score"),
+    wealthSignals: jsonb("wealth_signals").$type<Record<string, unknown>>().notNull().default({}),
+    tags: text("tags").array(),
+    notes: text("notes"),
+    vistacrmHouseholdId: text("vistacrm_household_id"),
+    wealthboxHouseholdId: text("wealthbox_household_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    zipIdx: index("prospect_households_zip_idx").on(t.zip5),
+    valueIdx: index("prospect_households_value_idx").on(t.homeValue),
+  })
+);
+
+export const prospects = pgTable(
+  "prospects",
+  {
+    id: serial("id").primaryKey(),
+    householdId: integer("household_id").references(() => prospectHouseholds.id, { onDelete: "set null" }),
+    personKey: text("person_key").notNull().unique(),
+    firstName: text("first_name"),
+    middleName: text("middle_name"),
+    lastName: text("last_name"),
+    suffix: text("suffix"),
+    fullName: text("full_name").notNull(),
+    email: text("email"),
+    emailNormalized: text("email_normalized"),
+    emailStatus: varchar("email_status", { length: 16 }).notNull().default("unknown"),
+    emailOptIn: boolean("email_opt_in"),
+    optInAt: timestamp("opt_in_at"),
+    optInSource: text("opt_in_source"),
+    doNotContact: boolean("do_not_contact").notNull().default(false),
+    doNotEmail: boolean("do_not_email").notNull().default(false),
+    doNotCall: boolean("do_not_call").notNull().default(false),
+    doNotMail: boolean("do_not_mail").notNull().default(false),
+    phone: text("phone"),
+    phoneMobile: text("phone_mobile"),
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    city: text("city"),
+    state: varchar("state", { length: 2 }),
+    zip5: char("zip5", { length: 5 }).notNull(),
+    zip4: char("zip4", { length: 4 }),
+    ageBand: varchar("age_band", { length: 16 }),
+    birthYear: integer("birth_year"),
+    occupation: text("occupation"),
+    employer: text("employer"),
+    title: text("title"),
+    industry: text("industry"),
+    linkedinUrl: text("linkedin_url"),
+    estNetWorthBand: varchar("est_net_worth_band", { length: 32 }),
+    estInvestableAssets: bigint("est_investable_assets", { mode: "number" }),
+    estIncomeBand: varchar("est_income_band", { length: 32 }),
+    isBusinessOwner: boolean("is_business_owner"),
+    isExecutive: boolean("is_executive"),
+    hasTrust: boolean("has_trust"),
+    wealthSignals: jsonb("wealth_signals").$type<Record<string, unknown>>().notNull().default({}),
+    leadScore: smallint("lead_score"),
+    leadStatus: varchar("lead_status", { length: 24 }).notNull().default("new"),
+    source: text("source").notNull(),
+    sourceDetail: text("source_detail"),
+    sourceRecordId: text("source_record_id"),
+    acquiredAt: date("acquired_at"),
+    importId: integer("import_id").references(() => prospectImports.id, { onDelete: "set null" }),
+    vistacrmContactId: text("vistacrm_contact_id"),
+    wealthboxContactId: text("wealthbox_contact_id"),
+    crmSyncedAt: timestamp("crm_synced_at"),
+    tags: text("tags").array(),
+    notes: text("notes"),
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    zipIdx: index("prospects_zip_idx").on(t.zip5),
+    emailIdx: index("prospects_email_idx").on(t.emailNormalized),
+    nameIdx: index("prospects_name_idx").on(t.lastName, t.firstName),
+    householdIdx: index("prospects_household_idx").on(t.householdId),
+    statusIdx: index("prospects_status_idx").on(t.leadStatus),
+    sourceIdx: index("prospects_source_idx").on(t.source),
+    updatedIdx: index("prospects_updated_idx").on(t.updatedAt),
+    crmIdx: index("prospects_crm_idx").on(t.vistacrmContactId),
+  })
+);
+
+export const prospectEvents = pgTable(
+  "prospect_events",
+  {
+    id: serial("id").primaryKey(),
+    prospectId: integer("prospect_id").notNull().references(() => prospects.id, { onDelete: "cascade" }),
+    at: timestamp("at").notNull().defaultNow(),
+    kind: varchar("kind", { length: 32 }).notNull(),
+    detail: text("detail"),
+    meta: jsonb("meta").$type<Record<string, unknown>>(),
+    actor: text("actor"),
+  },
+  (t) => ({
+    prospectIdx: index("prospect_events_prospect_idx").on(t.prospectId, t.at),
+  })
+);
+
+export type ProspectZip = typeof prospectZips.$inferSelect;
+export type ProspectImport = typeof prospectImports.$inferSelect;
+export type ProspectHousehold = typeof prospectHouseholds.$inferSelect;
+export type ProspectHouseholdInsert = typeof prospectHouseholds.$inferInsert;
+export type Prospect = typeof prospects.$inferSelect;
+export type ProspectInsert = typeof prospects.$inferInsert;
+export type ProspectEvent = typeof prospectEvents.$inferSelect;

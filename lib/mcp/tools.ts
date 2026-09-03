@@ -108,6 +108,17 @@ import {
   eodhdNews,
   eodhdScreener,
 } from "../eodhd/tools";
+import {
+  prospectsSearch,
+  prospectLookup,
+  prospectsUpsert,
+  prospectsImportCsv,
+  prospectUpdate,
+  prospectsZipSummary,
+  prospectZipTargets,
+  prospectsExportCrm,
+  prospectImportsList,
+} from "../prospects/tools";
 
 export interface ToolDef {
   name: string;
@@ -455,6 +466,63 @@ const EODHD_TOOLS: ToolDef[] = [
   },
 ];
 
+const PROSPECT_TOOLS: ToolDef[] = [
+  {
+    name: "prospects_zip_summary",
+    description: "Dashboard for the zip-code prospecting database: for every target zip (prospect_zips; 60521 Hinsdale seeded) and every zip with data, the count of people, households, records with an email, opted-in, contactable-by-email (has email, not DNC/do-not-email, not bounced), do-not-contact, lead-status breakdown, home-value stats (count, avg, median, max, homes >= $2M), and last update — plus the 10 most recent imports. START HERE before any prospect work; it tells you what is actually loaded. Optional zip filter (comma list ok).",
+    inputSchema: { type: "object", properties: { zip: { type: "string" }, includeInactive: { type: "boolean", default: false } } },
+    handler: prospectsZipSummary,
+  },
+  {
+    name: "prospects_search",
+    description: "Search/filter the first-party prospect database (households + individuals funneled in by zip code from purchased lists, assessor/voter exports, web forms, Randall, and the CRM). Filters: zip (comma list) or zips[], q (name/email/street/employer/notes contains), lastName prefix, exact email, street contains, city, leadStatus (new|researching|qualified|contacted|meeting|client|disqualified, comma list), source prefix, tag, hasEmail, emailOptIn, excludeDoNotContact, contactableByEmail (email present AND not DNC/do-not-email AND not invalid/bounced — use this before ANY email campaign), minHomeValue/maxHomeValue (household), minLeadScore, minInvestableAssets, isBusinessOwner, isExecutive, householdId, importId, updatedSince (ISO), notSyncedToCrm. Sort by updated_at|created_at|last_name|home_value|lead_score. Returns shaped rows with name, address, consent block, profile, wealth signals (person + household home value), lead status, provenance, CRM ids; total is the unpaged count. PII — never paste raw rows into public channels.",
+    inputSchema: { type: "object", properties: { zip: { type: "string" }, zips: { type: "array", items: { type: "string" } }, q: { type: "string" }, lastName: { type: "string" }, email: { type: "string" }, street: { type: "string" }, city: { type: "string" }, leadStatus: { type: "string" }, source: { type: "string" }, tag: { type: "string" }, hasEmail: { type: "boolean" }, emailOptIn: { type: "boolean" }, excludeDoNotContact: { type: "boolean" }, contactableByEmail: { type: "boolean" }, minHomeValue: { type: "number" }, maxHomeValue: { type: "number" }, minLeadScore: { type: "number" }, minInvestableAssets: { type: "number" }, isBusinessOwner: { type: "boolean" }, isExecutive: { type: "boolean" }, householdId: { type: "number" }, importId: { type: "number" }, updatedSince: { type: "string" }, notSyncedToCrm: { type: "boolean" }, sortBy: { type: "string", enum: ["updated_at", "created_at", "last_name", "home_value", "lead_score"], default: "updated_at" }, sortDir: { type: "string", enum: ["asc", "desc"], default: "desc" }, limit: { type: "number", default: 50, maximum: 1000 }, offset: { type: "number", default: 0 } } },
+    handler: prospectsSearch,
+  },
+  {
+    name: "prospect_lookup",
+    description: "One prospect in full by id, email, or personKey: the shaped record, the household (address, name, other members at the same address), and the last 50 events (notes, status changes, consent changes, CRM pushes, touchpoints). Use before contacting anyone — the consent block and event history are the record of what has already happened.",
+    inputSchema: { type: "object", properties: { id: { type: "number" }, email: { type: "string" }, personKey: { type: "string" } } },
+    handler: prospectLookup,
+  },
+  {
+    name: "prospects_upsert",
+    description: "Add or enrich prospects from JSON — one `record` or a `records` array (max 5,000). Each record: firstName/lastName (or fullName — 'Last, First' and 'First M Last Jr' both parse), email, phone, addressLine1/2, city, state, zip (or defaultZip for the batch), plus optional wealth/profile fields (homeValue, purchasePrice, purchaseDate, yearBuilt, sqFt, estNetWorthBand, estInvestableAssets, occupation, employer, title, linkedinUrl, isBusinessOwner, isExecutive, hasTrust, wealthSignals{}), lead fields (leadStatus, leadScore, tags, notes), consent (emailOptIn, doNotContact/Email/Call/Mail), and provenance (source, sourceDetail, sourceRecordId, acquiredAt). DEDUPE: matches an existing row by normalized email first, then by name + normalized street address + zip ('123 N. Main Street' == '123 North Main St'); households dedupe on address. MERGE: incoming non-null values win, do-not-* flags only ever turn on, tags union, notes append, wealthSignals shallow-merge, lead_status is never demoted to 'new', first-seen source is kept. Set dryRun=true to see the insert/update split, zip counts, and rejects without writing. restrictZips=true skips rows outside the active target zips. Always pass a meaningful `source` (e.g. 'linkedin-research', 'event:hinsdale-gala-2026', 'referral:jsmith').",
+    inputSchema: { type: "object", properties: { record: { type: "object" }, records: { type: "array", items: { type: "object" } }, source: { type: "string", default: "randall" }, sourceDetail: { type: "string" }, defaultZip: { type: "string" }, restrictZips: { type: "boolean", default: false }, dryRun: { type: "boolean", default: false }, tags: { type: "array", items: { type: "string" } }, nameOrder: { type: "string", enum: ["auto", "first-last", "last-first"], default: "auto" }, actor: { type: "string" } } },
+    handler: prospectsUpsert,
+  },
+  {
+    name: "prospects_import_csv",
+    description: "Bulk-load a CSV/TSV (as text, up to ~4 MB; larger files go to POST /api/prospects as a file) into the prospect database. Header row required; columns are auto-mapped by synonym ('First Name'/'fname'/'Owner1First' -> firstName, 'Situs Address'/'Property Address' -> addressLine1, 'Market Value'/'AVM'/'Zestimate' -> homeValue, 'PIN'/'Parcel ID' -> sourceRecordId, etc.). Unmapped columns are preserved in `raw` and listed in `unmappedColumns`; force a mapping with columnMap {\"Weird Header\": \"fullName\"} (use \"ignore\" to drop a column). Single-zip lists without a zip column: pass defaultZip. A single owner/name column is split automatically ('Last, First', 'First M Last Jr', and ALL-CAPS assessor 'LAST FIRST M' / 'LAST FIRST & SPOUSE' are all recognised); pass nameOrder='last-first' for assessor or voter files to remove the two-token ambiguity ('SMITH JOHN'). ALWAYS run once with dryRun=true first and read the mapping, sample rows, zipCounts, and rejected list before the real import. Same dedupe/merge rules as prospects_upsert. `source` is required and should name the list (e.g. 'dupage-assessor-2026', 'list-broker:Exact Data', 'voter-file:dupage').",
+    inputSchema: { type: "object", properties: { csv: { type: "string" }, source: { type: "string" }, sourceDetail: { type: "string" }, filename: { type: "string" }, columnMap: { type: "object" }, defaultZip: { type: "string" }, restrictZips: { type: "boolean", default: false }, dryRun: { type: "boolean", default: false }, delimiter: { type: "string" }, tags: { type: "array", items: { type: "string" } }, nameOrder: { type: "string", enum: ["auto", "first-last", "last-first"], default: "auto" }, actor: { type: "string" } }, required: ["csv", "source"] },
+    handler: prospectsImportCsv,
+  },
+  {
+    name: "prospect_update",
+    description: "Work a single prospect by id: move leadStatus (new|researching|qualified|contacted|meeting|client|disqualified — logs a status_change event), set leadScore 0-100, record consent (emailOptIn true/false with optInSource; doNotContact/doNotEmail/doNotCall/doNotMail — opt-out also sets doNotEmail), correct emailStatus (valid|invalid|bounced), fix email/phone, enrich (estNetWorthBand, estInvestableAssets, occupation, employer, title, linkedinUrl, wealthSignals merge), addTags/removeTags, append a `note` (logged), link CRM ids (vistacrmContactId — also stamps crm_synced_at; wealthboxContactId), or log a touchpoint via event {kind: email|call|mail|meeting|..., detail, meta}. Pass actor (who did it) for the audit trail.",
+    inputSchema: { type: "object", properties: { id: { type: "number" }, leadStatus: { type: "string" }, leadScore: { type: "number" }, emailOptIn: { type: "boolean" }, optInSource: { type: "string" }, emailStatus: { type: "string", enum: ["unknown", "unverified", "valid", "invalid", "bounced"] }, doNotContact: { type: "boolean" }, doNotEmail: { type: "boolean" }, doNotCall: { type: "boolean" }, doNotMail: { type: "boolean" }, email: { type: "string" }, phone: { type: "string" }, phoneMobile: { type: "string" }, estNetWorthBand: { type: "string" }, estInvestableAssets: { type: "number" }, occupation: { type: "string" }, employer: { type: "string" }, title: { type: "string" }, linkedinUrl: { type: "string" }, wealthSignals: { type: "object" }, addTags: { type: "array", items: { type: "string" } }, removeTags: { type: "array", items: { type: "string" } }, note: { type: "string" }, vistacrmContactId: { type: "string" }, wealthboxContactId: { type: "string" }, event: { type: "object", properties: { kind: { type: "string" }, detail: { type: "string" }, meta: { type: "object" } } }, actor: { type: "string" } }, required: ["id"] },
+    handler: prospectUpdate,
+  },
+  {
+    name: "prospect_zip_targets",
+    description: "Manage the target zip list that scopes prospecting and the restrictZips import gate. action=list (default) shows every zip with priority/active; action=add|update upserts a zip with city/state/county/label/priority/notes (60521 Hinsdale is seeded as priority 1); action=deactivate|activate toggles it without losing data. Adjacent affluent zips for expansion: 60523 Oak Brook, 60514 Clarendon Hills, 60558 Western Springs, 60559 Westmont, 60515 Downers Grove, 60527 Willowbrook/Burr Ridge, 60521 covers Hinsdale + part of Oak Brook.",
+    inputSchema: { type: "object", properties: { action: { type: "string", enum: ["list", "add", "update", "deactivate", "activate"], default: "list" }, zip: { type: "string" }, city: { type: "string" }, state: { type: "string" }, county: { type: "string" }, label: { type: "string" }, priority: { type: "number" }, notes: { type: "string" } } },
+    handler: prospectZipTargets,
+  },
+  {
+    name: "prospects_export_crm",
+    description: "The VistaCRM-facing feed: prospects shaped as CRM contacts (externalId 'vistaintel:prospect:<id>', household externalId, name parts, email ONLY when contactable, phone/address suppressed under do-not-call/do-not-mail, consent block, profile, wealth signals, lead, tags, notes, provenance). Defaults: excludeDoNotContact, notSyncedToCrm (never synced OR changed since last sync), oldest-change-first, limit 500 — so a scheduled puller can call it bare. Accepts every prospects_search filter (zip, leadStatus, minHomeValue, contactableByEmail ...). Two-way link: markSynced=true stamps crm_synced_at on the returned rows and logs crm_push events; vistacrmContactIds {prospectId: crmId} writes VistaCRM's ids back. The same payload is GET /api/prospects?format=crm for VistaCRM to pull directly with the ACCESS_TOKEN.",
+    inputSchema: { type: "object", properties: { zip: { type: "string" }, zips: { type: "array", items: { type: "string" } }, leadStatus: { type: "string" }, tag: { type: "string" }, source: { type: "string" }, contactableByEmail: { type: "boolean" }, minHomeValue: { type: "number" }, minLeadScore: { type: "number" }, updatedSince: { type: "string" }, notSyncedToCrm: { type: "boolean", default: true }, excludeDoNotContact: { type: "boolean", default: true }, markSynced: { type: "boolean", default: false }, vistacrmContactIds: { type: "object" }, limit: { type: "number", default: 500, maximum: 2000 }, offset: { type: "number", default: 0 }, actor: { type: "string" } } },
+    handler: prospectsExportCrm,
+  },
+  {
+    name: "prospect_imports",
+    description: "The import ledger: every CSV/XLSX/JSON/MCP/form batch with source, filename, who submitted it, row counts (received/inserted/updated/skipped/rejected), per-zip counts, the column map that was applied, and up to 50 row-level errors. Use it to audit where a record came from (prospects.import_id points here) or to see why a load rejected rows.",
+    inputSchema: { type: "object", properties: { limit: { type: "number", default: 25, maximum: 200 } } },
+    handler: prospectImportsList,
+  },
+];
+
 export const TOOLS: ToolDef[] = [
   ...RIA_TOOLS,
   ...NONPROFIT_TOOLS,
@@ -471,5 +539,6 @@ export const TOOLS: ToolDef[] = [
   ...BDC_TOOLS,
   ...PENSION_TOOLS,
   ...EODHD_TOOLS,
+  ...PROSPECT_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

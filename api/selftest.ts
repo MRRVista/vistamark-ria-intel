@@ -60,6 +60,8 @@ const CHECKS: Check[] = [
   { name: "eodhd-search", tool: "eodhd_search", args: { query: "Apple", limit: 2 }, note: "EODHD symbol-resolution probe — expect AAPL.US among the matches; an EODHD_API_TOKEN-not-configured error means the env var has not landed in Vercel yet" },
   { name: "eodhd-eod", tool: "eodhd_eod_prices", args: { symbol: "AAPL", limit: 3 }, note: "EODHD price-history probe — bare ticker should normalize to AAPL.US; expect 3 newest-first daily bars with adjustedClose and volume" },
   { name: "eodhd-quote", tool: "eodhd_quote", args: { symbols: ["SPY", "AAPL.US"] }, note: "EODHD delayed-quote probe — expect two quotes with last, previousClose, changePct, and a recent timestamp (delayed ~15m; stale over weekends is normal)" },
+  { name: "prospects-zips", tool: "prospects_zip_summary", args: {}, note: "prospect DB probe — expect at least the seeded 60521 target zip (Hinsdale, priority 1) with people/households counts (0 until the first import is loaded); a relation-does-not-exist error means migration 0006 has not been applied (POST /api/admin/migrate)" },
+  { name: "prospects-60521", tool: "prospects_search", args: { zip: "60521", limit: 1 }, note: "read-only; total = people loaded for 60521 — 0 is a clean empty result until lists are funneled in, not an error" },
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
 ];
