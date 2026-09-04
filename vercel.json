@@ -15,12 +15,14 @@
     "api/portfolio.ts": { "maxDuration": 60 },
     "api/funds.ts": { "maxDuration": 30 },
     "api/prospects.ts": { "maxDuration": 120 },
+    "api/prospect-outreach.ts": { "maxDuration": 30 },
     "api/selftest.ts": { "maxDuration": 60 },
     "api/cron/ingest-adv.ts": { "maxDuration": 300 },
     "api/cron/refresh-irs-bmf.ts": { "maxDuration": 300 },
     "api/cron/refresh-dol-5500.ts": { "maxDuration": 300 },
     "api/cron/refresh-ipeds.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
-    "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" }
+    "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" },
+    "api/cron/prospect-engine.ts": { "maxDuration": 300, "includeFiles": "migrations/**" }
   },
   "crons": [
     { "path": "/api/cron/ingest-adv", "schedule": "0 6 * * 1" },
@@ -28,7 +30,9 @@
     { "path": "/api/cron/refresh-irs-bmf", "schedule": "0 4 * * 3" },
     { "path": "/api/cron/refresh-dol-5500", "schedule": "0 5 * * 4" },
     { "path": "/api/cron/refresh-ipeds", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/refresh-nacubo", "schedule": "0 12 15 2 *" }
+    { "path": "/api/cron/refresh-nacubo", "schedule": "0 12 15 2 *" },
+    { "path": "/api/cron/prospect-engine", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/prospect-engine", "schedule": "0 1 * * *" }
   ],
   "redirects": [
     { "source": "/index.html", "destination": "/", "permanent": true }
