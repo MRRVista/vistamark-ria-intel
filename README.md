@@ -78,6 +78,7 @@ curl -X POST "$BASE/api/admin/refresh-nacubo" -H "Authorization: Bearer $CRON_SE
 | `refresh-dol-5500` | Thu 05:00 | Re-pull latest plan year |
 | `refresh-ipeds` | daily 06:00 | IPEDS freshness check |
 | `refresh-nacubo` | Feb 15 yearly | Annual NACUBO study refresh |
+| `prospect-engine` | daily 00:00 & 01:00 (runs only at 7 PM Chicago) | 3 researched, personalized outreach drafts → Outlook Drafts |
 | `refresh-13f` | quarterly (1st, 08:00) | **Stub** — returns 200, no-op; real 13F loads are manual admin ingests |
 
 `database_status` reports per-pipeline health: each ingest family's latest run, errors sorted first with redacted error messages — a failing scheduled ingest surfaces there instead of failing silently. A family absent from `pipelineHealth` has never created a run record, meaning its handler is not being reached.
@@ -109,6 +110,14 @@ Column headers are auto-mapped by synonym (`Owner Name`/`Situs Address`/`Market 
 **VistaCRM link:** `GET /api/prospects?format=crm` (or the `prospects_export_crm` tool) returns CRM-shaped contacts — `externalId` `vistaintel:prospect:<id>`, email only when contactable, phone/address suppressed under do-not-call/mail — defaulting to *not yet synced or changed since last sync*, so a VistaCRM puller can run it bare on a schedule. `&markSynced=1` stamps the batch; `POST {"action":"crm_ack","vistacrmContactIds":{"<id>":"<crmId>"}}` writes VistaCRM's ids back for a two-way link. Filter the feed with any search param (`zip=60521&minHomeValue=2000000&contactableByEmail=1`).
 
 Tests: `DATABASE_DRIVER=pg DATABASE_URL=postgres://… npx tsx scripts/test-prospects.ts` (pure normalization checks run without a DB).
+
+### Prospect engine (nightly drafts)
+
+`GET /api/cron/prospect-engine` runs at **7:00 PM America/Chicago** year-round (vercel.json fires 00:00Z and 01:00Z; the handler runs only when it is 19:00 in Chicago) and produces **3 fully researched, personalized outreach drafts** from the untouched `60521` prospects, highest home value first.
+
+Per candidate: one web-search-backed model call finds the person's *professional* footprint and any **published** professional email (with the URL it came from); no email → tagged `engine:no_published_email` and skipped. Emails are never pattern-guessed and never taken from social networks or people-search sites. A second call writes the note from `lib/prospects/persona.ts` (edit that file to change voice/facts), the banned-phrase list is enforced, and the CAN-SPAM footer (address + opt-out) is appended. Nothing is sent: drafts go to Outlook **Drafts** via Microsoft Graph when `MS_GRAPH_TENANT_ID` / `MS_GRAPH_CLIENT_ID` / `MS_GRAPH_CLIENT_SECRET` / `OUTREACH_MAILBOX` are set, otherwise they queue in `prospect_events` (kind `outreach_draft`) for `GET /api/prospect-outreach?status=pending` to pull and `POST /api/prospect-outreach {eventId, delivery}` to ack. Acking `sent` flips the lead to `contacted`.
+
+Manual run: `curl -H "Authorization: Bearer $CRON_SECRET" "https://vistaintel.app/api/cron/prospect-engine?target=1&dryRun=1"`. Optional env: `OUTREACH_SENDER_NAME`, `OUTREACH_SENDER_TITLE`, `OUTREACH_FIRM_LEGAL`, `OUTREACH_FOOTER`, `PROSPECT_ENGINE_LOCAL_HOUR`.
 
 ## MCP tools (73 total)
 
