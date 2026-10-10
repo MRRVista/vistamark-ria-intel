@@ -1,7 +1,7 @@
 /**
  * Email append — find an email for a prospect from name + postal address.
  *
- * v0.24.0. Two providers behind one selection and write path:
+ * v0.24.0 (v0.24.1: surname trust-label cleanup + entity exclusion). Two providers behind one selection and write path:
  *
  *   atdata     AtData Email Append (paid). GET https://api.atdata.com/v5/eppend
  *              with first/last/street/city/state/zip. Each returned email is
@@ -95,7 +95,9 @@ async function selectForAppend(o: AppendOptions, limit: number) {
     sql`${prospects.firstName} IS NOT NULL AND length(${prospects.firstName}) > 1`,
     sql`${prospects.lastName} IS NOT NULL`,
     sql`${prospects.addressLine1} IS NOT NULL`,
-    sql`NOT (coalesce(${prospects.tags}, ARRAY[]::text[]) && ARRAY[${triedTag}, 'use:political', 'name-truncated']::text[])`,
+    sql`NOT (coalesce(${prospects.tags}, ARRAY[]::text[]) && ARRAY[${triedTag}, 'use:political', 'name-truncated', 'entity']::text[])`,
+    // v0.24.1: entity owners that slipped past the parcel cleaner ("Tr Midwest", "Titlte Chicago").
+    sql`NOT (${prospects.fullName} ~* '\\m(titl[a-z]*|bank|ctltc|land tr[a-z]*|llc|inc)\\M' OR ${prospects.firstName} ~* '^(tr|trs|trust|ttee)$')`,
   ];
   if (o.minHomeValue) conds.push(sql`${prospectHouseholds.homeValue} >= ${o.minHomeValue}`);
   const order = [
@@ -130,7 +132,12 @@ async function selectForAppend(o: AppendOptions, limit: number) {
 
 type Candidate = Awaited<ReturnType<typeof selectForAppend>>[number];
 
-// ── Providers ────────────────────────────────────────────────────────────────────────────
+/** Some tax bills put the trust label on the surname ("ILEKIS TR, CHRISTOPHER" -> last "Ilekis Tr"). Strip it before any lookup. */
+export function cleanSurname(last: string | null): string {
+  return (last ?? "").replace(/(\s+(tr|trs|trst|trust|trustee|trustees|ttee|decl|rev|living))+$/i, "").trim();
+}
+
+// ── Providers ──────────────────────────────────────────────────────────────────────────
 
 interface ProviderResult {
   outcome: AppendRow["outcome"];
@@ -144,7 +151,7 @@ interface ProviderResult {
 async function viaAtData(c: Candidate, acceptHousehold: boolean): Promise<ProviderResult> {
   const qs = new URLSearchParams({
     first: c.firstName ?? "",
-    last: c.lastName ?? "",
+    last: cleanSurname(c.lastName),
     street: c.addressLine1 ?? "",
     city: c.city ?? "",
     state: c.state ?? "IL",
@@ -183,9 +190,9 @@ const SOCIAL_OR_BROKER = /(linkedin|facebook|instagram|twitter|x\.com|whitepages
 async function viaPublished(c: Candidate): Promise<ProviderResult> {
   const r = await researchProspect(
     {
-      fullName: c.fullName,
+      fullName: [c.firstName, cleanSurname(c.lastName)].filter(Boolean).join(" "),
       firstName: c.firstName,
-      lastName: c.lastName,
+      lastName: cleanSurname(c.lastName),
       addressLine1: c.addressLine1,
       city: c.city,
       state: c.state,
