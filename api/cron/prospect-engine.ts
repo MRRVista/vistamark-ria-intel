@@ -40,6 +40,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const q = req.query as Record<string, string | undefined>;
   const force = q.force === "1" || !isVercelCron;
 
+  // v0.23.0: scheduled runs are opt-in. VistaRandall's lead-outreach engine (D-061)
+  // drafts into the same Outlook folder; two engines must not both run unattended.
+  // Set PROSPECT_ENGINE_ENABLED=1 on the Vercel project to re-arm the nightly run.
+  // Manual (CRON_SECRET) runs are unaffected, so ?dryRun=1 testing still works.
+  if (isVercelCron && process.env.PROSPECT_ENGINE_ENABLED !== "1") {
+    res.status(200).json({ ok: true, skipped: true, reason: "PROSPECT_ENGINE_ENABLED is not 1; scheduled runs paused" });
+    return;
+  }
+
   if (!force && chicagoHour() !== LOCAL_HOUR) {
     res.status(200).json({ ok: true, skipped: true, reason: `not ${LOCAL_HOUR}:00 in ${TZ}`, chicagoHour: chicagoHour() });
     return;
