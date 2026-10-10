@@ -75,7 +75,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return fail(res, "bad_id_token");
   }
   const now = Math.floor(Date.now() / 1000);
-  const email = String(claims.email ?? claims.preferred_username ?? "").toLowerCase();
+  // Dual-domain (2026-10-10): vistamark.com is the primary email domain;
+  // vistamarkllc.com is a permanent alias. Canonicalize to the
+  // @vistamarkllc.com form so principal lookups and sessions keep matching.
+  const email = String(claims.email ?? claims.preferred_username ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/@vistamark\.com$/, "@vistamarkllc.com");
   const oid = String(claims.oid ?? "");
   if (
     claims.iss !== `https://login.microsoftonline.com/${tenant}/v2.0` ||
@@ -86,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   ) {
     return fail(res, "claims_invalid");
   }
-  if (!email.replace(/@vistamark\.com$/i, "@vistamarkllc.com").endsWith(ALLOWED_DOMAIN)) return fail(res, "domain_not_allowed");
+  if (!email.endsWith(ALLOWED_DOMAIN)) return fail(res, "domain_not_allowed");
 
   // ── VistaCRM principals: the authorization source of truth ──
   let principal: Awaited<ReturnType<typeof resolvePrincipal>>;
