@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   ) {
     return fail(res, "claims_invalid");
   }
-  if (!email.endsWith(ALLOWED_DOMAIN)) return fail(res, "domain_not_allowed");
+  if (!email.replace(/@vistamark\.com$/i, "@vistamarkllc.com").endsWith(ALLOWED_DOMAIN)) return fail(res, "domain_not_allowed");
 
   // ── VistaCRM principals: the authorization source of truth ──
   let principal: Awaited<ReturnType<typeof resolvePrincipal>>;
