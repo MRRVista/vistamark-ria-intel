@@ -567,7 +567,10 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab[data-tab]"),functio
 /* ============================ sidebar nav ============================ */
 /* Page links shown inside a domain group (not MCP tools; they open a page). */
 var NAV_LINKS={
-  prospects:[{name:"enrich_contacts",href:"/api/admin/enrich-upload",description:"Upload a CSV or XLSX of emails and phones (Tracerfy results, your own contacts) and attach them to households already in VistaIntel."}]
+  prospects:[
+    {name:"enrich_contacts",href:"/api/admin/enrich-upload",description:"Upload a CSV or XLSX of emails and phones (Tracerfy results, your own contacts) and attach them to households already in VistaIntel."},
+    {name:"export_tracerflyinput_contacts_format",href:"/api/admin/tracerfy-export",description:"Download households in Tracerfy input format (columns A-F) with every other VistaIntel field in G+. Skips traced and emailed households by default."}
+  ]
 };
 function renderNav(){
   var nav=document.getElementById("nav"); nav.innerHTML="";
