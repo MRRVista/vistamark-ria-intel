@@ -66,7 +66,7 @@ async function run(dry){
     const r=await fetch('/api/admin/enrich-upload?'+qs,{method:'POST',credentials:'include',headers:{'X-Filename':f.name,'Content-Type':'application/octet-stream'},body:await f.arrayBuffer()});
     const j=await r.json(); if(!j.ok){out.textContent='Error: '+(j.error||r.status);return;}
     const c=j.counts||{};
-    out.innerHTML='<div class="stats"><div><div class="k">'+j.rows+'</div>rows</div><div><div class="k">'+((c.written||0)+(c.would_write||0))+'</div>'+(dry?'would load':'loaded')+'</div><div><div class="k">'+j.withEmail+'</div>with email</div><div><div class="k">'+j.withPhone+'</div>with phone</div><div><div class="k">'+(c.other_person||0)+'</div>wrong person (skipped)</div></div>'
+    out.innerHTML='<div class="stats"><div><div class="k">'+j.rows+'</div>rows</div><div><div class="k">'+((c.written||0)+(c.would_write||0)+(c.added_resident||0))+'</div>'+(dry?'would load':'loaded')+'</div><div><div class="k">'+j.withEmail+'</div>with email</div><div><div class="k">'+(j.withSpouseEmail||0)+'</div>spouse email</div><div><div class="k">'+j.withPhone+'</div>with phone</div><div><div class="k">'+(c.other_person||0)+'</div>wrong person (skipped)</div><div><div class="k">'+(j.householdsTagged||0)+'</div>households tagged traced</div></div>'
       +'<table><tr><th>Outcome</th><th>Rows</th></tr>'+Object.entries(c).map(([k,v])=>'<tr><td>'+k+'</td><td>'+v+'</td></tr>').join('')+'</table>';
   }catch(e){out.textContent='Error: '+e;}
 }
