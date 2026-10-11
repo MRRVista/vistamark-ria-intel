@@ -24,7 +24,8 @@
     "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" },
     "api/cron/prospect-engine.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
     "api/cron/ingest-parcels.ts": { "maxDuration": 300 },
-    "api/admin/email-append.ts": { "maxDuration": 300 }
+    "api/admin/email-append.ts": { "maxDuration": 300 },
+    "api/admin/enrich-upload.ts": { "maxDuration": 300 }
   },
   "crons": [
     { "path": "/api/cron/ingest-adv", "schedule": "0 6 * * 1" },
