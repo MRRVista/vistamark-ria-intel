@@ -1,5 +1,5 @@
 /**
- * Tracerfy input-format export (v0.25.2).
+ * Tracerfy input-format export (v0.25.2; already-traced mode v0.25.3).
  *
  * One row per household in Tracerfy's intake layout (A-F), with every other
  * field VistaIntel holds appended from column G onward so the download doubles
@@ -7,6 +7,12 @@
  * trace costs credits: a household already run through Tracerfy (tagged by
  * enrich-upload when its results were loaded) or already holding an email is
  * left out by default.
+ *
+ * onlyTraced (v0.25.3) inverts the traced filter: it returns ONLY households
+ * already run through Tracerfy, in the same A-F layout, as a suppression list
+ * to dedupe a new batch against before paying for it again. In that mode the
+ * emailed and do-not-contact skips do not apply — a DNC or emailed household
+ * that was traced was still paid for.
  */
 
 import { asc, eq } from "drizzle-orm";
@@ -21,7 +27,7 @@ const EXTRA_HEADER = [
   "Co-Owner 1 First", "Co-Owner 1 Last", "Co-Owner 2 First", "Co-Owner 2 Last",
   "Mail Address", "Mail City", "Mail State", "Mail Zip",
   "Email", "Phone", "Mobile", "Lead Status", "Tags", "Source", "County",
-  "Home Value Source", "Owner Occupied", "Traced", "Co-Owner Records",
+  "Home Value Source", "Owner Occupied", "Traced", "Co-Owner Records", "Traced Tags",
 ] as const;
 
 export interface ExportArgs {
@@ -29,6 +35,8 @@ export interface ExportArgs {
   minHomeValue?: number;
   skipTraced?: boolean;
   skipEmailed?: boolean;
+  /** v0.25.3: return only households already traced (suppression list). */
+  onlyTraced?: boolean;
   limit?: number;
 }
 
@@ -60,14 +68,25 @@ const csvCell = (v: unknown) => {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+/**
+ * A tag that marks a trace. traced:<source>:<date> is written on every
+ * household a results file reaches (v0.25.2+). enriched:<source> is the only
+ * mark v0.25.0/0.25.1 uploads left, and only on hits; any source naming
+ * Tracerfy counts (v0.25.3 — previously only the exact "enriched:tracerfy").
+ */
+function isTraceTag(t: string): boolean {
+  return t.startsWith("traced:") || /^enriched:[^:]*tracerfy/.test(t);
+}
+
 export function isTraced(tags: string[] | null | undefined): boolean {
-  return (tags ?? []).some((t) => t.startsWith("traced:") || t === "enriched:tracerfy");
+  return (tags ?? []).some(isTraceTag);
 }
 
 export async function buildTracerfyExport(a: ExportArgs) {
   if (!isDbReady()) throw new Error("DATABASE_URL not configured");
   const zips = a.zips ?? [];
   const minHomeValue = a.minHomeValue ?? 0;
+  const onlyTraced = a.onlyTraced === true;
   const skipTraced = a.skipTraced !== false;
   const skipEmailed = a.skipEmailed !== false;
 
@@ -118,9 +137,15 @@ export async function buildTracerfyExport(a: ExportArgs) {
     if (g) g.push(r); else groups.set(key, [r]);
   }
 
-  let skippedTraced = 0, skippedEmailed = 0, skippedDnc = 0;
+  let skippedTraced = 0, skippedEmailed = 0, skippedDnc = 0, skippedNotTraced = 0;
   const kept: Row[][] = [];
   for (const g of groups.values()) {
+    if (onlyTraced) {
+      const traced = g.some((r) => isTraced(r.pTags)) || isTraced(g[0].hTags);
+      if (!traced) { skippedNotTraced++; continue; }
+      kept.push(g);
+      continue;
+    }
     if (g.every((r) => r.doNotContact)) { skippedDnc++; continue; }
     const members = g.filter((r) => !r.doNotContact);
     const traced = members.some((r) => isTraced(r.pTags)) || isTraced(members[0].hTags);
@@ -153,6 +178,7 @@ export async function buildTracerfyExport(a: ExportArgs) {
     const state = p.hState ?? p.pState ?? "IL";
     const zip = p.hZip ?? p.pZip ?? "";
     const traced = g.some((r) => isTraced(r.pTags)) || isTraced(p.hTags);
+    const traceTags = Array.from(new Set([...g.flatMap((r) => r.pTags ?? []), ...(p.hTags ?? [])].filter(isTraceTag))).sort();
     const rec: Record<string, unknown> = {
       Address: address, City: city, State: state, Zip: zip, "First Name": p.firstName ?? "", "Last Name": p.lastName ?? "",
       "Home Value": p.homeValue ?? "", "VistaIntel ID": p.id, "Household ID": p.hId ?? "",
@@ -168,6 +194,7 @@ export async function buildTracerfyExport(a: ExportArgs) {
       Source: p.source, County: p.county ?? "",
       "Home Value Source": p.homeValueSource ?? "", "Owner Occupied": p.ownerOccupied == null ? "" : p.ownerOccupied ? "yes" : "no",
       Traced: traced ? "yes" : "no", "Co-Owner Records": others.map((o) => o.id).join("; "),
+      "Traced Tags": traceTags.join("; "),
     };
     for (const k of rawCols) rec[`county_${k}`] = (p.raw as Record<string, unknown> | null)?.[k] ?? "";
     out.push(rec);
@@ -177,12 +204,14 @@ export async function buildTracerfyExport(a: ExportArgs) {
   return {
     ok: true,
     zips,
+    onlyTraced,
     header,
     rows: out,
     csv: lines.join("\r\n") + "\r\n",
     skippedTraced,
     skippedEmailed,
     skippedDnc,
+    skippedNotTraced,
     totalHouseholds: groups.size,
   };
 }
