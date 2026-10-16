@@ -2,60 +2,174 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "functions": {
-    "api/admin/migrate.ts": { "includeFiles": "migrations/**" },
-    "api/admin/refresh-irs-bmf.ts": { "maxDuration": 300 },
-    "api/admin/refresh-dol-5500.ts": { "maxDuration": 300 },
-    "api/admin/refresh-ipeds.ts": { "maxDuration": 300 },
-    "api/admin/refresh-nacubo.ts": { "maxDuration": 60 },
-    "api/admin/bootstrap-once.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
-    "api/admin/query.ts": { "maxDuration": 60 },
-    "api/ask.ts": { "maxDuration": 300 },
-    "api/catalog.ts": { "maxDuration": 60 },
-    "api/prospects.ts": { "maxDuration": 120 },
-    "api/prospect-outreach.ts": { "maxDuration": 30 },
-    "api/selftest.ts": { "maxDuration": 60 },
-    "api/cron/ingest-adv.ts": { "maxDuration": 300 },
-    "api/cron/refresh-irs-bmf.ts": { "maxDuration": 300 },
-    "api/cron/refresh-dol-5500.ts": { "maxDuration": 300 },
-    "api/cron/refresh-ipeds.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
-    "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" },
-    "api/cron/prospect-engine.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
-    "api/cron/nonprofit-engine.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
-    "api/cron/ingest-parcels.ts": { "maxDuration": 300 },
-    "api/admin/email-append.ts": { "maxDuration": 300 },
-    "api/admin/enrich-upload.ts": { "maxDuration": 300 },
-    "api/admin/tracerfy-export.ts": { "maxDuration": 60 },
-    "api/admin/irs990.ts": { "maxDuration": 60 }
+    "api/admin/migrate.ts": {
+      "includeFiles": "migrations/**"
+    },
+    "api/admin/refresh-irs-bmf.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/refresh-dol-5500.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/refresh-ipeds.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/refresh-nacubo.ts": {
+      "maxDuration": 60
+    },
+    "api/admin/bootstrap-once.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/admin/query.ts": {
+      "maxDuration": 60
+    },
+    "api/ask.ts": {
+      "maxDuration": 300
+    },
+    "api/catalog.ts": {
+      "maxDuration": 60
+    },
+    "api/prospects.ts": {
+      "maxDuration": 120
+    },
+    "api/prospect-outreach.ts": {
+      "maxDuration": 30
+    },
+    "api/selftest.ts": {
+      "maxDuration": 60
+    },
+    "api/cron/ingest-adv.ts": {
+      "maxDuration": 300
+    },
+    "api/cron/refresh-irs-bmf.ts": {
+      "maxDuration": 300
+    },
+    "api/cron/refresh-dol-5500.ts": {
+      "maxDuration": 300
+    },
+    "api/cron/refresh-ipeds.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/cron/refresh-nacubo.ts": {
+      "maxDuration": 60,
+      "includeFiles": "migrations/**"
+    },
+    "api/cron/prospect-engine.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/cron/nonprofit-engine.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/cron/ingest-parcels.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/email-append.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/enrich-upload.ts": {
+      "maxDuration": 300
+    },
+    "api/admin/tracerfy-export.ts": {
+      "maxDuration": 60
+    },
+    "api/admin/irs990.ts": {
+      "maxDuration": 60
+    },
+    "api/admin/np-drafts.ts": {
+      "maxDuration": 120
+    }
   },
   "crons": [
-    { "path": "/api/cron/ingest-adv", "schedule": "0 6 * * 1" },
-    { "path": "/api/cron/refresh-13f", "schedule": "0 8 1 */3 *" },
-    { "path": "/api/cron/refresh-irs-bmf", "schedule": "0 4 * * 3" },
-    { "path": "/api/cron/refresh-dol-5500", "schedule": "0 5 * * 4" },
-    { "path": "/api/cron/refresh-ipeds", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/refresh-nacubo", "schedule": "0 12 15 2 *" },
-    { "path": "/api/cron/prospect-engine", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/prospect-engine", "schedule": "0 1 * * *" },
-    { "path": "/api/cron/nonprofit-engine?program=matt", "schedule": "5 0 * * *" },
-    { "path": "/api/cron/nonprofit-engine?program=matt", "schedule": "5 1 * * *" },
-    { "path": "/api/cron/nonprofit-engine?program=ryan", "schedule": "25 0 * * *" },
-    { "path": "/api/cron/nonprofit-engine?program=ryan", "schedule": "25 1 * * *" },
-    { "path": "/api/cron/ingest-parcels", "schedule": "0 7 3 * *" }
+    {
+      "path": "/api/cron/ingest-adv",
+      "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/refresh-13f",
+      "schedule": "0 8 1 */3 *"
+    },
+    {
+      "path": "/api/cron/refresh-irs-bmf",
+      "schedule": "0 4 * * 3"
+    },
+    {
+      "path": "/api/cron/refresh-dol-5500",
+      "schedule": "0 5 * * 4"
+    },
+    {
+      "path": "/api/cron/refresh-ipeds",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-nacubo",
+      "schedule": "0 12 15 2 *"
+    },
+    {
+      "path": "/api/cron/prospect-engine",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/prospect-engine",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/nonprofit-engine?program=matt",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/nonprofit-engine?program=matt",
+      "schedule": "5 1 * * *"
+    },
+    {
+      "path": "/api/cron/nonprofit-engine?program=ryan",
+      "schedule": "25 0 * * *"
+    },
+    {
+      "path": "/api/cron/nonprofit-engine?program=ryan",
+      "schedule": "25 1 * * *"
+    },
+    {
+      "path": "/api/cron/ingest-parcels",
+      "schedule": "0 7 3 * *"
+    }
   ],
   "redirects": [
-    { "source": "/index.html", "destination": "/", "permanent": true }
+    {
+      "source": "/index.html",
+      "destination": "/",
+      "permanent": true
+    }
   ],
   "rewrites": [
-    { "source": "/", "destination": "/console.html" }
+    {
+      "source": "/",
+      "destination": "/console.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains"
+        }
       ]
     }
   ]
