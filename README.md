@@ -40,6 +40,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | `GET /api/selftest` | none | Read-only diagnostic battery (41 checks). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
 | `GET /api/market-brief` | none | The morning composite, served for the vistamark-m365 pre-market digest cron. Aggregated public macro data only — same exposure posture as selftest. |
 | `GET/POST /api/prospects` | `ACCESS_TOKEN` or Entra session | Prospect database: search/filter, CSV download, VistaCRM feed (`?format=crm`), and intake — JSON records, inline CSV, raw CSV/TSV/XLSX body, or multipart file upload. |
+| `GET/POST /api/ask` | `ACCESS_TOKEN` or Entra session | "Ask Randall" natural-language layer: a server-side tool loop over the MCP tools plus hosted **web search** (Anthropic `web_search` / OpenRouter `web` plugin) and an Ask-only `export_excel` tool that returns a real .xlsx as a download. `GET` is the capability probe and the **model roster** (Anthropic lineup + live OpenRouter catalog); `POST { question, provider?, model?, webSearch?, domains?, maxRounds?, history? }`. Any model id is accepted; Mythos-class primaries fail over to the Opus line on 429/5xx. |
 
 ## Setup
 
@@ -54,6 +55,9 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | `EODHD_API_TOKEN` | yes (eodhd_* tools) | EODHD API token — https://eodhd.com |
 | `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2) |
 | `EIA_API_KEY` / `BLS_API_KEY` / `DATA_GOV_API_KEY` | future | Reserved for the keyed-API expansion tier |
+| `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | yes (Ask layer) | At least one. `ANTHROPIC_MODEL` / `OPENROUTER_MODEL` pin the defaults the picker opens on. |
+| `ASK_WEB_SEARCH` | optional | `0` turns hosted web search off by default (the console toggle still overrides per question). `ASK_WEB_SEARCH_MAX_USES` caps searches per answer (default 8). |
+| `ASK_EXTRA_MODELS` | optional | JSON array of `{id,label,provider?,tier?,notes?}` to add models to the picker without a deploy. |
 
 ### First ingest (after schema migrate)
 

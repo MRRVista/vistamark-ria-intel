@@ -199,74 +199,30 @@ summary:hover{color:var(--gold-hi)}
 .tchip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:2px;
   background:var(--panel3);border:1px solid var(--line2);color:var(--muted)}
 .tchip.bad{color:var(--bad);border-color:rgba(217,112,94,.35)}
+.tchip.web{color:var(--gold);border-color:rgba(200,165,92,.4)}
+.msg h3,.msg h4{font-family:var(--serif,inherit);color:var(--gold-hi);font-weight:500;margin:12px 0 6px;font-size:15px}
+.msg h4{font-size:13.5px}
+.msg ol{margin:9px 0 9px 22px}
+.msg em{color:var(--cream)}
+.msg a{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+.msg hr{border:none;border-top:1px solid var(--line2);margin:12px 0}
+.msg .tblwrap{margin:10px 0}
+.msg td{white-space:normal}
+.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.file{display:inline-flex;align-items:center;gap:9px;padding:8px 12px;border:1px solid var(--gold);border-radius:2px;
+  background:var(--gold-dim);color:var(--gold-hi);font-size:12px;cursor:pointer;text-decoration:none}
+.file:hover{background:var(--gold);color:#0B1015}
+.file .fx{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;opacity:.8}
+.sources{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);font-size:11.5px;color:var(--faint)}
+.sources .sl{font-size:9.5px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.sources a{color:var(--gold);text-decoration:none}
+.sources a:hover{text-decoration:underline}
+.sources li{margin:2px 0}
+.sources ol{margin:0 0 0 18px}
+#askModelCustom{display:none;margin-top:6px}
 .composer{display:flex;gap:12px;align-items:flex-end}
 .composer textarea{resize:vertical;min-height:78px;font-size:13.5px}
 .composer button.go{margin-top:0;flex-shrink:0}
-
-/* ---------- VistaCharts ---------- */
-.chartctrl{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
-.chartctrl .field{min-width:180px}
-.periods{display:flex;gap:0;flex-wrap:wrap;border:1px solid var(--line2);border-radius:2px;overflow:hidden;width:max-content}
-.periods button{padding:8px 15px;border:none;border-right:1px solid var(--line2);background:var(--panel2);
-  color:var(--muted);font-family:inherit;font-size:10px;font-weight:600;letter-spacing:1.2px;
-  text-transform:uppercase;cursor:pointer;transition:.15s}
-.periods button:last-child{border-right:none}
-.periods button:hover{color:var(--cream);background:var(--panel3)}
-.periods button.on{background:var(--gold-dim);color:var(--gold-hi);box-shadow:inset 0 -2px 0 var(--gold)}
-.chartbox{position:relative;margin-top:4px;min-height:200px}
-.chartbox svg{display:block;width:100%;height:auto;touch-action:pan-y}
-.chartlegend{display:flex;gap:20px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:11.5px}
-.chartlegend .lg{display:flex;align-items:center;gap:8px;color:var(--muted)}
-.chartlegend .sw{width:16px;height:2px;flex-shrink:0;border-radius:1px}
-.chartlegend .lg b{color:var(--text);font-weight:600;letter-spacing:.4px}
-.chartlegend .lg .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.readout{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;
-  border-top:1px solid var(--line2);font-size:11.5px;color:var(--faint);
-  font-variant-numeric:tabular-nums;min-height:18px}
-.readout .rk{color:var(--muted);font-family:var(--mono)}
-.up{color:var(--ok)}
-.down{color:var(--bad)}
-
-/* VistaCharts takes the full width. The filter and domain rail serve Explore;
-   300px of RIA data domains buys nothing beside a chart. The tabs live in the
-   same column, so the rail flattens into a top bar rather than disappearing —
-   the same transformation the narrow-viewport block below already makes. */
-/* Symbol typeahead. Replaces two datalists that could only filter the dozen
-   presets baked into the page - and matched on the option LABEL, so typing
-   "R" surfaced VTI, VWO and AGG. */
-.combo{position:relative}
-/* Wider than the field on purpose: a symbol, an instrument name and a type
-   chip do not fit in a 180px input, and a truncated name ("Direxion D...")
-   is the one thing this menu exists to show. */
-.cmenu{position:absolute;top:calc(100% + 3px);left:0;right:auto;z-index:40;display:none;
-  width:392px;max-width:76vw;
-  background:var(--panel2);border:1px solid var(--line);border-radius:2px;
-  max-height:302px;overflow-y:auto;box-shadow:0 12px 28px rgba(0,0,0,.55)}
-.cmenu.on{display:block}
-.cmenu::-webkit-scrollbar{width:8px}
-.cmenu::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:4px}
-.copt{display:flex;align-items:baseline;gap:11px;padding:8px 12px;cursor:pointer;
-  border-bottom:1px solid var(--line2)}
-.copt:last-child{border-bottom:none}
-.copt:hover,.copt.sel{background:var(--gold-dim)}
-.copt .sym{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--gold-hi);
-  flex:0 0 auto;min-width:62px}
-.copt .nm{flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--muted);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.copt .tp{margin-left:auto;flex:0 0 auto;font-size:8.5px;font-weight:600;letter-spacing:1px;
-  text-transform:uppercase;color:var(--faint)}
-.cnone{padding:10px 12px;font-size:11.5px;color:var(--faint)}
-.cbusy{padding:10px 12px;font-size:11.5px;color:var(--faint)}
-
-.shell.chartsmode{grid-template-columns:1fr}
-.shell.chartsmode aside{position:static;max-height:none;border-right:none;
-  border-bottom:1px solid var(--line)}
-.shell.chartsmode .searchwrap,
-.shell.chartsmode .navscroll,
-.shell.chartsmode .railstamp{display:none}
-.shell.chartsmode .tabs{padding:12px 26px 0}
-.shell.chartsmode .tab{flex:0 0 auto;padding:9px 18px}
-.shell.chartsmode main{max-width:1500px}
 
 @media(max-width:900px){
   .shell{grid-template-columns:1fr}
@@ -277,9 +233,6 @@ summary:hover{color:var(--gold-hi)}
   .tabs{padding:12px 10px 0;gap:2px}
   .tabs{flex-wrap:wrap}
   .tab{font-size:9px;letter-spacing:.5px;padding:9px 2px;flex:1 1 30%}
-  .chartctrl .field{min-width:100%}
-  .periods{width:100%}
-  .periods button{flex:1;padding:8px 4px;letter-spacing:.6px}
   h2.display{font-size:27px}
 }
 </style>
@@ -310,13 +263,12 @@ summary:hover{color:var(--gold-hi)}
   <aside>
     <div class="tabs">
       <button class="tab on" data-tab="explore">Explore</button>
-      <button class="tab" data-tab="charts">VistaCharts</button>
       <button class="tab" data-tab="ask">Ask Randall</button>
       <button class="tab" data-tab="status">Status</button>
       <a class="tab link" href="/overview.html" title="Back to the VistaIntel overview">Overview</a>
     </div>
     <div class="searchwrap">
-      <input type="text" id="filter" placeholder="Filter 64 tools…" autocomplete="off">
+      <input type="text" id="filter" placeholder="Filter tools…" autocomplete="off">
     </div>
     <div class="navscroll" id="nav"><div class="empty-state"><span class="spin"></span></div></div>
     <div class="railstamp"><em>V</em>0.18 &middot; VistaIntel&trade;</div>
@@ -335,79 +287,13 @@ summary:hover{color:var(--gold-hi)}
     </section>
 
 
-    <!-- VISTACHARTS -->
-    <section class="panel" id="p-charts">
-      <div class="eyebrow">Relative Performance</div>
-      <h2 class="display">Vista<em>Charts.</em></h2>
-      <p class="lede">Total-return history for any listed security against a benchmark, from
-        3 months to max available history. Series are dividend- and split-adjusted, rebased to
-        zero at the start of the window, and intersected on common trading days so the comparison
-        is honest. Trailing and calendar-year tables are measured over full common history,
-        whatever window the chart shows.</p>
-
-      <div class="card">
-        <div class="chartctrl">
-          <div class="field">
-            <label for="chTicker">Ticker</label>
-            <div class="combo">
-              <input type="text" id="chTicker" value="AAPL" role="combobox"
-                     placeholder="Symbol or name"
-                     autocomplete="off" spellcheck="false"
-                     aria-autocomplete="list" aria-expanded="false" aria-controls="chTickerMenu">
-              <div class="cmenu" id="chTickerMenu" role="listbox"></div>
-            </div>
-          </div>
-          <div class="field">
-            <label for="chBench">Benchmark</label>
-            <div class="combo">
-              <input type="text" id="chBench" value="SPY" role="combobox"
-                     placeholder="Symbol, name, or blank"
-                     autocomplete="off" spellcheck="false"
-                     aria-autocomplete="list" aria-expanded="false" aria-controls="chBenchMenu">
-              <div class="cmenu" id="chBenchMenu" role="listbox"></div>
-            </div>
-          </div>
-          <button class="go" id="chGo" style="margin-top:0">Render</button>
-        </div>
-        <div class="periods" id="chPeriods"></div>
-
-        <div id="chBanner"></div>
-        <div class="chartlegend" id="chLegend"></div>
-        <div class="chartbox" id="chBox"></div>
-        <div class="readout" id="chReadout"></div>
-        <div class="meta" id="chMeta"></div>
-      </div>
-
-      <div class="card" id="chTrailCard" style="display:none">
-        <h3>Trailing returns</h3>
-        <div class="tblwrap"><table id="chTrail"></table></div>
-        <div class="meta" id="chTrailMeta"></div>
-      </div>
-
-      <div class="card" id="chYearsCard" style="display:none">
-        <h3>Calendar years</h3>
-        <div class="tblwrap"><table id="chYears"></table></div>
-        <div class="meta" id="chYearsMeta"></div>
-      </div>
-
-      <div class="card" id="chStatsCard" style="display:none">
-        <h3>Return &amp; risk &mdash; selected window</h3>
-        <div class="tblwrap"><table id="chStats"></table></div>
-        <div class="meta">Volatility and tracking error are annualised from daily returns (&radic;252).
-          Annualised return is shown only for windows longer than about 13 months — annualising a
-          shorter window converts noise into a headline. Sharpe, Sortino and alpha assume a 0%
-          risk-free rate; capture ratios are computed on monthly returns.</div>
-      </div>
-
-      <div class="stamp"><em>V</em>0.20 BUILD &middot; VistaCharts &middot; EODHD total return</div>
-    </section>
-
     <!-- ASK -->
     <section class="panel" id="p-ask">
       <div class="eyebrow">Natural Language Layer</div>
       <h2 class="display">Ask <em>Randall Stephens.</em></h2>
       <p class="lede">Randall selects the tools, runs them server-side against live data, and answers.
-        Every call he makes is shown in the trace beneath the answer.</p>
+        He can also search the web for what the datasets do not carry and hand back an Excel workbook
+        when a result is better sorted than read. Every call he makes is shown in the trace beneath the answer.</p>
       <div id="askBanner"></div>
       <div class="card">
         <div class="askctrl">
@@ -415,15 +301,23 @@ summary:hover{color:var(--gold-hi)}
             <label>Provider</label>
             <select id="askProvider"></select>
           </div>
+          <div class="field" style="min-width:260px">
+            <label>Model</label>
+            <select id="askModel"></select>
+            <input type="text" id="askModelCustom" placeholder="model id, e.g. claude-opus-5-5" autocomplete="off" spellcheck="false">
+          </div>
           <div class="field">
             <label>Tool scope</label>
-            <select id="askScope"><option value="">All 64 tools</option></select>
+            <select id="askScope"><option value="">All tools</option></select>
           </div>
           <div class="field">
             <label>Max rounds</label>
             <select id="askRounds">
               <option>3</option><option selected>5</option><option>8</option>
             </select>
+          </div>
+          <div class="field chk">
+            <input type="checkbox" id="askWeb" checked><label for="askWeb">Web search</label>
           </div>
           <div class="field chk">
             <input type="checkbox" id="askRelay"><label for="askRelay">Randall MCP relay</label>
@@ -557,10 +451,6 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab[data-tab]"),functio
     Array.prototype.forEach.call(document.querySelectorAll(".panel"),function(x){x.classList.remove("on");});
     t.classList.add("on");
     document.getElementById("p-"+t.dataset.tab).classList.add("on");
-    /* Explore's rail is noise on the chart panel; flatten it to a tab bar. */
-    var shell=document.querySelector(".shell");
-    if(t.dataset.tab==="charts") shell.classList.add("chartsmode");
-    else shell.classList.remove("chartsmode");
   };
 });
 
@@ -946,6 +836,50 @@ document.getElementById("stBtn").onclick=function(){
 };
 
 /* ============================ ask panel ============================ */
+var ASKMODELS={anthropic:[],openrouter:[]};
+var CUSTOM_MODEL="__custom__";
+
+function fmtPrice(m){
+  if(m.priceIn==null&&m.priceOut==null) return "";
+  return " · $"+(m.priceIn==null?"?":m.priceIn)+"/"+(m.priceOut==null?"?":m.priceOut)+" per M";
+}
+
+/* Model picker: one <optgroup> per tier for Anthropic, one per vendor for
+   OpenRouter, plus a free-text escape hatch so a model that shipped this
+   morning is usable before the roster knows its name. */
+function renderModelPicker(){
+  var provider=document.getElementById("askProvider").value;
+  var sel=document.getElementById("askModel"), custom=document.getElementById("askModelCustom");
+  sel.innerHTML="";
+  var list=ASKMODELS[provider]||[];
+  var def=(ASKCAP&&ASKCAP.providers&&ASKCAP.providers[provider]&&ASKCAP.providers[provider].model)||"";
+  var groups={}, order=[];
+  list.forEach(function(m){
+    var g=provider==="anthropic"
+      ? (m.tier>=5?"Flagship":m.tier>=4?"Opus line":m.tier>=3?"Sonnet line":"Fast / cheap")
+      : (m.id.split("/")[0]);
+    if(!groups[g]){groups[g]=[];order.push(g);}
+    groups[g].push(m);
+  });
+  var seenDefault=false;
+  order.forEach(function(g){
+    var og=document.createElement("optgroup"); og.label=g;
+    groups[g].forEach(function(m){
+      var o=el("option",null,m.label+(m.id!==m.label&&provider==="anthropic"?"  — "+m.id:"")+fmtPrice(m));
+      o.value=m.id; if(m.notes) o.title=m.notes;
+      if(m.id===def){o.selected=true;seenDefault=true;}
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  if(def&&!seenDefault){
+    var o=el("option",null,def+" (env default)"); o.value=def; o.selected=true; sel.insertBefore(o,sel.firstChild);
+  }
+  var c=el("option",null,"Custom model id…"); c.value=CUSTOM_MODEL; sel.appendChild(c);
+  custom.style.display="none";
+  sel.onchange=function(){ custom.style.display=sel.value===CUSTOM_MODEL?"block":"none"; if(sel.value===CUSTOM_MODEL) custom.focus(); };
+}
+
 function renderAskCaps(){
   var sel=document.getElementById("askProvider"), banner=document.getElementById("askBanner");
   sel.innerHTML=""; banner.innerHTML="";
@@ -953,11 +887,13 @@ function renderAskCaps(){
     banner.innerHTML='<div class="note bad">Could not read /api/ask capabilities. Reload the page.</div>';
     return;
   }
+  ASKMODELS=ASKCAP.models||{anthropic:[],openrouter:[]};
 
   var p=ASKCAP.providers||{}, any=false;
-  [["anthropic","Anthropic"],["openrouter","OpenRouter"]].forEach(function(x){
+  [["anthropic","Anthropic (direct)"],["openrouter","OpenRouter"]].forEach(function(x){
     var cfg=p[x[0]]||{};
-    var o=el("option",null,x[1]+(cfg.configured?" · "+(cfg.model||""):" (no key)"));
+    var n=(ASKMODELS[x[0]]||[]).length;
+    var o=el("option",null,x[1]+(cfg.configured?" · "+n+" models":" (no key)"));
     o.value=x[0]; if(!cfg.configured) o.disabled=true; else any=true;
     sel.appendChild(o);
   });
@@ -970,6 +906,14 @@ function renderAskCaps(){
       'project environment, then redeploy. Everything else on this page works without them.</div>';
     document.getElementById("askGo").disabled=true;
   }
+  sel.onchange=renderModelPicker;
+  renderModelPicker();
+  if(ASKMODELS.openrouterLive===false&&p.openrouter&&p.openrouter.configured){
+    banner.innerHTML+='<div class="note gap">OpenRouter model catalog could not be fetched; showing the built-in fallback list. Custom model ids still work.</div>';
+  }
+
+  var web=document.getElementById("askWeb");
+  if(ASKCAP.webSearch){ web.checked=ASKCAP.webSearch["default"]!==false; }
 
   var relay=document.getElementById("askRelay");
   if(!(ASKCAP.randallRelay&&ASKCAP.randallRelay.configured)){
@@ -979,39 +923,105 @@ function renderAskCaps(){
   }
 
   var scope=document.getElementById("askScope");
+  scope.options[0].textContent="All "+(ASKCAP.toolCount||"")+" tools";
   (ASKCAP.domains||[]).forEach(function(d){
     var o=el("option",null,d.label+" ("+d.toolCount+")"); o.value=d.id; scope.appendChild(o);
   });
+  var f=document.getElementById("filter"); if(f&&ASKCAP.toolCount) f.placeholder="Filter "+ASKCAP.toolCount+" tools…";
 }
 
-/* deliberately minimal + escape-first: model output is untrusted text */
-function mdlite(s){
-  var h=esc(s);
+function selectedModel(){
+  var sel=document.getElementById("askModel");
+  if(sel.value===CUSTOM_MODEL){
+    return (document.getElementById("askModelCustom").value||"").trim();
+  }
+  return sel.value;
+}
+
+/* Deliberately escape-first: model output is untrusted text. Supports the
+   Markdown the system prompt asks for - headings, bold/italic, inline code,
+   links, bullets and numbered lists, pipe tables, rules - and nothing with
+   script surface. Inline markup runs on already-escaped text. */
+function mdInline(h){
   h=h.replace(/`([^`\n]+)`/g,"<code>$1</code>");
   h=h.replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>");
-  var lines=h.split("\n"), out=[], inUl=false;
-  lines.forEach(function(l){
-    if(/^\s*[-*]\s+/.test(l)){
-      if(!inUl){out.push("<ul>");inUl=true;}
-      out.push("<li>"+l.replace(/^\s*[-*]\s+/,"")+"</li>");
-    } else {
-      if(inUl){out.push("</ul>");inUl=false;}
-      out.push(l.trim()===""?"<br>":"<div>"+l+"</div>");
+  h=h.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,"$1<em>$2</em>");
+  h=h.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  h=h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  return h;
+}
+function mdlite(s){
+  var lines=esc(s).split("\n"), out=[], list=null, i=0;
+  function closeList(){ if(list){out.push("</"+list+">");list=null;} }
+  function isTableRow(l){ return /^\s*\|.*\|\s*$/.test(l); }
+  function isTableSep(l){ return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l); }
+  function cells(l){ var t=l.trim().replace(/^\|/,"").replace(/\|$/,""); return t.split("|").map(function(c){return c.trim();}); }
+  while(i<lines.length){
+    var l=lines[i];
+    if(isTableRow(l)&&i+1<lines.length&&isTableSep(lines[i+1])){
+      closeList();
+      var head=cells(l), rows=[]; i+=2;
+      while(i<lines.length&&isTableRow(lines[i])){ rows.push(cells(lines[i])); i++; }
+      var t='<div class="tblwrap"><table><thead><tr>'+head.map(function(c){return "<th>"+mdInline(c)+"</th>";}).join("")+"</tr></thead><tbody>";
+      rows.forEach(function(r){ t+="<tr>"+r.map(function(c){return "<td>"+mdInline(c)+"</td>";}).join("")+"</tr>"; });
+      out.push(t+"</tbody></table></div>");
+      continue;
     }
-  });
-  if(inUl)out.push("</ul>");
-  return out.join("");
+    var m;
+    if((m=/^\s*(#{1,6})\s+(.*)$/.exec(l))){ closeList(); out.push("<"+(m[1].length<=2?"h3":"h4")+">"+mdInline(m[2])+"</"+(m[1].length<=2?"h3":"h4")+">"); }
+    else if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ closeList(); out.push("<hr>"); }
+    else if((m=/^\s*[-*•]\s+(.*)$/.exec(l))){ if(list!=="ul"){closeList();out.push("<ul>");list="ul";} out.push("<li>"+mdInline(m[1])+"</li>"); }
+    else if((m=/^\s*\d+[.)]\s+(.*)$/.exec(l))){ if(list!=="ol"){closeList();out.push("<ol>");list="ol";} out.push("<li>"+mdInline(m[1])+"</li>"); }
+    else if(l.trim()===""){ closeList(); out.push("<br>"); }
+    else { closeList(); out.push("<div>"+mdInline(l)+"</div>"); }
+    i++;
+  }
+  closeList();
+  /* collapse the double <br> a blank line before a block produces */
+  return out.join("").replace(/(<br>){2,}/g,"<br>");
 }
 
-function addMsg(kind,text,calls){
+function downloadAttachment(a){
+  var bin=atob(a.base64), bytes=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  var blob=new Blob([bytes],{type:a.mime}), url=URL.createObjectURL(blob);
+  var link=document.createElement("a"); link.href=url; link.download=a.filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},4000);
+}
+
+function addMsg(kind,text,calls,extra){
   var th=document.getElementById("thread");
   var m=el("div","msg "+kind);
   m.innerHTML=mdlite(text);
+  extra=extra||{};
+  if(extra.attachments&&extra.attachments.length){
+    var fl=el("div","files");
+    extra.attachments.forEach(function(a){
+      var b=el("a","file"); b.href="#";
+      b.innerHTML='<span class="fx">xlsx</span><span>'+esc(a.filename)+'</span><span class="fx">'+esc(a.summary||"")+' · '+Math.max(1,Math.round(a.bytes/1024))+' KB</span>';
+      b.onclick=function(e){e.preventDefault();downloadAttachment(a);};
+      fl.appendChild(b);
+    });
+    m.appendChild(fl);
+  }
+  if(extra.sources&&extra.sources.length){
+    var sv=el("div","sources");
+    sv.appendChild(el("div","sl","Web sources"));
+    var ol=el("ol");
+    extra.sources.slice(0,12).forEach(function(src){
+      var li=el("li"); var a=el("a",null,src.title||src.url); a.href=src.url; a.target="_blank"; a.rel="noopener noreferrer"; a.title=src.url;
+      li.appendChild(a); ol.appendChild(li);
+    });
+    sv.appendChild(ol); m.appendChild(sv);
+  }
   if(calls&&calls.length){
     var tr=el("div","trace");
     calls.forEach(function(c){
-      var chip=el("span","tchip"+(c.ok?"":" bad"),
-        c.name+" · "+c.ms+"ms"+(c.truncated?" · trunc":"")+(c.ok?"":" · ERR"));
+      var label=c.hosted
+        ? "web_search"+(c.args&&c.args.query?" · “"+c.args.query+"”":"")
+        : c.name+" · "+c.ms+"ms"+(c.truncated?" · trunc":"")+(c.ok?"":" · ERR");
+      var chip=el("span","tchip"+(c.ok?"":" bad")+(c.hosted?" web":""),label);
       if(c.error) chip.title=c.error;
       tr.appendChild(chip);
     });
@@ -1035,6 +1045,8 @@ function doAsk(){
   var scope=document.getElementById("askScope").value;
   var provider=document.getElementById("askProvider").value;
   if(!provider){ addMsg("e","No provider selected — no API key is configured."); return; }
+  var model=selectedModel();
+  if(!model){ addMsg("e","Enter a model id or pick one from the list."); return; }
 
   addMsg("u",q);
   inp.value="";
@@ -1053,8 +1065,9 @@ function doAsk(){
   function done(){ clearInterval(timer); pending.remove(); btn.disabled=false; btn.textContent="Ask"; }
 
   var payload={
-    question:q, provider:provider,
+    question:q, provider:provider, model:model,
     maxRounds:Number(document.getElementById("askRounds").value),
+    webSearch:document.getElementById("askWeb").checked,
     history:HISTORY.slice(-10)
   };
   if(scope) payload.domains=[scope];
@@ -1073,14 +1086,17 @@ function doAsk(){
         (d.error||failMsg(res))+(d.remedy?"\n\n"+d.remedy:""));
       return;
     }
-    addMsg("a",d.answer||"(empty answer)",d.toolCalls);
+    addMsg("a",d.answer||"(empty answer)",d.toolCalls,{attachments:d.attachments,sources:d.sources});
     HISTORY.push({role:"user",content:q});
     HISTORY.push({role:"assistant",content:d.answer||""});
     var w=(d.warnings&&d.warnings.length)?" · "+d.warnings.join(" · "):"";
+    var modelNote=d.modelUsed&&d.modelUsed!==d.model?d.model+" → "+d.modelUsed:(d.modelUsed||d.model);
     document.getElementById("askMeta").textContent=
-      d.provider+" · "+d.model+" · "+d.rounds+" round"+(d.rounds===1?"":"s")+
-      " · "+d.toolsExposed+" tools exposed · "+(d.toolCalls?d.toolCalls.length:0)+" calls · "+
-      fmt(d.usage?d.usage.inputTokens:0)+" in / "+fmt(d.usage?d.usage.outputTokens:0)+" out tokens · "+
+      d.provider+" · "+modelNote+" · "+d.rounds+" round"+(d.rounds===1?"":"s")+
+      " · "+d.toolsExposed+" tools exposed · "+(d.toolCalls?d.toolCalls.length:0)+" calls"+
+      (d.webSearches?" · "+d.webSearches+" web search"+(d.webSearches===1?"":"es"):(d.webSearch?"":" · web off"))+
+      (d.attachments&&d.attachments.length?" · "+d.attachments.length+" file"+(d.attachments.length===1?"":"s"):"")+
+      " · "+fmt(d.usage?d.usage.inputTokens:0)+" in / "+fmt(d.usage?d.usage.outputTokens:0)+" out tokens · "+
       fmt(Date.now()-t0)+" ms"+(d.randallRelay?" · Randall relay on":"")+w;
   }).catch(function(e){
     done();
@@ -1088,569 +1104,6 @@ function doAsk(){
   });
 }
 
-/* ============================ VistaCharts panel ============================
-   Rebased total-return chart, ticker vs benchmark, drawn as inline SVG.
-
-   No chart library on purpose. The console ships zero third-party JS today
-   and the whole panel is one path element per series plus axes — pulling in
-   a charting dependency to draw two lines would cost more than it buys and
-   would be the only remote script on a page that is otherwise self-contained.
---------------------------------------------------------------------------- */
-var CH = { period:"1Y", data:null, loaded:false, req:0 };
-
-var CH_PERIODS = ["3M","YTD","1Y","3Y","5Y","10Y","MAX"];
-var CH_TICKERS = [
-  ["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["AMZN","Amazon"],
-  ["GOOGL","Alphabet"],["META","Meta Platforms"],["BRK-B","Berkshire Hathaway B"],
-  ["JPM","JPMorgan Chase"],["XOM","Exxon Mobil"],["UNH","UnitedHealth"],
-  ["VTI","Vanguard Total Stock Market"],["VOO","Vanguard S&P 500"],
-  ["QQQ","Invesco Nasdaq 100"],["SCHD","Schwab US Dividend Equity"],
-  ["VIG","Vanguard Dividend Appreciation"],["VYM","Vanguard High Dividend Yield"],
-  ["ARKK","ARK Innovation"],["BND","Vanguard Total Bond Market"]
-];
-var CH_BENCHES = [
-  ["SPY","S&P 500"],["VTI","US total market"],["QQQ","Nasdaq 100"],["IWM","US small cap"],
-  ["ACWI","MSCI ACWI — global"],["VEA","Developed ex-US"],["VWO","Emerging markets"],
-  ["AGG","US aggregate bond"],["TLT","Long Treasury"],["VNQ","US REITs"],
-  ["GLD","Gold"],["DBC","Broad commodities"]
-];
-var CH_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function chPct(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
-  var v=x*100; return (v>=0?"+":"−")+Math.abs(v).toFixed(dp===undefined?2:dp)+"%"; }
-function chNum(x,dp){ if(x===null||x===undefined||!isFinite(x)) return "—";
-  return x.toFixed(dp===undefined?2:dp); }
-function chCls(x){ return (x===null||x===undefined||!isFinite(x))?"":(x>=0?"up":"down"); }
-function chDate(iso,longform){
-  var p=String(iso).split("-"); if(p.length<3) return String(iso);
-  var m=CH_MONTHS[parseInt(p[1],10)-1]||"";
-  return longform ? m+" "+parseInt(p[2],10)+", "+p[0] : m+" "+parseInt(p[2],10);
-}
-function chDateShort(iso,wide){
-  var p=String(iso).split("-"); var m=CH_MONTHS[parseInt(p[1],10)-1]||"";
-  return wide ? m+" ’"+p[0].slice(2) : m+" "+parseInt(p[2],10);
-}
-
-/* Y-axis label. A MAX window on a long-lived stock can run to five-digit
-   cumulative percentages; "30k%" keeps the gutter legible where "30000%"
-   would spill out of it. */
-function chYLab(t,span){
-  var v=t*100;
-  if(Math.abs(v)>=1000){
-    var k=v/1000;
-    return (Math.abs(k)>=10?k.toFixed(0):k.toFixed(1).replace(/\.0$/,""))+"k%";
-  }
-  return v.toFixed(span<0.12?1:0)+"%";
-}
-
-/* Whether the selected window annualises. relativeStats() annualises excess
-   and alpha past the same ~400-day threshold riskStats() uses for CAGR, so a
-   non-null series annualized is an exact proxy. It matters on MAX: an excess
-   of +10.91% sitting beside cumulative totals of +74,491% and +3,090% reads
-   as cumulative unless the label says otherwise. */
-function chAnnu(d){ return d.series.some(function(s){ return s.annualized!==null; }); }
-/* Axis ticks on human numbers (…1%, 2%, 5%, 10%…) rather than range/N. */
-function chTicks(lo,hi,target){
-  var span=hi-lo; if(!(span>0)) return [lo];
-  var raw=span/(target||5), mag=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)), norm=raw/mag;
-  var step=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
-  var out=[], t=Math.ceil(lo/step)*step;
-  for(; t<=hi+step*1e-9; t+=step) out.push(Math.abs(t)<step*1e-9?0:t);
-  return out;
-}
-
-/* ------------------------------------------------------------- typeahead
-   Symbol lookup against /api/funds?q= - EODHD search, already behind the same
-   auth as the chart itself, so no new server surface and no new billing
-   surface. Any listed instrument resolves by name or partial code: "MSF"
-   finds MSFT, a fund family name finds its funds, an index name finds the
-   index. The curated presets still show on an empty box, because a blank menu
-   is a worse starting point than a short list of real benchmarks.
-
-   US instruments trade as the bare code; everything else needs the exchange
-   suffix, which is exactly what the chart passes upstream. */
-function chCombo(inputId,menuId,presets){
-  var inp=document.getElementById(inputId);
-  var menu=document.getElementById(menuId);
-  var rows=[], sel=-1, seq=0, timer=null;
-
-  function close(){
-    menu.classList.remove("on"); menu.innerHTML="";
-    rows=[]; sel=-1; inp.setAttribute("aria-expanded","false");
-  }
-  function open(){ menu.classList.add("on"); inp.setAttribute("aria-expanded","true"); }
-
-  function paint(){
-    menu.innerHTML="";
-    rows.forEach(function(r,i){
-      var o=el("div","copt"+(i===sel?" sel":""));
-      o.setAttribute("role","option");
-      o.appendChild(el("span","sym",r.value));
-      o.appendChild(el("span","nm",r.name||""));
-      if(r.tag) o.appendChild(el("span","tp",r.tag));
-      /* mousedown, not click: blur fires first on click and would close the
-         menu out from under the selection. */
-      o.onmousedown=function(e){ e.preventDefault(); pick(i); };
-      menu.appendChild(o);
-    });
-    if(!rows.length) menu.appendChild(el("div","cnone","No match. Try a symbol or a name."));
-    open();
-  }
-
-  function busy(){
-    menu.innerHTML="";
-    var b=el("div","cbusy"); b.appendChild(el("span","spin"));
-    b.appendChild(el("span",null," Searching…"));
-    menu.appendChild(b); open();
-  }
-
-  function pick(i){
-    var r=rows[i]; if(!r) return;
-    inp.value=r.value; close(); chLoad();
-  }
-
-  function showPresets(){
-    rows=presets.map(function(p){ return {value:p[0],name:p[1],tag:null}; });
-    sel=-1; paint();
-  }
-
-  function search(q){
-    var my=++seq;
-    busy();
-    jfetch("/api/funds?limit=25&q="+encodeURIComponent(q)).then(function(res){
-      if(my!==seq) return;                 /* a newer keystroke already won */
-      /* A failed lookup is not an empty result. Saying "no match" when the
-         upstream 502'd sends the user hunting for a symbol that exists. */
-      if(!res.ok||!res.data){
-        rows=[]; sel=-1; menu.innerHTML="";
-        menu.appendChild(el("div","cnone","Lookup failed — "+failMsg(res)));
-        open(); return;
-      }
-      var list=res.data.results||[];
-      rows=[];
-      list.forEach(function(h){
-        var code=h.code||h.symbol||"";
-        if(!code) return;
-        var us=(h.exchange==="US");
-        rows.push({
-          value: us?code:(code+"."+(h.exchange||"")),
-          code: code.toUpperCase(), us: us,
-          name: h.name||"", tag: h.type||null
-        });
-      });
-      /* EODHD returns every listing of a name, ordered so the German venues
-         lead: live, "MSF" answered MSF.XETRA, MSF.F, MSF.STU, MSF.HM... with
-         MSFT eighth. Vistamark's universe is US-listed, so US venues sort
-         first, then an exact code match, then the shortest code - the closest
-         thing to what was actually typed. Non-US listings stay reachable
-         immediately below rather than being filtered out. */
-      var qq=q.toUpperCase();
-      rows.sort(function(a,b){
-        if(a.us!==b.us) return a.us?-1:1;
-        var ax=(a.code===qq)?0:1, bx=(b.code===qq)?0:1;
-        if(ax!==bx) return ax-bx;
-        return a.code.length-b.code.length;
-      });
-      sel=rows.length?0:-1;
-      paint();
-    }).catch(function(){ if(my===seq) close(); });   /* a failed lookup must not break typing */
-  }
-
-  inp.addEventListener("input",function(){
-    if(timer) clearTimeout(timer);
-    var q=inp.value.trim();
-    if(!q){ seq++; showPresets(); return; }
-    timer=setTimeout(function(){ search(q); },220);
-  });
-  inp.addEventListener("focus",function(){ if(!inp.value.trim()) showPresets(); });
-  inp.addEventListener("blur",function(){ setTimeout(close,140); });
-  inp.addEventListener("keydown",function(e){
-    var isOpen=menu.classList.contains("on");
-    if(e.key==="ArrowDown"||e.key==="ArrowUp"){
-      if(!isOpen){ showPresets(); return; }
-      e.preventDefault();
-      if(!rows.length) return;
-      sel=sel+(e.key==="ArrowDown"?1:-1);
-      if(sel<0) sel=rows.length-1;
-      if(sel>rows.length-1) sel=0;
-      paint();
-      var n=menu.children[sel];
-      if(n&&n.scrollIntoView) n.scrollIntoView({block:"nearest"});
-      return;
-    }
-    if(e.key==="Enter"){
-      e.preventDefault();
-      if(isOpen&&sel>=0&&rows.length) pick(sel);
-      else { close(); chLoad(); }
-      return;
-    }
-    if(e.key==="Escape"){ close(); }
-  });
-}
-
-/* ---------------------------------------------------------------- controls */
-(function chInit(){
-  chCombo("chTicker","chTickerMenu",CH_TICKERS);
-  chCombo("chBench","chBenchMenu",CH_BENCHES);
-
-  var box=document.getElementById("chPeriods");
-  CH_PERIODS.forEach(function(p){
-    var b=el("button",p===CH.period?"on":null,p);
-    b.onclick=function(){
-      CH.period=p;
-      Array.prototype.forEach.call(box.children,function(x){x.classList.remove("on");});
-      b.classList.add("on");
-      chLoad();
-    };
-    box.appendChild(b);
-  });
-
-  document.getElementById("chGo").onclick=chLoad;
-  /* Enter is owned by the combo below: it commits the highlighted match if the
-     menu is open, and renders otherwise. */
-
-  var tab=document.querySelector('.tab[data-tab="charts"]');
-  if(tab) tab.addEventListener("click",function(){ if(!CH.loaded) chLoad(); });
-})();
-
-/* -------------------------------------------------------------------- load */
-function chLoad(){
-  var ticker=(document.getElementById("chTicker").value||"").trim();
-  var bench=(document.getElementById("chBench").value||"").trim();
-  if(!ticker){ chFail("Enter a ticker symbol."); return; }
-
-  CH.loaded=true;
-  var myReq=++CH.req;
-  document.getElementById("chBanner").innerHTML="";
-  document.getElementById("chLegend").innerHTML="";
-  document.getElementById("chReadout").innerHTML="";
-  document.getElementById("chStatsCard").style.display="none";
-  document.getElementById("chTrailCard").style.display="none";
-  document.getElementById("chYearsCard").style.display="none";
-  document.getElementById("chBox").innerHTML=
-    '<div class="empty-state" style="padding:60px 0"><span class="spin"></span> '+
-    'Loading '+esc(ticker.toUpperCase())+(bench?" vs "+esc(bench.toUpperCase()):"")+
-    " · "+esc(CH.period)+"…</div>";
-  document.getElementById("chMeta").textContent="";
-
-  var url="/api/vistacharts?ticker="+encodeURIComponent(ticker)+
-          "&benchmark="+encodeURIComponent(bench)+
-          "&period="+encodeURIComponent(CH.period);
-
-  jfetch(url).then(function(res){
-    if(myReq!==CH.req) return;              /* a newer request already won */
-    if(!res.ok||!res.data) throw new Error(failMsg(res));
-    CH.data=res.data;
-    chDraw(res.data); chStats(res.data); chTables(res.data); chNotes(res.data);
-  }).catch(function(e){ if(myReq===CH.req) chFail(e.message); });
-}
-
-function chFail(msg){
-  document.getElementById("chBox").innerHTML="";
-  document.getElementById("chBanner").innerHTML=
-    '<div class="note bad">'+esc(msg)+"</div>";
-  document.getElementById("chStatsCard").style.display="none";
-  document.getElementById("chTrailCard").style.display="none";
-  document.getElementById("chYearsCard").style.display="none";
-  document.getElementById("chMeta").textContent="";
-}
-
-function chNotes(d){
-  if(!d.notes || !d.notes.length) return;
-  var b=document.getElementById("chBanner");
-  d.notes.forEach(function(n){
-    var div=el("div","note gap",n); b.appendChild(div);
-  });
-}
-
-/* -------------------------------------------------------------------- draw */
-function chDraw(d){
-  var W=920,H=330,padL=58,padR=16,padT=16,padB=28;
-  var plotW=W-padL-padR, plotH=H-padT-padB;
-  var n=d.dates.length;
-  var COLORS=["#C8A55C","#6E8BA8"];
-
-  var lo=0, hi=0;                            /* always keep 0 in frame */
-  d.series.forEach(function(s){ s.points.forEach(function(v){
-    if(v<lo)lo=v; if(v>hi)hi=v; }); });
-  var pad=(hi-lo)*0.08 || 0.02; lo-=pad; hi+=pad;
-
-  function X(i){ return padL + (n<2?0:(i/(n-1))*plotW); }
-  function Y(v){ return padT + (1-(v-lo)/(hi-lo))*plotH; }
-
-  var svg='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" '+
-          'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+
-          esc(d.series.map(function(s){return s.symbol;}).join(" versus "))+
-          " "+esc(d.periodLabel)+' return chart">';
-  svg+='<defs><linearGradient id="chFill" x1="0" y1="0" x2="0" y2="1">'+
-       '<stop offset="0" stop-color="#C8A55C" stop-opacity=".22"/>'+
-       '<stop offset="1" stop-color="#C8A55C" stop-opacity="0"/></linearGradient></defs>';
-
-  /* y grid + labels */
-  chTicks(lo,hi,6).forEach(function(t){
-    var y=Y(t), zero=Math.abs(t)<1e-9;
-    svg+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+
-         '" stroke="'+(zero?"rgba(200,165,92,.30)":"rgba(255,255,255,.055)")+
-         '" stroke-width="1"/>';
-    svg+='<text x="'+(padL-9)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" '+
-         'font-family="ui-monospace,Menlo,monospace" font-size="10.5" fill="'+
-         (zero?"#8794A1":"#5A6672")+'">'+chYLab(t,hi-lo)+'</text>';
-  });
-
-  /* x labels */
-  var wide=(Date.parse(d.to)-Date.parse(d.from))/86400000 > 400;
-  var xn=Math.min(6,n), seen={};
-  for(var k=0;k<xn;k++){
-    var i=Math.round(k*(n-1)/(xn-1||1)), lab=chDateShort(d.dates[i],wide);
-    if(seen[lab]) continue; seen[lab]=1;
-    var anch=k===0?"start":(k===xn-1?"end":"middle");
-    svg+='<text x="'+X(i).toFixed(1)+'" y="'+(H-9)+'" text-anchor="'+anch+'" '+
-         'font-family="ui-monospace,Menlo,monospace" font-size="10.5" fill="#5A6672">'+
-         esc(lab)+'</text>';
-  }
-
-  /* series — benchmark first so the ticker line sits on top */
-  var order=d.series.map(function(s,i){return i;}).sort(function(a,b){return b-a;});
-  order.forEach(function(si){
-    var s=d.series[si], pts=s.points, path="";
-    for(var i=0;i<pts.length;i++){
-      var xi=(pts.length===n)?i:Math.round(i*(n-1)/(pts.length-1||1));
-      path+=(i?"L":"M")+X(xi).toFixed(1)+" "+Y(pts[i]).toFixed(1)+" ";
-    }
-    if(si===0){
-      svg+='<path d="'+path+"L"+X(n-1).toFixed(1)+" "+Y(lo).toFixed(1)+
-           " L"+X(0).toFixed(1)+" "+Y(lo).toFixed(1)+' Z" fill="url(#chFill)" stroke="none"/>';
-    }
-    svg+='<path d="'+path+'" fill="none" stroke="'+COLORS[si]+'" stroke-width="'+
-         (si===0?2:1.5)+'" stroke-linejoin="round" stroke-linecap="round"'+
-         (si===0?'':' stroke-opacity=".85"')+'/>';
-  });
-
-  /* crosshair (hidden until scrub) */
-  svg+='<g id="chCross" style="display:none">'+
-       '<line id="chCrossL" y1="'+padT+'" y2="'+(padT+plotH)+'" stroke="rgba(237,228,207,.35)" stroke-width="1"/>';
-  d.series.forEach(function(s,i){
-    svg+='<circle id="chDot'+i+'" r="3.5" fill="'+COLORS[i]+'" stroke="#080B0F" stroke-width="1.5"/>';
-  });
-  svg+='</g>';
-  svg+='<rect id="chHit" x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+
-       '" fill="transparent" style="cursor:crosshair"/>';
-  svg+='</svg>';
-
-  document.getElementById("chBox").innerHTML=svg;
-
-  /* legend */
-  var lg=document.getElementById("chLegend"); lg.innerHTML="";
-  d.series.forEach(function(s,i){
-    var w=el("div","lg");
-    var sw=el("span","sw"); sw.style.background=COLORS[i]; w.appendChild(sw);
-    w.appendChild(el("b",null,s.symbol));
-    var v=el("span","v "+chCls(s.totalReturn),chPct(s.totalReturn));
-    w.appendChild(v);
-    if(i===1) w.appendChild(el("span",null,"benchmark"));
-    lg.appendChild(w);
-  });
-  if(d.relative && d.relative.excessReturn!==null){
-    var ex=el("div","lg");
-    ex.appendChild(el("b",null,chAnnu(d)?"Excess (ann.)":"Excess"));
-    ex.appendChild(el("span","v "+chCls(d.relative.excessReturn),chPct(d.relative.excessReturn)));
-    lg.appendChild(ex);
-  }
-
-  document.getElementById("chMeta").textContent=
-    d.periodLabel+" · "+chDate(d.from,true)+" → "+chDate(d.to,true)+" · "+
-    fmt(d.tradingDays)+" common trading days · total return, dividend + split adjusted · EODHD";
-
-  chScrub(d,{W:W,padL:padL,plotW:plotW,n:n,X:X,Y:Y,colors:COLORS});
-  chReadoutAt(d,n-1);
-}
-
-/* ----------------------------------------------------------------- scrub */
-function chScrub(d,g){
-  var box=document.getElementById("chBox");
-  var svg=box.querySelector("svg"), hit=box.querySelector("#chHit");
-  var cross=box.querySelector("#chCross"), line=box.querySelector("#chCrossL");
-  if(!svg||!hit) return;
-
-  function at(clientX){
-    var r=svg.getBoundingClientRect(); if(!r.width) return;
-    var vx=((clientX-r.left)/r.width)*g.W;
-    var i=Math.round(((vx-g.padL)/g.plotW)*(g.n-1));
-    i=Math.max(0,Math.min(g.n-1,i));
-    cross.style.display="";
-    line.setAttribute("x1",g.X(i).toFixed(1));
-    line.setAttribute("x2",g.X(i).toFixed(1));
-    d.series.forEach(function(s,si){
-      var dot=box.querySelector("#chDot"+si); if(!dot) return;
-      var pi=(s.points.length===g.n)?i:Math.round(i*(s.points.length-1)/(g.n-1||1));
-      dot.setAttribute("cx",g.X(i).toFixed(1));
-      dot.setAttribute("cy",g.Y(s.points[pi]).toFixed(1));
-    });
-    chReadoutAt(d,i);
-  }
-
-  hit.addEventListener("mousemove",function(e){ at(e.clientX); });
-  hit.addEventListener("mouseleave",function(){
-    cross.style.display="none"; chReadoutAt(d,g.n-1);
-  });
-  hit.addEventListener("touchstart",function(e){
-    if(e.touches[0]) at(e.touches[0].clientX);
-  },{passive:true});
-  hit.addEventListener("touchmove",function(e){
-    if(e.touches[0]) at(e.touches[0].clientX);
-  },{passive:true});
-}
-
-function chReadoutAt(d,i){
-  var r=document.getElementById("chReadout"); r.innerHTML="";
-  var n=d.dates.length;
-  var head=el("span","rk",chDate(d.dates[Math.max(0,Math.min(n-1,i))],true));
-  r.appendChild(head);
-  d.series.forEach(function(s){
-    var pi=(s.points.length===n)?i:Math.round(i*(s.points.length-1)/(n-1||1));
-    pi=Math.max(0,Math.min(s.points.length-1,pi));
-    var v=s.points[pi];
-    var w=el("span");
-    w.appendChild(el("span","rk",s.symbol+" "));
-    w.appendChild(el("span",chCls(v),chPct(v)));
-    r.appendChild(w);
-  });
-}
-
-/* ----------------------------------------------------------------- stats */
-function chStats(d){
-  var card=document.getElementById("chStatsCard");
-  var t=document.getElementById("chStats"); t.innerHTML="";
-
-  var head=el("thead"), hr=el("tr");
-  hr.appendChild(el("th",null,"Measure"));
-  d.series.forEach(function(s){
-    var th=el("th",null,s.symbol+(s.role==="benchmark"?" (benchmark)":""));
-    th.style.textAlign="right"; hr.appendChild(th);
-  });
-  head.appendChild(hr); t.appendChild(head);
-
-  var tb=el("tbody");
-  function row(label,vals,cls){
-    var tr=el("tr"); tr.appendChild(el("td",null,label));
-    vals.forEach(function(v){
-      var td=el("td","num "+(cls?cls(v.raw):""),v.txt);
-      tr.appendChild(td);
-    });
-    tb.appendChild(tr);
-  }
-  function pcts(key,dp){ return d.series.map(function(s){
-    return {raw:s[key],txt:chPct(s[key],dp)}; }); }
-
-  row("Total return",pcts("totalReturn"),chCls);
-  if(d.series.some(function(s){return s.annualized!==null;}))
-    row("Annualised (CAGR)",pcts("annualized"),chCls);
-  row("Volatility (ann.)",d.series.map(function(s){
-    return {raw:null,txt:s.volatility===null||s.volatility===undefined?"—":
-            (s.volatility*100).toFixed(2)+"%"};}));
-  row("Sharpe ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sharpe)};}));
-  row("Sortino ratio",d.series.map(function(s){return {raw:null,txt:chNum(s.sortino)};}));
-  row("Max drawdown",pcts("maxDrawdown"),chCls);
-  row("Drawdown window",d.series.map(function(s){
-    if(!s.drawdownPeak||!s.drawdownTrough) return {raw:null,txt:"—"};
-    return {raw:null,txt:chDate(s.drawdownPeak,true)+" → "+chDate(s.drawdownTrough,true)+
-            (s.drawdownRecovered?" · rec. "+chDate(s.drawdownRecovered,true):
-             " · not recovered")};}));
-  row("Best day",d.series.map(function(s){
-    return {raw:s.best?s.best.value:null,
-            txt:s.best?chPct(s.best.value)+"  "+chDate(s.best.date):"—"};}),chCls);
-  row("Worst day",d.series.map(function(s){
-    return {raw:s.worst?s.worst.value:null,
-            txt:s.worst?chPct(s.worst.value)+"  "+chDate(s.worst.date):"—"};}),chCls);
-  row("Positive days",d.series.map(function(s){
-    return {raw:null,txt:s.positiveDays===null||s.positiveDays===undefined?"—":
-            (s.positiveDays*100).toFixed(0)+"%"};}));
-
-  var rel=d.relative;
-  if(rel){
-    var ratio=function(x){ return x===null||x===undefined||!isFinite(x)?"—":
-      (x*100).toFixed(0)+"%"; };
-    var span2=function(txt,cls){
-      var tr=el("tr"); tr.appendChild(el("td",null,txt[0]));
-      var td=el("td","num "+(cls||""),txt[1]); td.colSpan=d.series.length;
-      tr.appendChild(td); tb.appendChild(tr);
-    };
-    span2(["Excess return vs "+d.series[1].symbol+(chAnnu(d)?" (ann.)":""),
-           chPct(rel.excessReturn)],chCls(rel.excessReturn));
-    span2(["Alpha (ann.)",chPct(rel.alpha)],chCls(rel.alpha));
-    span2(["Beta to "+d.series[1].symbol,chNum(rel.beta)]);
-    span2(["Correlation",chNum(rel.correlation)]);
-    span2(["R²",chNum(rel.rSquared)]);
-    span2(["Tracking error (ann.)",rel.trackingError===null||rel.trackingError===undefined?"—":
-           (rel.trackingError*100).toFixed(2)+"%"]);
-    span2(["Information ratio",chNum(rel.informationRatio)]);
-    span2(["Up capture (monthly)",ratio(rel.upCapture)]);
-    span2(["Down capture (monthly)",ratio(rel.downCapture)]);
-  }
-  t.appendChild(tb);
-  card.style.display="";
-}
-
-/* --------------------------------------------------- multi-period tables */
-function chTables(d){
-  /* A cached pre-0.20 payload has no trailing/calendarYears - degrade to
-     the chart rather than throwing mid-render. */
-  if(!d.trailing || !d.calendarYears){
-    document.getElementById("chTrailCard").style.display="none";
-    document.getElementById("chYearsCard").style.display="none";
-    return;
-  }
-  var two=d.series.length>1;
-  var tSym=d.series[0].symbol, bSym=two?d.series[1].symbol:null;
-
-  function head(first){
-    var h=el("thead"), r=el("tr");
-    r.appendChild(el("th",null,first));
-    var th1=el("th",null,tSym); th1.style.textAlign="right"; r.appendChild(th1);
-    if(two){
-      var th2=el("th",null,bSym); th2.style.textAlign="right"; r.appendChild(th2);
-      var th3=el("th",null,"+/−"); th3.style.textAlign="right"; r.appendChild(th3);
-    }
-    h.appendChild(r); return h;
-  }
-  function tr(label,a,b){
-    var r=el("tr"); r.appendChild(el("td",null,label));
-    r.appendChild(el("td","num "+chCls(a),chPct(a)));
-    if(two){
-      r.appendChild(el("td","num "+chCls(b),chPct(b)));
-      var ex=(a!==null&&a!==undefined&&b!==null&&b!==undefined&&isFinite(a)&&isFinite(b))
-             ? a-b : null;
-      r.appendChild(el("td","num "+chCls(ex),chPct(ex)));
-    }
-    return r;
-  }
-
-  var tt=document.getElementById("chTrail"); tt.innerHTML="";
-  tt.appendChild(head("Window"));
-  var tb=el("tbody");
-  d.trailing.forEach(function(t){
-    tb.appendChild(tr(t.window+(t.annualized?" (ann.)":""),t.return,t.benchmark));
-  });
-  tt.appendChild(tb);
-  document.getElementById("chTrailMeta").textContent=
-    "Measured back from "+chDate(d.asOf,true)+" over full common history, since "+
-    chDate(d.historyFrom,true)+". Windows over ~13 months are annualised; "+
-    "— means the window opens before the data does.";
-  document.getElementById("chTrailCard").style.display="";
-
-  var ty=document.getElementById("chYears"); ty.innerHTML="";
-  ty.appendChild(head("Year"));
-  var yb=el("tbody"), partial=false;
-  d.calendarYears.slice().reverse().forEach(function(y){
-    partial=partial||y.partial;
-    yb.appendChild(tr(y.year+(y.partial?"*":""),y.return,y.benchmark));
-  });
-  ty.appendChild(yb);
-  document.getElementById("chYearsMeta").textContent=
-    (partial?"* partial year. ":"")+
-    "Total returns, dividends reinvested; each full year measures Dec 31 to Dec 31.";
-  document.getElementById("chYearsCard").style.display="";
-}
 </script>
 </body>
 </html>
