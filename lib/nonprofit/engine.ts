@@ -116,7 +116,7 @@ export interface NpProgramSummary {
   target: number;
   examined: number;
   drafted: number;
-  skipped: { reason: string; ein: string; org: string; person?: string }[];
+  skipped: { reason: string; ein: string; org: string; person?: string; error?: string }[];
   drafts: { leadId: number; org: string; person: string; email: string; emailStatus: string | null; subject: string; delivery: string; crm: string }[];
   budgetExhausted: boolean;
   candidatesExhausted: boolean;
@@ -630,7 +630,8 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
     const lid = leadId ?? 0;
 
     const fail = async (reason: string, person?: string, meta: Record<string, unknown> = {}) => {
-      s.skipped.push({ reason, ein: org.ein, org: org.name, person });
+      if (meta.error) console.error(`[nonprofit-engine] ${org.name}: ${reason}: ${String(meta.error).slice(0, 400)}`);
+      s.skipped.push({ reason, ein: org.ein, org: org.name, person, ...(meta.error ? { error: String(meta.error).slice(0, 200) } : {}) });
       if (!opts.dryRun && leadId != null) {
         await updateLead(leadId, { status: `skipped:${reason}` });
         await logEvent(leadId, "gate", `skipped: ${reason}`, meta, opts.actor);
@@ -664,6 +665,8 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
       email = person?.email ?? null;
       emailStatus = person?.emailStatus ?? null;
       if (person) {
+        if (person.name && person.name.split(" ").length > pick.name.split(" ").length) pick.name = person.name;
+        pick.title = pick.title ?? person.title ?? null;
         pick.linkedinUrl = pick.linkedinUrl ?? person.linkedinUrl ?? null;
         pick.headline = pick.headline ?? person.headline ?? null;
         pick.firstName = pick.firstName ?? person.firstName ?? null;
