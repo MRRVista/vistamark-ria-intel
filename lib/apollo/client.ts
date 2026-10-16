@@ -144,6 +144,8 @@ export interface ApolloPeopleSearchResponse {
   people?: ApolloPerson[];
   contacts?: ApolloPerson[];
   pagination?: ApolloPagination;
+  /** mixed_people/api_search returns a flat total instead of a pagination block */
+  total_entries?: number;
 }
 
 export interface ApolloMatchResponse {
