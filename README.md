@@ -1,6 +1,6 @@
 # Vistamark Intel
 
-A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **73 tools across 17 dataset families.** Queried in production by Randall, Vistamark's AI associate.
+A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **79 tools across 18 dataset families.** Queried in production by Randall, Vistamark's AI associate.
 
 ## Data domains
 
@@ -27,6 +27,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 - **Public Plans Database** — the ~230 largest U.S. state/local pension plans, multi-year funding history.
 - **USAspending** — federal awards by recipient + top-recipient screens.
 - **EODHD** (keyed) — global market data: symbol search, EOD price history (adjusted), delayed real-time quotes (batch ≤15), dividends/splits, fundamentals (section-filtered), news with sentiment, cross-market screener.
+- **Apollo.io** (keyed; Free plan includes API access) — B2B people/company search (free) and professional-email enrichment (1 credit per email found). Personal-email and phone reveal are off by default; `apollo_enrich_prospect` writes hits onto prospect rows as `unverified` with `append:apollo:tried` / `email:apollo` tags so nothing is re-billed.
 
 **First-party (PII — token-or-session gated, never on an open endpoint):**
 
@@ -53,6 +54,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | `CRON_SECRET` | yes | Authenticates manual cron/admin triggers |
 | `FRED_API_KEY` | yes (macro tools) | Free key — https://fred.stlouisfed.org |
 | `EODHD_API_TOKEN` | yes (eodhd_* tools) | EODHD API token — https://eodhd.com |
+| `APOLLO_API_KEY` | yes (apollo_* tools) | Apollo.io API key — app.apollo.io → Settings → Integrations → API |
 | `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2) |
 | `EIA_API_KEY` / `BLS_API_KEY` / `DATA_GOV_API_KEY` | future | Reserved for the keyed-API expansion tier |
 | `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | yes (Ask layer) | At least one. `ANTHROPIC_MODEL` / `OPENROUTER_MODEL` pin the defaults the picker opens on. |
@@ -123,9 +125,9 @@ Per candidate: one web-search-backed model call finds the person's *professional
 
 Manual run: `curl -H "Authorization: Bearer $CRON_SECRET" "https://vistaintel.app/api/cron/prospect-engine?target=1&dryRun=1"`. Optional env: `OUTREACH_SENDER_NAME`, `OUTREACH_SENDER_TITLE`, `OUTREACH_FIRM_LEGAL`, `OUTREACH_FOOTER`, `PROSPECT_ENGINE_LOCAL_HOUR`.
 
-## MCP tools (73 total)
+## MCP tools (79 total)
 
-RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`)
+RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Apollo contact enrichment (6: `apollo_people_search`, `apollo_person_enrich`, `apollo_people_bulk_enrich`, `apollo_org_search`, `apollo_org_enrich`, `apollo_enrich_prospect`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`)
 
 Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 
@@ -139,6 +141,7 @@ Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 - *"Who's raising credit funds this month?"* → `formd_search` (query='credit fund', startDate=…)
 - *"UChicago endowment vs the national field"* → `endowment_percentile_rank` (instnm='University of Chicago')
 - *"Illinois public pensions under 50% funded"* → `ppd_plan_search` (state=IL, maxFundedRatioPct=50)
+- *"Who sits on the Hinsdale Community House board and how do I reach them?"* → 990 Part VII roster → `apollo_people_search` (personName + organizationNames) → `apollo_person_enrich` (apolloId) → validate → draft
 - *"What do we have in 60521?"* → `prospects_zip_summary` → *"Homes over $2M we can email"* → `prospects_search` (zip=60521, minHomeValue=2000000, contactableByEmail=true)
 
 ## Roadmap
