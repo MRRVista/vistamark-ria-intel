@@ -1,0 +1,86 @@
+# IRS Form 990 e-file loader.
+#
+# WHY GITHUB ACTIONS AND NOT A VERCEL CRON
+#   One IRS TEOS zip batch is 50–500 MB and ~10K–160K XML returns. Vercel
+#   functions cap wall-clock, memory and ephemeral disk far below that; a
+#   hosted runner has 6 h / 7 GB / 14 GB. The job writes straight to Neon over
+#   `pg` and records progress in irs990_batches + ingest_runs, so the console
+#   Status page and database_status see it exactly like the Vercel crons.
+#
+# SCHEDULE
+#   The IRS republishes monthly, usually in the first week. We run on the 8th
+#   at 08:10 UTC (after the 3rd-of-month parcel cron, before the weekly BMF
+#   Wednesday). Each run diff-loads whatever the yearly index lists that the
+#   ledger has not marked ok — a no-op month costs one index download.
+#
+# SECRETS
+#   IRS990_DATABASE_URL — Neon Postgres URL (direct or pooled; `pg` driver).
+#   Falls back to DATABASE_URL if that secret exists instead.
+#
+# MANUAL
+#   Actions → "IRS 990 ingest" → Run workflow: pick index years, a single
+#   batch id (re-loads it), a batch cap, or --list to see the diff only.
+
+name: IRS 990 ingest
+
+on:
+  schedule:
+    - cron: "10 8 8 * *"
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Index years, comma-separated (default 2021→current)"
+        required: false
+        default: ""
+      batch:
+        description: "Single batch id to (re)load, e.g. 2025_TEOS_XML_10A"
+        required: false
+        default: ""
+      max_batches:
+        description: "Cap on batches this run (blank = all pending)"
+        required: false
+        default: ""
+      max_entries:
+        description: "Cap on XML entries per batch (dry runs)"
+        required: false
+        default: ""
+      list_only:
+        description: "Only list index batches vs ledger"
+        type: boolean
+        default: false
+
+concurrency:
+  group: irs990-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DATABASE_URL: ${{ secrets.IRS990_DATABASE_URL != '' && secrets.IRS990_DATABASE_URL || secrets.DATABASE_URL }}
+      NODE_OPTIONS: --max-old-space-size=5120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Apply migrations (idempotent)
+        run: npx tsx scripts/migrate.ts
+
+      - name: Load IRS 990 batches
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ -n "${{ github.event.inputs.years }}" ]; then ARGS="$ARGS --years ${{ github.event.inputs.years }}"; fi
+          if [ -n "${{ github.event.inputs.batch }}" ]; then ARGS="$ARGS --batch ${{ github.event.inputs.batch }}"; fi
+          if [ -n "${{ github.event.inputs.max_batches }}" ]; then ARGS="$ARGS --max-batches ${{ github.event.inputs.max_batches }}"; fi
+          if [ -n "${{ github.event.inputs.max_entries }}" ]; then ARGS="$ARGS --max-entries ${{ github.event.inputs.max_entries }}"; fi
+          if [ "${{ github.event.inputs.list_only }}" = "true" ]; then ARGS="$ARGS --list"; fi
+          echo "args: $ARGS"
+          npx tsx scripts/irs990-ingest.ts $ARGS

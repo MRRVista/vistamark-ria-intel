@@ -1,6 +1,8 @@
 # Form 990 e-file XML family — design spec
 
-**Status:** SPEC — pre-build. Phase 0 spike gates everything below.
+**Status:** SUPERSEDED 2026-10-16 by the shipped `irs990` family (v0.28.0, migration 0007). Phase 0 outcome: IRS zips do not need range reads — the loader runs in GitHub Actions (`.github/workflows/irs990-ingest.yml`, `scripts/irs990-ingest.ts`, `lib/irs990/`) and downloads whole batches. Shipped fields: financial summary, Part X investments, Schedule D endowment EOY, Part IX 11f investment-management fees, governance counts, and the full Part VII people table. Kept for the field rationale below.
+
+~~**Status:** SPEC — pre-build. Phase 0 spike gates everything below.~~
 **Author:** drafted 2026-07-06, per Matt ("Go").
 **Family name:** `f990` (distinct from `irs_eo` = BMF bands, and `propublica_org_990` = live per-EIN API).
 **Why:** BMF gives asset *bands*; the 990 e-file XML gives exact investment assets, Schedule D endowment balances, investment income, and — the killer field — investment-management fees paid (Part IX line 11f). One tool call answers: *"Illinois nonprofits with >$25M invested, paying >50bps, whose endowment shrank last year."*

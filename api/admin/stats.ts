@@ -113,8 +113,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       latestQuery: "SELECT MAX(last_updated_at) AS t FROM nonprofits",
     },
     {
+      name: "irs990_filings",
+      source: "IRS TEOS 990 e-file XML (GitHub Actions, monthly)",
+      countQuery: "SELECT COUNT(*)::int AS n FROM irs990_filings",
+      latestQuery: "SELECT MAX(loaded_at) AS t FROM irs990_filings",
+    },
+    {
+      name: "irs990_persons",
+      source: "Part VII people from irs990_filings",
+      countQuery: "SELECT COUNT(*)::int AS n FROM irs990_persons",
+      latestQuery: "SELECT MAX(f.loaded_at) AS t FROM irs990_filings f",
+    },
+    {
+      name: "irs990_batches",
+      source: "Loader ledger — one row per IRS zip batch",
+      countQuery: "SELECT COUNT(*)::int AS n FROM irs990_batches WHERE status = 'ok'",
+      latestQuery: "SELECT MAX(finished_at) AS t FROM irs990_batches",
+    },
+    {
       name: "ingest_runs",
-      source: "Written by all cron jobs",
+      source: "Written by all cron jobs + the irs990 loader",
       countQuery: "SELECT COUNT(*)::int AS n FROM ingest_runs",
       latestQuery: "SELECT MAX(started_at) AS t FROM ingest_runs",
     },
