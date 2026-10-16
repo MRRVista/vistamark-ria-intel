@@ -20,6 +20,7 @@
     "api/cron/refresh-ipeds.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
     "api/cron/refresh-nacubo.ts": { "maxDuration": 60, "includeFiles": "migrations/**" },
     "api/cron/prospect-engine.ts": { "maxDuration": 300, "includeFiles": "migrations/**" },
+    "api/cron/nonprofit-engine.ts": { "maxDuration": 800, "includeFiles": "migrations/**" },
     "api/cron/ingest-parcels.ts": { "maxDuration": 300 },
     "api/admin/email-append.ts": { "maxDuration": 300 },
     "api/admin/enrich-upload.ts": { "maxDuration": 300 },
@@ -35,6 +36,10 @@
     { "path": "/api/cron/refresh-nacubo", "schedule": "0 12 15 2 *" },
     { "path": "/api/cron/prospect-engine", "schedule": "0 0 * * *" },
     { "path": "/api/cron/prospect-engine", "schedule": "0 1 * * *" },
+    { "path": "/api/cron/nonprofit-engine?program=matt", "schedule": "5 0 * * *" },
+    { "path": "/api/cron/nonprofit-engine?program=matt", "schedule": "5 1 * * *" },
+    { "path": "/api/cron/nonprofit-engine?program=ryan", "schedule": "25 0 * * *" },
+    { "path": "/api/cron/nonprofit-engine?program=ryan", "schedule": "25 1 * * *" },
     { "path": "/api/cron/ingest-parcels", "schedule": "0 7 3 * *" }
   ],
   "redirects": [
