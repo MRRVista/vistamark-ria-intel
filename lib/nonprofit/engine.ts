@@ -351,7 +351,7 @@ Hard rules:
 - org_angle: ONE sentence a partner could say about the ORGANIZATION's investment program drawn from the facts given (pool size, endowment, fees paid to outside managers, retirement plan) — factual, not flattering.
 - Do not invent anything about Vistamark.
 
-Return one JSON object in <result></result>:
+Your FINAL message must be exactly one JSON object inside <result></result> tags and nothing else — no prose before or after:
 {"confidence":"high|medium|low","identity_match":"...","summary":"2-3 sentence professional bio","affinity":null,"affinity_kind":null,"personalization_hooks":[],"org_angle":"...","sources":[]}
 affinity_kind is "school" | "city" | "board" | "career" | null.`;
 
@@ -368,13 +368,29 @@ ${extraSeats.length ? `Other nonprofit board seats on file (IRS 990 index):\n${e
 
 Verify and research this person, following the rules exactly.`;
 
-  const blocks = await anthropic({
-    max_tokens: 1600,
+  const first = await anthropic({
+    max_tokens: 3000,
     system,
     messages: [{ role: "user", content: user }],
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
   }, timeoutMs);
-  const r = extractJson<ResearchOut>(finalText(blocks));
+  let r: ResearchOut;
+  try {
+    r = extractJson<ResearchOut>(finalText(first));
+  } catch {
+    // Long web-search turns sometimes end before the JSON envelope. One
+    // tool-free nudge finishes the job from what was already found.
+    const retry = await anthropic({
+      max_tokens: 1500,
+      system,
+      messages: [
+        { role: "user", content: user },
+        { role: "assistant", content: finalText(first).slice(-3000) || "(research notes gathered)" },
+        { role: "user", content: "Return ONLY the <result></result> JSON object now, based on what you found. No other text." },
+      ],
+    }, Math.min(45_000, timeoutMs));
+    r = extractJson<ResearchOut>(finalText(retry));
+  }
   r.personalization_hooks = Array.isArray(r.personalization_hooks) ? r.personalization_hooks.filter((x) => typeof x === "string").slice(0, 6) : [];
   r.sources = Array.isArray(r.sources) ? r.sources.filter((x) => typeof x === "string").slice(0, 8) : [];
   if (!["high", "medium", "low"].includes(r.confidence)) r.confidence = "low";
