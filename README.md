@@ -1,6 +1,6 @@
 # Vistamark Intel
 
-A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **79 tools across 18 dataset families.** Queried in production by Randall, Vistamark's AI associate.
+A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **84 tools across 19 dataset families.** Queried in production by Randall, Vistamark's AI associate.
 
 ## Data domains
 
@@ -8,6 +8,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 
 - **Form ADV (SEC IAPD)** — weekly ingest; ~23.7K SEC-registered advisers. Firms, advisors, AUM history, custodians, private funds, alumni tracking.
 - **IRS Exempt Organizations BMF** — 6-region rotation; 1.7M+ tax-exempt orgs with asset/income/revenue bands.
+- **IRS Form 990 e-file returns** — every e-filed 990 / 990-EZ / 990-PF from the IRS TEOS bulk XML (index years 2021→current, ~750K returns/yr): financial summary (revenue, expenses, assets, net assets, invested securities, Schedule D endowment, investment-management fees paid — Part IX 11f) **plus every officer / director / trustee / key employee listed in Part VII** — the national nonprofit board-member index (`irs990_persons`, ~8 people per return, trigram-indexed on a normalized name; 990-PF rows carry the person's address). Loaded by the **`IRS 990 ingest` GitHub Actions workflow** (monthly, 8th) — not a Vercel cron, because one IRS batch is 50–500 MB. Ledger in `irs990_batches`; status at `GET /api/admin/irs990`.
 - **DOL Form 5500** — annual ERISA filings (sponsor, plan type, assets, participants, 401(k)/DB flags). Thursday refresh cron + manual admin backfill.
 - **IPEDS Finance Survey Part H** — ~6,400 Title IV institutions' endowments, FY2003-04 onward, with peer sets, percentile ranks, and growth analytics.
 - **NACUBO** — public NCSE/NTSE benchmark aggregates by cohort.
@@ -75,6 +76,14 @@ curl -X POST "$BASE/api/admin/refresh-ipeds" -H "Authorization: Bearer $CRON_SEC
 curl -X POST "$BASE/api/admin/refresh-nacubo" -H "Authorization: Bearer $CRON_SECRET"
 ```
 
+IRS 990 e-file returns load from GitHub Actions, not from a Vercel endpoint. Add the repository secret `IRS990_DATABASE_URL` (the Neon connection string), then run **Actions → IRS 990 ingest → Run workflow** (blank inputs = load every un-loaded batch for 2021→current, ~1–2 h per index year; or `batch = 2025_TEOS_XML_10A` for a 1-minute smoke test). The same script runs locally:
+
+```bash
+DATABASE_URL=... npx tsx scripts/irs990-ingest.ts --list              # index batches vs ledger
+DATABASE_URL=... npx tsx scripts/irs990-ingest.ts --batch 2025_TEOS_XML_10A
+DATABASE_URL=... npx tsx scripts/irs990-ingest.ts --years 2025,2026   # diff-load those years
+```
+
 ### Scheduled crons (vercel.json)
 
 | Cron | Schedule (UTC) | Purpose |
@@ -86,6 +95,7 @@ curl -X POST "$BASE/api/admin/refresh-nacubo" -H "Authorization: Bearer $CRON_SE
 | `refresh-nacubo` | Feb 15 yearly | Annual NACUBO study refresh |
 | `prospect-engine` | daily 00:00 & 01:00 (runs only at 7 PM Chicago) | 3 researched, personalized outreach drafts → Outlook Drafts |
 | `refresh-13f` | quarterly (1st, 08:00) | **Stub** — returns 200, no-op; real 13F loads are manual admin ingests |
+| `IRS 990 ingest` (GitHub Actions, not Vercel) | 8th 08:10 | Diff-loads new IRS TEOS 990 XML batches → `irs990_filings` / `irs990_persons`; writes `irs-990/<batch>` rows to `ingest_runs` |
 
 `database_status` reports per-pipeline health: each ingest family's latest run, errors sorted first with redacted error messages — a failing scheduled ingest surfaces there instead of failing silently. A family absent from `pipelineHealth` has never created a run record, meaning its handler is not being reached.
 
@@ -125,9 +135,9 @@ Per candidate: one web-search-backed model call finds the person's *professional
 
 Manual run: `curl -H "Authorization: Bearer $CRON_SECRET" "https://vistaintel.app/api/cron/prospect-engine?target=1&dryRun=1"`. Optional env: `OUTREACH_SENDER_NAME`, `OUTREACH_SENDER_TITLE`, `OUTREACH_FIRM_LEGAL`, `OUTREACH_FOOTER`, `PROSPECT_ENGINE_LOCAL_HOUR`.
 
-## MCP tools (79 total)
+## MCP tools (84 total)
 
-RIA / Form ADV (8) · Nonprofit (4) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Apollo contact enrichment (6: `apollo_people_search`, `apollo_person_enrich`, `apollo_people_bulk_enrich`, `apollo_org_search`, `apollo_org_enrich`, `apollo_enrich_prospect`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`)
+RIA / Form ADV (8) · Nonprofit (9, incl. `irs990_filing_search`, `irs990_filing_get`, `irs990_board`, `irs990_people_search`, `irs990_boards_of_person`) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Apollo contact enrichment (6: `apollo_people_search`, `apollo_person_enrich`, `apollo_people_bulk_enrich`, `apollo_org_search`, `apollo_org_enrich`, `apollo_enrich_prospect`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`)
 
 Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 
@@ -156,5 +166,7 @@ Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 | 6 | 13F automated quarterly parse (cron currently a stub; manual admin ingest live) | pending |
 | 7 | Keyed-API tier: EIA, BLS, Data.gov, CFTC COT | pending env keys |
 | 8 | 990-PF / NCUA / FINRA verification batch | pending Randall channel |
+| 9 | IRS 990 e-file family — filings + Part VII people, GitHub Actions loader (v0.28.0) | shipped; first backfill pending `IRS990_DATABASE_URL` secret |
+| 10 | 990-N e-Postcard / Pub 78 / auto-revocation files; prospect ↔ board-member matcher (`prospect_affiliations`) | next |
 
 Internal — Vistamark Investments LLC.

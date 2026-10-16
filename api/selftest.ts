@@ -27,6 +27,8 @@ const CHECKS: Check[] = [
   { name: "adv-search", tool: "search_rias", args: { state: "IL", minAum: 100000000, limit: 2 } },
   { name: "adv-top", tool: "top_rias_by", args: { metric: "aum", state: "IL", limit: 3 } },
   { name: "irs-bmf", tool: "irs_eo_search", args: { state: "IL", subsection: 3, minAssetAmt: 25000000, limit: 2 } },
+  { name: "irs990-search", tool: "irs990_filing_search", args: { state: "IL", returnType: "990", minTotalAssets: 25000000, limit: 2 }, note: "990 e-file probe — total = IL filers with $25M+ assets on their newest return; 0 is a clean empty result until the irs990-ingest GitHub Actions workflow has loaded a batch (check /api/admin/irs990); a relation-does-not-exist error means migration 0007 has not been applied" },
+  { name: "irs990-people", tool: "irs990_people_search", args: { surname: "RICE", orgState: "IL", limit: 2 }, note: "board-member index probe — exact-surname + state; expect people rows with org name/city/assets once loaded, clean empty before" },
   { name: "propublica", tool: "propublica_org_search", args: { q: "community foundation", state: "IL" } },
   { name: "endowment-search", tool: "endowment_search", args: { state: "IL", minEndowment: 25000000, maxEndowment: 250000000, limit: 2 } },
   { name: "endowment-rank", tool: "endowment_percentile_rank", args: { instnm: "University of Chicago" } },

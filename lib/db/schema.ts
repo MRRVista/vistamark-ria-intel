@@ -702,3 +702,123 @@ export type ProspectHouseholdInsert = typeof prospectHouseholds.$inferInsert;
 export type Prospect = typeof prospects.$inferSelect;
 export type ProspectInsert = typeof prospects.$inferInsert;
 export type ProspectEvent = typeof prospectEvents.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// v0.28.0 — IRS Form 990 e-file returns (migration 0007_irs990.sql)
+// ---------------------------------------------------------------------------
+
+export const irs990Batches = pgTable("irs990_batches", {
+  batchId: varchar("batch_id", { length: 32 }).primaryKey(),
+  indexYear: smallint("index_year").notNull(),
+  url: text("url").notNull(),
+  bytes: bigint("bytes", { mode: "number" }),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  status: varchar("status", { length: 16 }).notNull().default("running"),
+  filesTotal: integer("files_total").notNull().default(0),
+  filingsLoaded: integer("filings_loaded").notNull().default(0),
+  filingsSkipped: integer("filings_skipped").notNull().default(0),
+  personsLoaded: integer("persons_loaded").notNull().default(0),
+  parseErrors: integer("parse_errors").notNull().default(0),
+  errorSample: jsonb("error_sample").$type<unknown[]>(),
+  errorMessage: text("error_message"),
+  runner: text("runner"),
+});
+
+export const irs990Filings = pgTable(
+  "irs990_filings",
+  {
+    objectId: varchar("object_id", { length: 24 }).primaryKey(),
+    batchId: varchar("batch_id", { length: 32 }).notNull().references(() => irs990Batches.batchId),
+    ein: varchar("ein", { length: 9 }).notNull(),
+    returnType: varchar("return_type", { length: 8 }).notNull(),
+    taxYear: smallint("tax_year"),
+    taxPeriodBegin: date("tax_period_begin"),
+    taxPeriodEnd: date("tax_period_end"),
+    returnTs: timestamp("return_ts"),
+    amendedReturn: boolean("amended_return").notNull().default(false),
+    finalReturn: boolean("final_return").notNull().default(false),
+    returnVersion: varchar("return_version", { length: 16 }),
+    orgName: text("org_name").notNull(),
+    orgName2: text("org_name2"),
+    inCareOf: text("in_care_of"),
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    city: varchar("city", { length: 128 }),
+    state: varchar("state", { length: 4 }),
+    zip: varchar("zip", { length: 16 }),
+    country: varchar("country", { length: 4 }),
+    website: text("website"),
+    phone: varchar("phone", { length: 24 }),
+    formationYear: smallint("formation_year"),
+    mission: text("mission"),
+    grossReceipts: bigint("gross_receipts", { mode: "number" }),
+    totalRevenue: bigint("total_revenue", { mode: "number" }),
+    totalExpenses: bigint("total_expenses", { mode: "number" }),
+    totalAssetsEoy: bigint("total_assets_eoy", { mode: "number" }),
+    totalLiabilitiesEoy: bigint("total_liabilities_eoy", { mode: "number" }),
+    netAssetsEoy: bigint("net_assets_eoy", { mode: "number" }),
+    contributions: bigint("contributions", { mode: "number" }),
+    investmentIncome: bigint("investment_income", { mode: "number" }),
+    investmentsPublic: bigint("investments_public", { mode: "number" }),
+    investmentsOther: bigint("investments_other", { mode: "number" }),
+    investmentsProgram: bigint("investments_program", { mode: "number" }),
+    endowmentEoy: bigint("endowment_eoy", { mode: "number" }),
+    investMgmtFees: bigint("invest_mgmt_fees", { mode: "number" }),
+    votingMembers: integer("voting_members"),
+    independentMembers: integer("independent_members"),
+    employees: integer("employees"),
+    volunteers: integer("volunteers"),
+    officerCount: integer("officer_count").notNull().default(0),
+    signerName: text("signer_name"),
+    signerTitle: text("signer_title"),
+    loadedAt: timestamp("loaded_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    einPeriodIdx: index("irs990_filings_ein_period_idx").on(t.ein, t.taxPeriodEnd, t.returnTs),
+    stateIdx: index("irs990_filings_state_idx").on(t.state, t.city),
+    typeYearIdx: index("irs990_filings_type_year_idx").on(t.returnType, t.taxYear),
+  })
+);
+
+export const irs990Persons = pgTable(
+  "irs990_persons",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey(),
+    objectId: varchar("object_id", { length: 24 }).notNull().references(() => irs990Filings.objectId, { onDelete: "cascade" }),
+    ein: varchar("ein", { length: 9 }).notNull(),
+    taxYear: smallint("tax_year"),
+    seq: smallint("seq").notNull(),
+    nameRaw: text("name_raw").notNull(),
+    nameNorm: text("name_norm").notNull(),
+    surname: varchar("surname", { length: 64 }),
+    isBusiness: boolean("is_business").notNull().default(false),
+    title: text("title"),
+    avgHours: numeric("avg_hours", { precision: 7, scale: 2 }),
+    avgHoursRelated: numeric("avg_hours_related", { precision: 7, scale: 2 }),
+    isIndividualTrustee: boolean("is_individual_trustee").notNull().default(false),
+    isInstitutionalTrustee: boolean("is_institutional_trustee").notNull().default(false),
+    isOfficer: boolean("is_officer").notNull().default(false),
+    isKeyEmployee: boolean("is_key_employee").notNull().default(false),
+    isHighestComp: boolean("is_highest_comp").notNull().default(false),
+    isFormer: boolean("is_former").notNull().default(false),
+    compOrg: bigint("comp_org", { mode: "number" }),
+    compRelated: bigint("comp_related", { mode: "number" }),
+    compOther: bigint("comp_other", { mode: "number" }),
+    addressLine1: text("address_line1"),
+    city: varchar("city", { length: 128 }),
+    state: varchar("state", { length: 4 }),
+    zip: varchar("zip", { length: 16 }),
+  },
+  (t) => ({
+    objectIdx: index("irs990_persons_object_idx").on(t.objectId),
+    einIdx: index("irs990_persons_ein_idx").on(t.ein, t.taxYear),
+    surnameIdx: index("irs990_persons_surname_idx").on(t.surname),
+  })
+);
+
+export type Irs990Batch = typeof irs990Batches.$inferSelect;
+export type Irs990Filing = typeof irs990Filings.$inferSelect;
+export type Irs990FilingInsert = typeof irs990Filings.$inferInsert;
+export type Irs990Person = typeof irs990Persons.$inferSelect;
+export type Irs990PersonInsert = typeof irs990Persons.$inferInsert;

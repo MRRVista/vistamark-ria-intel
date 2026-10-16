@@ -23,7 +23,8 @@
     "api/cron/ingest-parcels.ts": { "maxDuration": 300 },
     "api/admin/email-append.ts": { "maxDuration": 300 },
     "api/admin/enrich-upload.ts": { "maxDuration": 300 },
-    "api/admin/tracerfy-export.ts": { "maxDuration": 60 }
+    "api/admin/tracerfy-export.ts": { "maxDuration": 60 },
+    "api/admin/irs990.ts": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/cron/ingest-adv", "schedule": "0 6 * * 1" },

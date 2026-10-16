@@ -1,9 +1,9 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 79 MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 84 MCP tools.
  *
  * WHY THIS EXISTS
  * ---------------
- * `lib/mcp/tools.ts` is a flat array of 79 tools. That is the right shape for
+ * `lib/mcp/tools.ts` is a flat array of 84 tools. That is the right shape for
  * an MCP client (which wants tools/list) and the wrong shape for a human
  * (who wants "show me the endowment tools"). This module adds the layer the
  * flat registry deliberately omits: which data DOMAIN a tool belongs to,
@@ -89,10 +89,15 @@ export const DOMAINS: CatalogDomain[] = [
   {
     id: "nonprofit",
     label: "Nonprofits",
-    source: "IRS EO BMF (ingested) + ProPublica Nonprofit Explorer 990s (live)",
+    source: "IRS EO BMF (ingested) + IRS Form 990 e-file returns with Part VII people (ingested from TEOS bulk XML via GitHub Actions, monthly) + ProPublica Nonprofit Explorer 990s (live)",
     tools: [
       { name: "irs_eo_search", backing: "postgres", probe: "live" },
       { name: "irs_eo_lookup", backing: "postgres", probe: "unprobed" },
+      { name: "irs990_filing_search", backing: "postgres", probe: "unprobed", note: "Shipped 2026-10-16 with migration 0007 (v0.28.0). Loader is the irs990-ingest GitHub Actions workflow, not a Vercel cron; empty until the first batch lands. Re-sync probes after the 2025 index year is loaded." },
+      { name: "irs990_filing_get", backing: "postgres", probe: "unprobed" },
+      { name: "irs990_board", backing: "postgres", probe: "unprobed" },
+      { name: "irs990_people_search", backing: "postgres", probe: "unprobed", note: "The national board-member index (Part VII of 990/990-EZ/990-PF). Trigram-indexed on normalized name." },
+      { name: "irs990_boards_of_person", backing: "postgres", probe: "unprobed" },
       { name: "propublica_org_search", backing: "live-api", probe: "live" },
       { name: "propublica_org_990", backing: "live-api", probe: "unprobed" },
     ],

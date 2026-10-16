@@ -1,45 +1,23 @@
-import { readFileSync, readdirSync } from "fs";
-import { join } from "path";
-import { neon } from "@neondatabase/serverless";
+/**
+ * Apply every migrations/*.sql file (idempotent). Delegates to the same
+ * runner the Vercel admin/cron endpoints use (lib/migrate.ts) so local, CI
+ * and production apply statements identically — including statements that
+ * open with a comment block, which the previous standalone splitter dropped.
+ */
+import { runMigrations } from "../lib/migrate";
 
 async function main() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
+  if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL is not set");
     process.exit(1);
   }
-
-  const sql = neon(url);
-  const dir = join(process.cwd(), "migrations");
-
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-
-  for (const file of files) {
-    const path = join(dir, file);
-    console.log(`Applying ${file}...`);
-    const content = readFileSync(path, "utf-8");
-    // Split on statement-breakpoint (Drizzle convention) or on ;
-    const statements = content
-      .split(/--> statement-breakpoint|;\s*$/m)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith("--"));
-
-    for (const stmt of statements) {
-      try {
-        await sql(stmt);
-      } catch (err: any) {
-        if (/already exists|duplicate/i.test(err?.message ?? "")) {
-          console.log(`  (skipped: ${err.message.split("\n")[0]})`);
-          continue;
-        }
-        throw err;
-      }
-    }
-    console.log(`  done.`);
+  const r = await runMigrations();
+  if (!r.ok) {
+    console.error(`Migration failed: ${r.error}`);
+    if (r.statement) console.error(r.statement);
+    process.exit(1);
   }
-
+  for (const f of r.applied) console.log(`${f.file}: ${f.statements} ran, ${f.skipped} skipped`);
   console.log("All migrations applied.");
 }
 
