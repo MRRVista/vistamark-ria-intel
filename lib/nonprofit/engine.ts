@@ -622,7 +622,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
 
   for (const org of candidates) {
     if (s.drafted >= opts.target) break;
-    if (remaining() < 110_000) { s.budgetExhausted = true; break; }
+    if (remaining() < 85_000) { s.budgetExhausted = true; break; }
     s.examined += 1;
 
     const leadId = opts.dryRun ? null : await insertLead(p, org);
@@ -693,7 +693,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
     const planLines = await planFacts(org.ein);
     let research: ResearchOut;
     try {
-      research = await researchPerson(org, pick, role, p, extraSeats, planLines, Math.min(90_000, remaining() - 60_000));
+      research = await researchPerson(org, pick, role, p, extraSeats, planLines, Math.min(70_000, Math.max(30_000, remaining() - 50_000)));
     } catch (err) { await fail("research_error", pick.name, { error: String(err) }); continue; }
     if (!opts.dryRun && leadId != null) {
       await updateLead(leadId, { affinity: research.affinity, research });
@@ -703,7 +703,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
 
     // draft
     let d: DraftOut;
-    try { d = await draftEmail(org, pick, role, research, p, 60_000); } catch (err) {
+    try { d = await draftEmail(org, pick, role, research, p, 45_000); } catch (err) {
       await fail("draft_error", pick.name, { error: String(err) }); continue;
     }
     const note = forNote(p, org, pick, role, research, emailStatus);
@@ -759,7 +759,7 @@ export async function runNonprofitEngine(opts: NpEngineOptions = {}): Promise<Np
   if (!isDbReady()) throw new Error("DATABASE_URL not configured");
   const target = Math.max(1, Math.min(opts.target ?? 3, 10));
   const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 40));
-  const budgetMs = Math.max(60_000, Math.min(opts.budgetMs ?? 700_000, 780_000));
+  const budgetMs = Math.max(60_000, Math.min(opts.budgetMs ?? 280_000, 780_000));
   const actor = opts.actor ?? ENGINE_ACTOR;
   const deadline = started + budgetMs;
   const has990 = await has990Tables();
