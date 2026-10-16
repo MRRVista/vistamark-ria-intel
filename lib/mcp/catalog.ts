@@ -1,9 +1,9 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 73 MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 79 MCP tools.
  *
  * WHY THIS EXISTS
  * ---------------
- * `lib/mcp/tools.ts` is a flat array of 73 tools. That is the right shape for
+ * `lib/mcp/tools.ts` is a flat array of 79 tools. That is the right shape for
  * an MCP client (which wants tools/list) and the wrong shape for a human
  * (who wants "show me the endowment tools"). This module adds the layer the
  * flat registry deliberately omits: which data DOMAIN a tool belongs to,
@@ -290,6 +290,19 @@ export const DOMAINS: CatalogDomain[] = [
       { name: "eodhd_fundamentals", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_news", backing: "live-api", probe: "unprobed" },
       { name: "eodhd_screener", backing: "live-api", probe: "unprobed" },
+    ],
+  },
+  {
+    id: "contacts",
+    label: "Contact Enrichment / Apollo",
+    source: "Apollo.io — B2B people + company search and professional-email enrichment (live, keyed; search free, enrich credit-metered)",
+    tools: [
+      { name: "apollo_people_search", backing: "live-api", probe: "unprobed", note: "Shipped 2026-10-16 (v0.27.0). Selftest probes apollo_org_enrich only — the one read that is free AND deterministic. Enrich tools are never probed: each hit spends a credit." },
+      { name: "apollo_person_enrich", backing: "live-api", probe: "unprobed", note: "Credit-metered — never probed by selftest on purpose." },
+      { name: "apollo_people_bulk_enrich", backing: "live-api", probe: "unprobed", note: "Credit-metered — never probed by selftest on purpose." },
+      { name: "apollo_org_search", backing: "live-api", probe: "unprobed" },
+      { name: "apollo_org_enrich", backing: "live-api", probe: "unprobed", note: "Selftest covers this one (domain=vistamark.com); re-sync after the first production run with APOLLO_API_KEY set." },
+      { name: "apollo_enrich_prospect", backing: "hybrid", probe: "unprobed", note: "Write tool (Apollo match -> prospects row, append:apollo:tried tag) — never probed by selftest on purpose." },
     ],
   },
   {

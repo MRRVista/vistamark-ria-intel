@@ -109,6 +109,14 @@ import {
   eodhdScreener,
 } from "../eodhd/tools";
 import {
+  apolloPeopleSearch,
+  apolloPersonEnrich,
+  apolloPeopleBulkEnrich,
+  apolloOrgSearch,
+  apolloOrgEnrich,
+  apolloEnrichProspect,
+} from "../apollo/tools";
+import {
   prospectsSearch,
   prospectLookup,
   prospectsUpsert,
@@ -466,6 +474,59 @@ const EODHD_TOOLS: ToolDef[] = [
   },
 ];
 
+const PERSON_MATCH_SCHEMA = {
+  type: "object",
+  properties: {
+    apolloId: { type: "string" },
+    firstName: { type: "string" },
+    lastName: { type: "string" },
+    name: { type: "string" },
+    email: { type: "string" },
+    organizationName: { type: "string" },
+    domain: { type: "string" },
+    linkedinUrl: { type: "string" },
+  },
+};
+
+const APOLLO_TOOLS: ToolDef[] = [
+  {
+    name: "apollo_people_search",
+    description: "Find professionals in Apollo.io's B2B contact database (live, keyed; FREE — search spends no credits). Filter by free-text q (keywords), personName, titles (comma list or array, e.g. 'Chief Investment Officer, Treasurer'), seniorities (owner, founder, c_suite, partner, vp, head, director, manager, senior, entry), organizationNames, organizationDomains, personLocations ('Hinsdale, Illinois', 'Chicago, Illinois'), organizationLocations; page/perPage (max 100). Returns name, title, seniority, LOCKED email placeholder (emailLocked:true), LinkedIn URL, location, current organization (name/domain/industry/headcount), and recent employment history. This is the LOOKUP step for anyone you only have a name for — a 990 board member, an ADV-listed advisor, an assessor-list homeowner with a known employer. Pick the right person, then apollo_person_enrich reveals the professional email.",
+    inputSchema: { type: "object", properties: { q: { type: "string" }, personName: { type: "string" }, titles: { type: "array", items: { type: "string" } }, seniorities: { type: "array", items: { type: "string" } }, organizationNames: { type: "array", items: { type: "string" } }, organizationDomains: { type: "array", items: { type: "string" } }, personLocations: { type: "array", items: { type: "string" } }, organizationLocations: { type: "array", items: { type: "string" } }, page: { type: "number", default: 1 }, perPage: { type: "number", default: 10, maximum: 100 } } },
+    handler: apolloPeopleSearch,
+  },
+  {
+    name: "apollo_person_enrich",
+    description: "Reveal one person's PROFESSIONAL email and profile from Apollo.io (live, keyed; SPENDS 1 credit only when an email is returned — Free plan grants ~75-100/month). Match on apolloId (from apollo_people_search), OR email, OR linkedinUrl, OR name/firstName+lastName together with organizationName or domain. Returns email with emailStatus (verified = deliverable; guessed = pattern inference, validate first), title, seniority, LinkedIn, location, organization, employment history. revealPersonalEmails and revealPhoneNumber default FALSE and should stay that way for outreach: the stack only ever uses published professional addresses, and phones cost 8 credits. Nothing returned here is contactable until it passes ZeroBounce/NeverBounce and the draft-then-approve gate — to write a hit straight onto a prospect row with billing tags use apollo_enrich_prospect instead.",
+    inputSchema: { ...PERSON_MATCH_SCHEMA, properties: { ...PERSON_MATCH_SCHEMA.properties, revealPersonalEmails: { type: "boolean", default: false }, revealPhoneNumber: { type: "boolean", default: false } } },
+    handler: apolloPersonEnrich,
+  },
+  {
+    name: "apollo_people_bulk_enrich",
+    description: "apollo_person_enrich for up to 10 people in ONE call (Apollo's bulk cap; live, keyed; 1 credit per email actually returned). `people` is an array of match objects (apolloId | email | linkedinUrl | name + organizationName/domain). matches[] is positional — index i answers people[i]; null = no record. Use for a board roster or an advisor list you have already resolved with apollo_people_search. Same reveal flags, same defaults (off), same validate-before-contact rule.",
+    inputSchema: { type: "object", properties: { people: { type: "array", items: PERSON_MATCH_SCHEMA, maxItems: 10 }, revealPersonalEmails: { type: "boolean", default: false }, revealPhoneNumber: { type: "boolean", default: false } }, required: ["people"] },
+    handler: apolloPeopleBulkEnrich,
+  },
+  {
+    name: "apollo_org_search",
+    description: "Find companies in Apollo.io by name, locations ('Hinsdale, Illinois', 'Illinois, US'), employeeRanges ('1,10' | '11,50' | '51,200' | '201,500' | '501,1000' | '1001,5000' | '5001,10000' | '10001+'), and industryKeywords (live, keyed; FREE — no credits). Returns name, domain, website, LinkedIn, industry, headcount and revenue estimates, founded year, location, keywords. Resolves a prospect's employer to a domain so apollo_people_search / apollo_person_enrich can match on it; the private-company complement to edgar_company_lookup and gleif_entity_search.",
+    inputSchema: { type: "object", properties: { name: { type: "string" }, locations: { type: "array", items: { type: "string" } }, employeeRanges: { type: "array", items: { type: "string" } }, industryKeywords: { type: "array", items: { type: "string" } }, page: { type: "number", default: 1 }, perPage: { type: "number", default: 10, maximum: 100 } } },
+    handler: apolloOrgSearch,
+  },
+  {
+    name: "apollo_org_enrich",
+    description: "One company's full Apollo.io profile by domain (live, keyed; FREE — no credits): description, industry, founded year, headcount and revenue ESTIMATES, total funding, public ticker if any, HQ address/phone, keyword tags, technology stack. Pass a bare domain ('vistamark.com'); URLs are normalized. For filed financials use edgar_* (public companies) or propublica_org_990 (nonprofits) — this is the quick private-company read.",
+    inputSchema: { type: "object", properties: { domain: { type: "string" } }, required: ["domain"] },
+    handler: apolloOrgEnrich,
+  },
+  {
+    name: "apollo_enrich_prospect",
+    description: "Enrich ONE row of the first-party prospects DB in place via Apollo.io (live, keyed; WRITES to Postgres; spends 1 credit on an email hit). Matches on the prospect's stored name + employer/linkedinUrl (override with organizationName, domain, linkedinUrl). Writes: email as emailStatus='unverified' (never overwrites an existing email unless overwriteEmail=true), title/employer/linkedinUrl only where blank, wealthSignals.apolloSeniority for owner/founder/c_suite/partner/vp. Billing discipline identical to the AtData append: every attempt tags `append:apollo:tried` and logs an enrich event; a hit also tags `email:apollo`; rows already tagged tried are SKIPPED unless force=true; do-not-contact rows are never touched; our own failures (quota, network) do not mark the row tried. dryRun=true shows what it would match on without spending anything. After a hit: ZeroBounce/NeverBounce validation, then the normal draft-then-approve gate — this tool never makes anyone contactable on its own.",
+    inputSchema: { type: "object", properties: { prospectId: { type: "number" }, organizationName: { type: "string" }, domain: { type: "string" }, linkedinUrl: { type: "string" }, revealPersonalEmails: { type: "boolean", default: false }, force: { type: "boolean", default: false }, overwriteEmail: { type: "boolean", default: false }, dryRun: { type: "boolean", default: false }, actor: { type: "string" } }, required: ["prospectId"] },
+    handler: apolloEnrichProspect,
+  },
+];
+
 const PROSPECT_TOOLS: ToolDef[] = [
   {
     name: "prospects_zip_summary",
@@ -539,6 +600,7 @@ export const TOOLS: ToolDef[] = [
   ...BDC_TOOLS,
   ...PENSION_TOOLS,
   ...EODHD_TOOLS,
+  ...APOLLO_TOOLS,
   ...PROSPECT_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
