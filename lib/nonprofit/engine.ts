@@ -485,7 +485,7 @@ async function graphToken(): Promise<string> {
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-async function createDraft(mailbox: string, to: string, toName: string, subject: string, body: string): Promise<{ id: string; webLink: string | null }> {
+export async function createDraft(mailbox: string, to: string, toName: string, subject: string, body: string): Promise<{ id: string; webLink: string | null }> {
   const token = await graphToken();
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages`, {
     method: "POST",
