@@ -133,7 +133,7 @@ export interface ApolloPeopleSearchArgs {
 
 export async function apolloPeopleSearch(args: ApolloPeopleSearchArgs) {
   const perPage = Math.min(Math.max(args.perPage ?? 10, 1), 100);
-  const res = await apolloPost<ApolloPeopleSearchResponse>("mixed_people/search", {
+  const res = await apolloPost<ApolloPeopleSearchResponse>("mixed_people/api_search", {
     q_keywords: args.q,
     q_person_name: args.personName,
     person_titles: csvList(args.titles),
@@ -149,7 +149,8 @@ export async function apolloPeopleSearch(args: ApolloPeopleSearchArgs) {
   return {
     dataSource: DATA_SOURCE,
     creditsSpent: 0,
-    note: "Search results never spend credits, so emails come back LOCKED (emailLocked:true). Pick the right person, then call apollo_person_enrich with their apolloId (or name + organization) to reveal the professional email — that is the call that costs a credit. Titles/seniorities/locations are Apollo's free-text filters (seniorities: owner, founder, c_suite, partner, vp, head, director, manager, senior, entry).",
+    note: "Search results never spend credits, so emails come back LOCKED (emailLocked:true) and last names / seniority may be withheld until enriched. Pick the right person, then call apollo_person_enrich with their apolloId (or name + organization) to reveal the professional email — that is the call that costs a credit. Titles/seniorities/locations are Apollo's free-text filters (seniorities: owner, founder, c_suite, partner, vp, head, director, manager, senior, entry). For 'who runs this org' pass organizationDomains + seniorities ['c_suite','partner','founder','owner'].",
+    totalEntries: res.total_entries ?? res.pagination?.total_entries ?? null,
     pagination: res.pagination ?? null,
     people: people.map(shapePerson),
   };
