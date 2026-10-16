@@ -2,9 +2,18 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAccessOrSession } from "../lib/auth";
 import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
 import { DOMAINS } from "../lib/mcp/catalog";
+import { LOCAL_TOOLS, LOCAL_TOOL_BY_NAME, type AskContext } from "../lib/ask/local-tools";
+import {
+  anthropicModels,
+  openRouterModels,
+  modelChain,
+  isModelUnavailable,
+  HARD_DEFAULT_ANTHROPIC,
+  HARD_DEFAULT_OPENROUTER,
+} from "../lib/ask/models";
 
 /**
- * POST /api/ask — natural-language front door to the 57 VistaIntel tools.
+ * POST /api/ask — natural-language front door to the VistaIntel tools.
  *
  * WHY A SERVER ENDPOINT AND NOT A BROWSER CALL
  * --------------------------------------------
@@ -14,6 +23,17 @@ import { DOMAINS } from "../lib/mcp/catalog";
  * until the model answers. Calling our own /api/mcp over HTTP would add a
  * round trip and re-auth for no benefit — the handlers are one import away.
  *
+ * THREE KINDS OF TOOL IN THE LOOP (v0.26)
+ * ---------------------------------------
+ *   MCP tools      — lib/mcp/tools.ts, the 70-odd data tools. Run here in-process.
+ *   Local tools    — lib/ask/local-tools.ts (export_excel). Ask-only; produce a
+ *                    download that rides back to the browser as `attachments`.
+ *   Web search     — the provider's hosted search. Anthropic runs it server-side
+ *                    (web_search_20250305 — the same tool the prospect engine
+ *                    uses for research); OpenRouter via its `web` plugin. Nothing
+ *                    to execute on our side; we log the queries and surface the
+ *                    citations the model attached to its text.
+ *
  * PROVIDERS
  * ---------
  *   anthropic  — Messages API, native tool_use blocks       (ANTHROPIC_API_KEY)
@@ -21,31 +41,38 @@ import { DOMAINS } from "../lib/mcp/catalog";
  *
  * Both are wired because they fail differently: OpenRouter is the fallback
  * when Anthropic is rate-limited or a specific non-Anthropic model is wanted,
- * and it keeps model choice a config change rather than a code change.
+ * and it keeps model choice a config change rather than a code change. The
+ * model roster itself lives in lib/ask/models.ts; any id in `body.model` is
+ * accepted, the roster is what the console offers.
  *
  * REQUEST
- *   { question, provider?, model?, domains?, tools?, maxRounds?, history?, target? }
+ *   { question, provider?, model?, domains?, tools?, maxRounds?, history?, target?, webSearch? }
  *
  * RESPONSE
- *   { answer, provider, model, rounds, toolCalls[], usage, warnings[] }
+ *   { answer, provider, model, modelUsed, rounds, toolCalls[], webSearches, sources[], attachments[], usage, warnings[] }
  */
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const ANTHROPIC_VERSION = "2023-06-01";
 const MCP_BETA = "mcp-client-2025-04-04";
+const WEB_SEARCH_TOOL_TYPE = "web_search_20250305";
 
 // Model ids are env-pinned so they can be rotated without a redeploy.
-const DEFAULT_ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-const DEFAULT_OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.5";
+const DEFAULT_ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || HARD_DEFAULT_ANTHROPIC;
+const DEFAULT_OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || HARD_DEFAULT_OPENROUTER;
 
 const MAX_ROUNDS_CAP = 8;
 const DEFAULT_MAX_ROUNDS = 5;
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 8192;
 /** Per-tool-result cap. Tool payloads here run to hundreds of KB (13F, EDGAR
  *  frames); unbounded they blow the context window inside two rounds. */
 const TOOL_RESULT_CHAR_CAP = 6000;
 const TOOL_TIMEOUT_MS = 20000;
+/** Web searches per request. Research-grade questions need several; the
+ *  prospect engine budgets 6 per person and that has proven enough. */
+const WEB_SEARCH_MAX_USES = Number(process.env.ASK_WEB_SEARCH_MAX_USES) || 8;
+const WEB_SEARCH_DEFAULT = process.env.ASK_WEB_SEARCH !== "0";
 
 type Provider = "anthropic" | "openrouter";
 
@@ -57,6 +84,13 @@ interface ToolCallLog {
   ms: number;
   truncated: boolean;
   error?: string;
+  /** true for the provider's hosted web search — nothing ran on our side */
+  hosted?: boolean;
+}
+
+interface Source {
+  url: string;
+  title?: string;
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -64,6 +98,12 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     p,
     new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`${label} exceeded ${ms}ms`)), ms)),
   ]);
+}
+
+function addSource(list: Source[], url: unknown, title?: unknown) {
+  if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return;
+  if (list.some((s) => s.url === url)) return;
+  list.push({ url, ...(typeof title === "string" && title.trim() ? { title: title.trim().slice(0, 160) } : {}) });
 }
 
 /**
@@ -74,7 +114,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * an un-ingested table. Telling the model the difference up front is the
  * single highest-value thing in this prompt.
  */
-function buildSystemPrompt(): string {
+function buildSystemPrompt(opts: { webSearch: boolean; excel: boolean }): string {
   const domainLines = DOMAINS.map(
     (d) => `- ${d.label} (${d.tools.length} tools) — ${d.source}`
   ).join("\n");
@@ -83,15 +123,40 @@ function buildSystemPrompt(): string {
   const degraded = DOMAINS.flatMap((d) => d.tools).filter((t) => t.probe === "degraded");
   const slow = DOMAINS.flatMap((d) => d.tools).filter((t) => t.probe === "slow");
 
+  const capabilities: string[] = [];
+  if (opts.webSearch) {
+    capabilities.push(
+      "WEB SEARCH is available (the `web_search` tool). Use it for what the structured tools cannot answer:",
+      "  named people at a firm and their roles, a firm's website and service menu, recent news, press releases,",
+      "  conference appearances, LinkedIn-visible titles, and anything that happened after the data cut.",
+      "  The structured tools stay primary for AUM, filings, registrations and dollar figures — search complements",
+      "  them, it does not replace them. When you use a web result, name the site and give the URL in your answer.",
+      "  Never present an unverified web claim as a filing fact."
+    );
+  } else {
+    capabilities.push("Web search is OFF for this request. If a question needs it, say so rather than guessing.");
+  }
+  if (opts.excel) {
+    capabilities.push(
+      "EXCEL EXPORT is available (the `export_excel` tool). When the user asks for a spreadsheet, Excel, xlsx or",
+      "  export — or when a result has more than about fifteen rows — build the workbook from the real tool results,",
+      "  typed columns included, then describe the file in a few lines instead of pasting the table. Never invent rows."
+    );
+  }
+
   return [
     "You are Randall Stephens, senior associate at Vistamark Investments LLC.",
-    "You answer questions using the VistaIntel tool set — 64 tools spanning SEC, IRS, DOL,",
-    "Treasury, Federal Reserve, EODHD market data and higher-ed data. Vistamark is an RIA; the recurring jobs are",
+    `You answer questions using the VistaIntel tool set — ${TOOLS.length} tools spanning SEC, IRS, DOL,`,
+    "Treasury, Federal Reserve, EODHD market data, higher-ed data and Vistamark's own prospect database.",
+    "Vistamark is an RIA; the recurring jobs are",
     "iCIO prospecting (boutique, planning-led, fee-only independent RIAs with no in-house CIO),",
-    "nonprofit and endowment intelligence, and pre-market macro reads.",
+    "nonprofit and endowment intelligence, local (Hinsdale, IL) prospect research, and pre-market macro reads.",
     "",
     "DATA DOMAINS AVAILABLE:",
     domainLines,
+    "",
+    "CAPABILITIES BEYOND THE DATA TOOLS:",
+    ...capabilities,
     "",
     "CRITICAL — DISTINGUISH NO DATA FROM NO INGEST:",
     "These tools return clean EMPTY results because their tables were never populated.",
@@ -113,6 +178,8 @@ function buildSystemPrompt(): string {
     "- State the as-of date for any figure that has one.",
     "- If a tool errors or times out, say so plainly and name the tool. Do not silently substitute",
     "  an estimate or a remembered number for a failed call.",
+    "- Format with Markdown: headings, bullet lists and pipe tables render; keep tables under ~15 rows",
+    "  and move anything larger to an Excel export.",
     "- Be terse. Lead with the answer, then the supporting figures.",
   ].join("\n");
 }
@@ -148,17 +215,22 @@ function selectTools(body: any): { tools: typeof TOOLS; warnings: string[] } {
   return { tools: TOOLS, warnings };
 }
 
-async function runTool(name: string, args: any, round: number): Promise<{ text: string; log: ToolCallLog }> {
+async function runTool(name: string, args: any, round: number, ctx: AskContext): Promise<{ text: string; log: ToolCallLog }> {
+  const local = LOCAL_TOOL_BY_NAME[name];
   const tool = TOOL_BY_NAME[name];
   const started = Date.now();
-  if (!tool) {
+  if (!local && !tool) {
     return {
       text: `Error: unknown tool "${name}".`,
       log: { round, name, args, ok: false, ms: 0, truncated: false, error: "unknown tool" },
     };
   }
   try {
-    const result = await withTimeout(Promise.resolve(tool.handler(args ?? {})), TOOL_TIMEOUT_MS, name);
+    const result = await withTimeout(
+      Promise.resolve(local ? local.handler(args ?? {}, ctx) : tool.handler(args ?? {})),
+      TOOL_TIMEOUT_MS,
+      name
+    );
     let text = JSON.stringify(result, null, 2);
     const truncated = text.length > TOOL_RESULT_CHAR_CAP;
     if (truncated) {
@@ -166,17 +238,33 @@ async function runTool(name: string, args: any, round: number): Promise<{ text: 
         text.slice(0, TOOL_RESULT_CHAR_CAP) +
         `\n\n[truncated at ${TOOL_RESULT_CHAR_CAP} chars — narrow the query or request fewer rows]`;
     }
+    // Attachments are logged with their size, never their payload — a 2 MB
+    // base64 blob in `args` would make the trace unreadable.
+    const logArgs = local ? summariseArgs(args) : args;
     return {
       text,
-      log: { round, name, args, ok: true, ms: Date.now() - started, truncated },
+      log: { round, name, args: logArgs, ok: true, ms: Date.now() - started, truncated },
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
       text: `Tool error: ${message}`,
-      log: { round, name, args, ok: false, ms: Date.now() - started, truncated: false, error: message },
+      log: { round, name, args: local ? summariseArgs(args) : args, ok: false, ms: Date.now() - started, truncated: false, error: message },
     };
   }
+}
+
+function summariseArgs(args: any): unknown {
+  if (!args || typeof args !== "object") return args;
+  const sheets = Array.isArray(args.sheets) ? args.sheets : [];
+  return {
+    filename: args.filename,
+    sheets: sheets.map((s: any) => ({
+      name: s?.name,
+      columns: Array.isArray(s?.columns) ? s.columns.length : 0,
+      rows: Array.isArray(s?.rows) ? s.rows.length : 0,
+    })),
+  };
 }
 
 /* ------------------------------- Anthropic ------------------------------- */
@@ -188,15 +276,18 @@ async function askAnthropic(opts: {
   model: string;
   maxRounds: number;
   attachRandall: boolean;
+  webSearch: boolean;
+  ctx: AskContext;
+  warnings: string[];
 }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw Object.assign(new Error("ANTHROPIC_API_KEY is not configured"), { status: 503 });
 
-  const toolDefs = opts.tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    input_schema: t.inputSchema,
-  }));
+  const toolDefs: any[] = [
+    ...opts.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema })),
+    ...LOCAL_TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema })),
+  ];
+  if (opts.webSearch) toolDefs.push({ type: WEB_SEARCH_TOOL_TYPE, name: "web_search", max_uses: WEB_SEARCH_MAX_USES });
 
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -221,37 +312,70 @@ async function askAnthropic(opts: {
 
   const messages = [...opts.messages];
   const toolCalls: ToolCallLog[] = [];
-  const usage = { inputTokens: 0, outputTokens: 0 };
+  const sources: Source[] = [];
+  const usage = { inputTokens: 0, outputTokens: 0, webSearches: 0 };
   let rounds = 0;
 
-  for (let round = 1; round <= opts.maxRounds; round++) {
-    rounds = round;
-    const resp = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: opts.model,
-        max_tokens: MAX_TOKENS,
-        system: opts.system,
-        messages,
-        tools: toolDefs,
-        ...(mcpServers ? { mcp_servers: mcpServers } : {}),
-      }),
-    });
+  // Failover chain (lib/ask/models.ts): a Mythos-class primary falls back to
+  // the Opus line when overloaded or not served on this key. Only availability
+  // failures move the pointer; a 400/401/403 would fail identically downstream.
+  const chain = modelChain(opts.model);
+  let modelIdx = 0;
 
-    if (!resp.ok) {
+  async function callOnce(body: any): Promise<any> {
+    for (;;) {
+      const model = chain[modelIdx];
+      const resp = await fetch(ANTHROPIC_URL, { method: "POST", headers, body: JSON.stringify({ ...body, model }) });
+      if (resp.ok) return resp.json();
       const detail = await resp.text().catch(() => "");
+      if (modelIdx < chain.length - 1 && isModelUnavailable(resp.status, detail)) {
+        opts.warnings.push(`${model} unavailable (${resp.status}) — failed over to ${chain[modelIdx + 1]}.`);
+        modelIdx++;
+        continue;
+      }
       throw Object.assign(new Error(`Anthropic API ${resp.status}: ${detail.slice(0, 600)}`), {
         status: resp.status === 429 ? 429 : 502,
       });
     }
+  }
 
-    const data: any = await resp.json();
+  for (let round = 1; round <= opts.maxRounds; round++) {
+    rounds = round;
+    const data: any = await callOnce({
+      max_tokens: MAX_TOKENS,
+      system: opts.system,
+      messages,
+      tools: toolDefs,
+      ...(mcpServers ? { mcp_servers: mcpServers } : {}),
+    });
+
     usage.inputTokens += data?.usage?.input_tokens ?? 0;
     usage.outputTokens += data?.usage?.output_tokens ?? 0;
+    usage.webSearches += data?.usage?.server_tool_use?.web_search_requests ?? 0;
 
     const blocks: any[] = Array.isArray(data?.content) ? data.content : [];
+
+    // Hosted web search ran inside the provider: log each query so the trace
+    // shows it, and harvest the citations attached to the prose.
+    for (const b of blocks) {
+      if (b?.type === "server_tool_use") {
+        toolCalls.push({ round, name: b.name || "web_search", args: b.input, ok: true, ms: 0, truncated: false, hosted: true });
+      } else if (b?.type === "web_search_tool_result" && Array.isArray(b.content)) {
+        for (const r of b.content) if (r?.type === "web_search_result") addSource(sources, r.url, r.title);
+      } else if (b?.type === "text" && Array.isArray(b.citations)) {
+        for (const c of b.citations) addSource(sources, c?.url, c?.title);
+      }
+    }
+
     const toolUses = blocks.filter((b) => b?.type === "tool_use");
+
+    // pause_turn: the server-side tool loop hit its budget mid-turn and wants
+    // us to send the partial turn back so it can continue. No client tools to
+    // run, just resume.
+    if (data?.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: blocks });
+      continue;
+    }
 
     if (data?.stop_reason !== "tool_use" || toolUses.length === 0) {
       const answer = blocks
@@ -259,14 +383,14 @@ async function askAnthropic(opts: {
         .map((b) => b.text)
         .join("\n")
         .trim();
-      return { answer, toolCalls, rounds, usage };
+      return { answer, toolCalls, rounds, usage, sources, modelUsed: chain[modelIdx] };
     }
 
     messages.push({ role: "assistant", content: blocks });
 
     const results = await Promise.all(
       toolUses.map(async (tu) => {
-        const { text, log } = await runTool(tu.name, tu.input, round);
+        const { text, log } = await runTool(tu.name, tu.input, round, opts.ctx);
         toolCalls.push(log);
         return { type: "tool_result", tool_use_id: tu.id, content: text, ...(log.ok ? {} : { is_error: true }) };
       })
@@ -282,6 +406,8 @@ async function askAnthropic(opts: {
     toolCalls,
     rounds,
     usage,
+    sources,
+    modelUsed: chain[modelIdx],
   };
 }
 
@@ -293,11 +419,13 @@ async function askOpenRouter(opts: {
   tools: typeof TOOLS;
   model: string;
   maxRounds: number;
+  webSearch: boolean;
+  ctx: AskContext;
 }) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw Object.assign(new Error("OPENROUTER_API_KEY is not configured"), { status: 503 });
 
-  const toolDefs = opts.tools.map((t) => ({
+  const toolDefs = [...opts.tools, ...LOCAL_TOOLS].map((t) => ({
     type: "function",
     function: {
       name: t.name,
@@ -310,7 +438,8 @@ async function askOpenRouter(opts: {
   // rather than a separate top-level field.
   const messages: any[] = [{ role: "system", content: opts.system }, ...opts.messages];
   const toolCalls: ToolCallLog[] = [];
-  const usage = { inputTokens: 0, outputTokens: 0 };
+  const sources: Source[] = [];
+  const usage = { inputTokens: 0, outputTokens: 0, webSearches: 0 };
   let rounds = 0;
 
   for (let round = 1; round <= opts.maxRounds; round++) {
@@ -329,6 +458,9 @@ async function askOpenRouter(opts: {
         messages,
         tools: toolDefs,
         tool_choice: "auto",
+        // OpenRouter's hosted web search: results are injected into the prompt
+        // and come back as url_citation annotations on the message.
+        ...(opts.webSearch ? { plugins: [{ id: "web", max_results: 5 }] } : {}),
       }),
     });
 
@@ -344,10 +476,19 @@ async function askOpenRouter(opts: {
     usage.outputTokens += data?.usage?.completion_tokens ?? 0;
 
     const message = data?.choices?.[0]?.message;
+    const annotations: any[] = Array.isArray(message?.annotations) ? message.annotations : [];
+    if (annotations.length) {
+      usage.webSearches += 1;
+      toolCalls.push({ round, name: "web_search", args: { results: annotations.length }, ok: true, ms: 0, truncated: false, hosted: true });
+      for (const a of annotations) {
+        const u = a?.url_citation ?? a;
+        addSource(sources, u?.url, u?.title);
+      }
+    }
     const requested: any[] = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
 
     if (requested.length === 0) {
-      return { answer: (message?.content ?? "").trim(), toolCalls, rounds, usage };
+      return { answer: (message?.content ?? "").trim(), toolCalls, rounds, usage, sources, modelUsed: opts.model };
     }
 
     messages.push(message);
@@ -381,7 +522,7 @@ async function askOpenRouter(opts: {
         continue;
       }
 
-      const { text, log } = await runTool(call?.function?.name, args, round);
+      const { text, log } = await runTool(call?.function?.name, args, round, opts.ctx);
       toolCalls.push(log);
       messages.push({ role: "tool", tool_call_id: call.id, content: text });
     }
@@ -395,6 +536,8 @@ async function askOpenRouter(opts: {
     toolCalls,
     rounds,
     usage,
+    sources,
+    modelUsed: opts.model,
   };
 }
 
@@ -407,14 +550,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
   // GET is a capability probe so the console can grey out the Ask panel with a
-  // specific reason instead of letting the user type a question into a dead box.
+  // specific reason instead of letting the user type a question into a dead
+  // box — and, since v0.26, the model roster the picker is built from.
   if (req.method === "GET") {
+    const or = await openRouterModels();
     res.status(200).json({
       endpoint: "ask",
       providers: {
         anthropic: { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: DEFAULT_ANTHROPIC_MODEL },
         openrouter: { configured: Boolean(process.env.OPENROUTER_API_KEY), model: DEFAULT_OPENROUTER_MODEL },
       },
+      models: {
+        anthropic: anthropicModels(),
+        openrouter: or.models,
+        openrouterLive: or.live,
+      },
+      webSearch: { available: true, default: WEB_SEARCH_DEFAULT, maxUses: WEB_SEARCH_MAX_USES },
+      localTools: LOCAL_TOOLS.map((t) => t.name),
       randallRelay: { configured: Boolean(process.env.RANDALL_MCP_URL) },
       toolCount: TOOLS.length,
       domains: DOMAINS.map((d) => ({ id: d.id, label: d.label, toolCount: d.tools.length })),
@@ -470,7 +622,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const model =
     typeof body.model === "string" && body.model.trim()
-      ? body.model.trim()
+      ? body.model.trim().slice(0, 120)
       : provider === "anthropic"
       ? DEFAULT_ANTHROPIC_MODEL
       : DEFAULT_OPENROUTER_MODEL;
@@ -479,6 +631,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     Math.max(Number.isFinite(body.maxRounds) ? Number(body.maxRounds) : DEFAULT_MAX_ROUNDS, 1),
     MAX_ROUNDS_CAP
   );
+
+  const webSearch = typeof body.webSearch === "boolean" ? body.webSearch : WEB_SEARCH_DEFAULT;
 
   const { tools, warnings: toolWarnings } = selectTools(body);
   warnings.push(...toolWarnings);
@@ -497,7 +651,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : [];
 
   const messages = [...history, { role: "user", content: question }];
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt({ webSearch, excel: true });
+  const ctx: AskContext = { attachments: [] };
   const startedAt = Date.now();
 
   try {
@@ -510,17 +665,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             model,
             maxRounds,
             attachRandall: attachRandall && provider === "anthropic",
+            webSearch,
+            ctx,
+            warnings,
           })
-        : await askOpenRouter({ system, messages, tools, model, maxRounds });
+        : await askOpenRouter({ system, messages, tools, model, maxRounds, webSearch, ctx });
 
     res.status(200).json({
       answer: result.answer,
       provider,
       model,
+      modelUsed: result.modelUsed,
       rounds: result.rounds,
-      toolsExposed: tools.length,
+      toolsExposed: tools.length + LOCAL_TOOLS.length,
       toolCalls: result.toolCalls,
-      usage: result.usage,
+      webSearch,
+      webSearches: result.usage.webSearches,
+      sources: result.sources,
+      attachments: ctx.attachments,
+      usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
       totalMs: Date.now() - startedAt,
       randallRelay: attachRandall && provider === "anthropic",
       warnings,
