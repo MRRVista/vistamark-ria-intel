@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sql } from "drizzle-orm";
 import { requireCron } from "../../lib/auth";
 import { db, isDbReady } from "../../lib/db";
-import { createDraft } from "../../lib/nonprofit/engine";
+import { createDraft, updateDraftBody, stripLegacySig } from "../../lib/nonprofit/engine";
 import { PROGRAMS } from "../../lib/nonprofit/programs";
 
 /**
@@ -55,7 +55,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (typeof req.body === "object" && req.body) || {};
-  if ((body as any).action !== "flush") { res.status(400).json({ error: "POST body must be {\"action\":\"flush\"}" }); return; }
+  const action = (body as any).action;
+
+  if (action === "strip_sig") {
+    // One-time cleanup (v0.29.4): remove the appended signature block + footer
+    // from drafts already delivered to Outlook — Sigsync owns signatures now.
+    const delivered = rows(await db.execute(sql`
+      SELECT e.id, e.meta, l.program
+      FROM np_events e JOIN np_leads l ON l.id = e.lead_id
+      WHERE e.kind = 'deliver' AND e.meta->>'graphMessageId' IS NOT NULL`));
+    const patched: any[] = [];
+    const failed: any[] = [];
+    for (const r of delivered) {
+      const m = r.meta ?? {};
+      const prog = r.program === "ryan" ? PROGRAMS.ryan : PROGRAMS.matt;
+      const cleaned = stripLegacySig(prog, String(m.body ?? ""));
+      if (cleaned === m.body) continue;
+      const mailbox = m.mailbox ?? prog.mailbox;
+      try {
+        await updateDraftBody(mailbox, m.graphMessageId, cleaned);
+        await db.execute(sql`
+          UPDATE np_events SET meta = meta || ${JSON.stringify({ body: cleaned, sigStrippedAt: new Date().toISOString() })}::jsonb
+          WHERE id = ${r.id}`);
+        patched.push({ eventId: r.id, subject: m.subject, mailbox });
+      } catch (err) {
+        failed.push({ eventId: r.id, subject: m.subject, error: String(err).slice(0, 200) });
+      }
+    }
+    res.status(200).json({ ok: failed.length === 0, patched: patched.length, failed, drafts: patched });
+    return;
+  }
+
+  if (action !== "flush") { res.status(400).json({ error: "POST body must be {\"action\":\"flush\"} or {\"action\":\"strip_sig\"}" }); return; }
 
   const delivered: any[] = [];
   const failed: any[] = [];
@@ -64,7 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mailbox = m.mailbox
       ?? (r.program === "ryan" ? PROGRAMS.ryan.mailbox : PROGRAMS.matt.mailbox);
     try {
-      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", m.body ?? "");
+      const prog = r.program === "ryan" ? PROGRAMS.ryan : PROGRAMS.matt;
+      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripLegacySig(prog, String(m.body ?? "")));
       await db.execute(sql`
         UPDATE np_events
         SET meta = meta || ${JSON.stringify({ delivery: "outlook_draft", graphMessageId: g.id, graphWebLink: g.webLink, flushedAt: new Date().toISOString() })}::jsonb

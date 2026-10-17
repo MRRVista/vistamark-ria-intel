@@ -461,8 +461,19 @@ function forNote(p: NonprofitProgram, org: OrgCandidate, pick: ApolloPick, role:
   return `[FOR ${p.draftNoteName}: ${bits.join(" · ")}]`;
 }
 
+/** [FOR X] note + the drafted body, nothing else. The draft already signs
+ *  off with the sender's first name; the full signature comes from Sigsync
+ *  at send time, so no signature block or footer is appended here
+ *  (M. Rice, 2026-10-16). stripLegacySig removes the block from drafts
+ *  produced before this change. */
 function finalBody(p: NonprofitProgram, note: string, d: DraftOut): string {
-  return `${note}\n\n${d.body}\n\n${p.persona.senderName}\n${p.persona.senderTitle}, ${p.persona.firm}\n${p.persona.officeShort}\n\n—\n${p.persona.footer}`;
+  return `${note}\n\n${d.body}`;
+}
+
+export function stripLegacySig(p: NonprofitProgram, body: string): string {
+  const marker = `\n\n${p.persona.senderName}\n${p.persona.senderTitle}`;
+  const i = body.indexOf(marker);
+  return i >= 0 ? body.slice(0, i).trimEnd() : body;
 }
 
 // ── Delivery: Graph draft into the PRINCIPAL'S mailbox ─────────────────────
@@ -500,6 +511,17 @@ export async function createDraft(mailbox: string, to: string, toName: string, s
   if (!res.ok) throw new Error(`graph draft ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = (await res.json()) as { id: string; webLink?: string };
   return { id: j.id, webLink: j.webLink ?? null };
+}
+
+/** Replace the body of an existing (unsent) draft in a mailbox. */
+export async function updateDraftBody(mailbox: string, messageId: string, body: string): Promise<void> {
+  const token = await graphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ body: { contentType: "Text", content: body } }),
+  });
+  if (!res.ok) throw new Error(`graph patch ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
 
 // ── VistaCRM ───────────────────────────────────────────────────────────────
