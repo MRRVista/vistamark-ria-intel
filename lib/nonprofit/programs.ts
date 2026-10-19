@@ -10,6 +10,13 @@
  *          Ohio State / Northwestern and ties to Chicago, Cleveland, Akron,
  *          Columbus, Evanston.
  *
+ * v0.30.0 (2026-10-19): the LIVE settings are each program's VistaRandall
+ * directive card (VistaOutreach; vistarandall lib/outreach-nonprofit.ts). The
+ * engine fetches them at run time (./remote-config.ts) and merges them over
+ * this file, which is now the shape and the defaults only: editing mailbox,
+ * pool band, geo, boost cities, affinities, facts or thesis HERE no longer
+ * changes what runs. Edit the card.
+ *
  * Every sender fact below is a claim the sender is willing to stand behind in
  * an SEC exam. The engine forbids the model from inventing facts about
  * Vistamark that are not in this file.
