@@ -44,7 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cron = requireCron(req);
   if (!cron.ok) { res.status(401).json({ error: cron.reason }); return; }
 
-  const isVercelCron = !!req.headers["x-vercel-cron"];
+  // v0.30.1: Vercel's scheduler identifies itself by user-agent "vercel-cron/1.0" (plus the
+  // CRON_SECRET bearer); it does not reliably send x-vercel-cron. Without this a scheduled call
+  // reads as "manual": the 19:00 Chicago gate and NONPROFIT_ENGINE_ENABLED were bypassed and each
+  // program ran at BOTH its 00:xx and 01:xx UTC slots (np_leads 10/16-10/18: two runs a night).
+  const isVercelCron = !!req.headers["x-vercel-cron"] || /vercel-cron/i.test(String(req.headers["user-agent"] || ""));
   const q = req.query as Record<string, string | undefined>;
   const force = q.force === "1" || !isVercelCron;
 
