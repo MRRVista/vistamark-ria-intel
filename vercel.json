@@ -81,6 +81,9 @@
     },
     "api/admin/np-drafts.ts": {
       "maxDuration": 120
+    },
+    "api/np-draft-now.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
