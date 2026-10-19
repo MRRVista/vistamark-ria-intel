@@ -20,6 +20,11 @@ import { runNonprofitEngine } from "../../lib/nonprofit/engine";
  * drafts into each PRINCIPAL'S OWN mailbox (never sends), so it does not
  * collide with the prospect-engine / D-061 single-mailbox concern.
  *
+ * v0.30.0: every run (scheduled or manual) first reads each program's settings
+ * from its VistaRandall directive card (lib/nonprofit/remote-config.ts). A
+ * program paused on its card is skipped; VistaRandall unreachable => the whole
+ * run is skipped, np_events kind config_unreachable, HTTP 503.
+ *
  * Manual runs (CRON_SECRET header) bypass the clock and accept
  * ?program=matt|ryan ?target= ?maxCandidates= ?budgetMs= ?dryRun=1.
  */
@@ -69,7 +74,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       dryRun: q.dryRun === "1",
       actor: isVercelCron ? "nonprofit-engine:cron" : "nonprofit-engine:manual",
     });
-    res.status(200).json(summary);
+    // v0.30.0: a run skipped because VistaRandall could not be read is a failure, not a 200.
+    if (!summary.ok) console.error(`[nonprofit-engine] ${summary.error}`);
+    res.status(summary.ok ? 200 : 503).json(summary);
   } catch (err) {
     res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
   }

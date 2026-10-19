@@ -46,6 +46,7 @@ import { db, isDbReady } from "../db";
 import { apolloPeopleSearch, apolloPersonEnrich } from "../apollo/tools";
 import { irs990BoardsOfPerson } from "../irs990/queries";
 import { PROGRAMS, NonprofitProgram, personaFactsBlock, availabilityDates } from "./programs";
+import { loadEffectivePrograms } from "./remote-config"; // v0.30.0: live settings = the VistaRandall directive cards
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -121,6 +122,8 @@ export interface NpProgramSummary {
   budgetExhausted: boolean;
   candidatesExhausted: boolean;
   warnings: string[];
+  paused?: boolean;                 // v0.30.0: paused on its VistaRandall card; not run
+  directiveDnum?: number | null;    // v0.30.0: the card that governs it
 }
 
 export interface NpRunSummary {
@@ -129,6 +132,8 @@ export interface NpRunSummary {
   model: string;
   elapsedMs: number;
   programs: NpProgramSummary[];
+  error?: string;                                       // v0.30.0: why the run did not happen
+  config?: { source: string; fetchedAt: string } | null; // v0.30.0: where the settings came from
 }
 
 // ── Anthropic (same minimal client as the prospect engine) ─────────────────
@@ -653,7 +658,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
   const candidates = await selectOrgs(p, has990, opts.maxCandidates);
   if (!candidates.length) {
     s.candidatesExhausted = true;
-    s.warnings.push(`no untouched orgs match the ${p.key} band/geo — widen the band in lib/nonprofit/programs.ts or clear np_leads rows`);
+    s.warnings.push(`no untouched orgs match the ${p.key} band/geo — widen the band on its VistaRandall directive card or clear np_leads rows`);
     return s;
   }
   const remaining = () => opts.deadline - Date.now();
@@ -798,17 +803,41 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
 export async function runNonprofitEngine(opts: NpEngineOptions = {}): Promise<NpRunSummary> {
   const started = Date.now();
   if (!isDbReady()) throw new Error("DATABASE_URL not configured");
-  const target = Math.max(1, Math.min(opts.target ?? 3, 10));
-  const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 40));
   const budgetMs = Math.max(60_000, Math.min(opts.budgetMs ?? 280_000, 780_000));
   const actor = opts.actor ?? ENGINE_ACTOR;
   const deadline = started + budgetMs;
   const has990 = await has990Tables();
 
+  // v0.30.0 (2026-10-19, M. Rice): each program's settings live on its
+  // VistaRandall directive card. If they cannot be read, the run is SKIPPED
+  // and that is recorded loudly -- never a silent run on the file defaults.
+  const cfg = await loadEffectivePrograms();
+  if (!cfg.ok) {
+    const msg = `nonprofit engine run SKIPPED: program settings could not be read from VistaRandall (${cfg.url}): ${cfg.error}. No drafts were made; lib/nonprofit/programs.ts defaults were NOT used.`;
+    console.error(`[nonprofit-engine] ${msg}`);
+    try { await logEvent(null, "config_unreachable", msg, { error: cfg.error, url: cfg.url, program: opts.program ?? "all" }, actor); }
+    catch (e) { console.error("[nonprofit-engine] could not record config_unreachable in np_events:", e); }
+    return { ok: false, has990, model: MODEL, elapsedMs: Date.now() - started, programs: [], error: msg, config: null };
+  }
+
   const keys: Array<"matt" | "ryan"> = opts.program ? [opts.program] : ["matt", "ryan"];
   const programs: NpProgramSummary[] = [];
   for (const k of keys) {
-    programs.push(await runProgram(PROGRAMS[k], has990, { target, maxCandidates, dryRun: !!opts.dryRun, actor, deadline }));
+    const eff = cfg.programs[k];
+    const card = eff.directiveDnum ? `D-${String(eff.directiveDnum).padStart(3, "0")}` : "(no card bound)";
+    if (!eff.enabled) {
+      const msg = `${k} program is paused on its VistaRandall card ${card}; not run`;
+      console.log(`[nonprofit-engine] ${msg}`);
+      if (!opts.dryRun) await logEvent(null, "paused", msg, { program: k, directiveDnum: eff.directiveDnum }, actor);
+      programs.push({ program: k, target: 0, examined: 0, drafted: 0, skipped: [], drafts: [], budgetExhausted: false, candidatesExhausted: false, warnings: [msg], paused: true, directiveDnum: eff.directiveDnum });
+      continue;
+    }
+    // The card's target governs scheduled runs; a manual ?target= still overrides.
+    const target = Math.max(1, Math.min(opts.target ?? eff.target, 10));
+    const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 40));
+    const s = await runProgram(eff.program, has990, { target, maxCandidates, dryRun: !!opts.dryRun, actor, deadline });
+    s.directiveDnum = eff.directiveDnum;
+    programs.push(s);
   }
-  return { ok: true, has990, model: MODEL, elapsedMs: Date.now() - started, programs };
+  return { ok: true, has990, model: MODEL, elapsedMs: Date.now() - started, programs, config: { source: cfg.url, fetchedAt: cfg.fetchedAt } };
 }
