@@ -1,9 +1,9 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 84 MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 140+ MCP tools.
  *
  * WHY THIS EXISTS
  * ---------------
- * `lib/mcp/tools.ts` is a flat array of 84 tools. That is the right shape for
+ * `lib/mcp/tools.ts` is a flat array of every tool. That is the right shape for
  * an MCP client (which wants tools/list) and the wrong shape for a human
  * (who wants "show me the endowment tools"). This module adds the layer the
  * flat registry deliberately omits: which data DOMAIN a tool belongs to,
@@ -27,6 +27,14 @@
  * live ingest-pipeline state on top of this. Treat `probe` as a hint that
  * tells the UI which colour to start with, never as a source of truth.
  */
+
+import { RESEARCH_DOMAIN } from "../research";
+import { FEDREG_DOMAIN } from "../fed-regional";
+import { INTLMACRO_DOMAIN } from "../intl-macro";
+import { MKTSTRUCT_DOMAIN } from "../market-structure";
+import { FUNDS_DOMAIN } from "../funds";
+import { FILPEOPLE_DOMAIN } from "../filings-people";
+import { LOCALWEALTH_DOMAIN } from "../local-wealth";
 
 export type ToolProbe =
   | "live" //      probed and returned real data
@@ -326,6 +334,13 @@ export const DOMAINS: CatalogDomain[] = [
       { name: "prospect_imports", backing: "postgres", probe: "unprobed" },
     ],
   },
+  RESEARCH_DOMAIN,
+  FEDREG_DOMAIN,
+  INTLMACRO_DOMAIN,
+  MKTSTRUCT_DOMAIN,
+  FUNDS_DOMAIN,
+  FILPEOPLE_DOMAIN,
+  LOCALWEALTH_DOMAIN,
   {
     id: "system",
     label: "System",

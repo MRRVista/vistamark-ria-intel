@@ -17,7 +17,7 @@ export const MKTSTRUCT_TOOLS: ToolDef[] = [...FINRA_TOOL_DEFS, ...SEC_FTD_TOOL_D
 
 export const MKTSTRUCT_DOMAIN: CatalogDomain = {
   id: "marketstructure",
-  label: "Market Structure (FINRA · SEC FTD · MSRB)",
+  label: "Market Structure (FINRA · SEC FTD)",
   source:
     "FINRA Reg SHO daily files (cdn.finra.org) + FINRA Query API (api.finra.org: public short interest; TRACE aggregates keyed) + SEC fails-to-deliver zips. MSRB EMMA: no free API (not wired).",
   tools: [

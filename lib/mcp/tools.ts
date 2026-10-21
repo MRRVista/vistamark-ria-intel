@@ -135,6 +135,14 @@ import {
   prospectImportsList,
 } from "../prospects/tools";
 
+import { RESEARCH_TOOLS } from "../research";
+import { FEDREG_TOOLS } from "../fed-regional";
+import { INTLMACRO_TOOLS } from "../intl-macro";
+import { MKTSTRUCT_TOOLS } from "../market-structure";
+import { FUNDS_TOOLS } from "../funds";
+import { FILPEOPLE_TOOLS } from "../filings-people";
+import { LOCALWEALTH_TOOLS } from "../local-wealth";
+
 export interface ToolDef {
   name: string;
   description: string;
@@ -614,5 +622,12 @@ export const TOOLS: ToolDef[] = [
   ...EODHD_TOOLS,
   ...APOLLO_TOOLS,
   ...PROSPECT_TOOLS,
+  ...RESEARCH_TOOLS,
+  ...FEDREG_TOOLS,
+  ...INTLMACRO_TOOLS,
+  ...MKTSTRUCT_TOOLS,
+  ...FUNDS_TOOLS,
+  ...FILPEOPLE_TOOLS,
+  ...LOCALWEALTH_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
