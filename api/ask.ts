@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAccessOrSession } from "../lib/auth";
 import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
 import { DOMAINS } from "../lib/mcp/catalog";
+import { renderDoctrine, renderPlaybookIndex } from "../lib/synthesis";
 import { LOCAL_TOOLS, LOCAL_TOOL_BY_NAME, type AskContext } from "../lib/ask/local-tools";
 import {
   anthropicModels,
@@ -46,7 +47,8 @@ import {
  * accepted, the roster is what the console offers.
  *
  * REQUEST
- *   { question, provider?, model?, domains?, tools?, maxRounds?, history?, target?, webSearch? }
+ *   { question, provider?, model?, domains?, tools?, maxRounds?, depth?, history?, target?, webSearch? }
+ *   depth: "standard" (default, 5 rounds) | "deep" (8 rounds; full playbook, drill everything)
  *
  * RESPONSE
  *   { answer, provider, model, modelUsed, rounds, toolCalls[], webSearches, sources[], attachments[], usage, warnings[] }
@@ -62,13 +64,23 @@ const WEB_SEARCH_TOOL_TYPE = "web_search_20250305";
 const DEFAULT_ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || HARD_DEFAULT_ANTHROPIC;
 const DEFAULT_OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || HARD_DEFAULT_OPENROUTER;
 
-const MAX_ROUNDS_CAP = 8;
+/** v0.33: deep questions (prospect/org/area triangulation) routinely need
+ *  more than five rounds — fan-out, join, drill, angle. The cap rises to 12
+ *  and `depth:"deep"` defaults to 8. The 300s function budget still governs. */
+const MAX_ROUNDS_CAP = 12;
 const DEFAULT_MAX_ROUNDS = 5;
+const DEEP_MAX_ROUNDS = 8;
 const MAX_TOKENS = 8192;
 /** Per-tool-result cap. Tool payloads here run to hundreds of KB (13F, EDGAR
  *  frames); unbounded they blow the context window inside two rounds. */
 const TOOL_RESULT_CHAR_CAP = 6000;
+/** Synthesis composites are already compacted and carry the join the model
+ *  would otherwise spend rounds doing — they get a bigger window. */
+const SYNTHESIS_RESULT_CHAR_CAP = 16000;
+const SYNTHESIS_TOOL_PREFIXES = ["prospect_360", "org_360", "liquidity_event_radar", "relationship_graph", "market_regime_brief", "synthesis_playbooks"];
 const TOOL_TIMEOUT_MS = 20000;
+/** Composites fan out to a dozen upstreams; they get a longer leash. */
+const SYNTHESIS_TOOL_TIMEOUT_MS = 45000;
 /** Web searches per request. Research-grade questions need several; the
  *  prospect engine budgets 6 per person and that has proven enough. */
 const WEB_SEARCH_MAX_USES = Number(process.env.ASK_WEB_SEARCH_MAX_USES) || 8;
@@ -114,7 +126,7 @@ function addSource(list: Source[], url: unknown, title?: unknown) {
  * an un-ingested table. Telling the model the difference up front is the
  * single highest-value thing in this prompt.
  */
-function buildSystemPrompt(opts: { webSearch: boolean; excel: boolean }): string {
+function buildSystemPrompt(opts: { webSearch: boolean; excel: boolean; depth: "standard" | "deep" }): string {
   const domainLines = DOMAINS.map(
     (d) => `- ${d.label} (${d.tools.length} tools) — ${d.source}`
   ).join("\n");
@@ -144,13 +156,38 @@ function buildSystemPrompt(opts: { webSearch: boolean; excel: boolean }): string
     );
   }
 
+  const depthLines =
+    opts.depth === "deep"
+      ? [
+          "DEPTH: DEEP. The user wants the full triangulation. Run the matching playbook end to end: composite first,",
+          "  then drill every confirmed signal with its single-dataset tool, then web_search for the human detail,",
+          "  then the Angle section. Use the rounds you have; a thin answer is the failure mode here, not a long one.",
+        ]
+      : [
+          "DEPTH: STANDARD. Composite first when a playbook matches; drill only what changes the answer; keep it tight.",
+        ];
+
   return [
-    "You are Randall Stephens, senior associate at Vistamark Investments LLC.",
+    "You are Randall Stephens, senior associate at Vistamark Investments LLC — the firm's analyst and its most creative",
+    "salesperson in one seat. You reason like a forensic analyst (hypothesis, parallel evidence, triangulation) and",
+    "write like a neighbor who happens to be a CFA (specific, useful, dry wit, zero hype).",
     `You answer questions using the VistaIntel tool set — ${TOOLS.length} tools spanning SEC, IRS, DOL,`,
-    "Treasury, Federal Reserve, EODHD market data, higher-ed data and Vistamark's own prospect database.",
+    "Treasury, Federal Reserve, EODHD market data, higher-ed data, county records, licensing boards and Vistamark's own prospect database.",
     "Vistamark is an RIA; the recurring jobs are",
     "iCIO prospecting (boutique, planning-led, fee-only independent RIAs with no in-house CIO),",
     "nonprofit and endowment intelligence, local (Hinsdale, IL) prospect research, and pre-market macro reads.",
+    "",
+    "START WITH A COMPOSITE. The Synthesis family fans out across a dozen datasets in one call and comes back joined,",
+    "scored and angled: prospect_360 (a person), org_360 (an institution), liquidity_event_radar (an area),",
+    "relationship_graph (a warm path), market_regime_brief (the market). Call the composite FIRST, read its",
+    "coverage block, then drill into the single-dataset tools it names. synthesis_playbooks has the recipes for",
+    "questions with no composite yet.",
+    "",
+    renderDoctrine(),
+    "",
+    renderPlaybookIndex(),
+    "",
+    ...depthLines,
     "",
     "DATA DOMAINS AVAILABLE:",
     domainLines,
@@ -225,18 +262,22 @@ async function runTool(name: string, args: any, round: number, ctx: AskContext):
       log: { round, name, args, ok: false, ms: 0, truncated: false, error: "unknown tool" },
     };
   }
+  const isSynthesis = SYNTHESIS_TOOL_PREFIXES.includes(name);
+  const cap = isSynthesis ? SYNTHESIS_RESULT_CHAR_CAP : TOOL_RESULT_CHAR_CAP;
   try {
     const result = await withTimeout(
       Promise.resolve(local ? local.handler(args ?? {}, ctx) : tool.handler(args ?? {})),
-      TOOL_TIMEOUT_MS,
+      isSynthesis ? SYNTHESIS_TOOL_TIMEOUT_MS : TOOL_TIMEOUT_MS,
       name
     );
-    let text = JSON.stringify(result, null, 2);
-    const truncated = text.length > TOOL_RESULT_CHAR_CAP;
+    // Composites are compacted with 0-space JSON: their value is the join, not
+    // the whitespace, and the bigger cap buys more rows that way.
+    let text = JSON.stringify(result, null, isSynthesis ? 0 : 2);
+    const truncated = text.length > cap;
     if (truncated) {
       text =
-        text.slice(0, TOOL_RESULT_CHAR_CAP) +
-        `\n\n[truncated at ${TOOL_RESULT_CHAR_CAP} chars — narrow the query or request fewer rows]`;
+        text.slice(0, cap) +
+        `\n\n[truncated at ${cap} chars — narrow the query or request fewer rows]`;
     }
     // Attachments are logged with their size, never their payload — a 2 MB
     // base64 blob in `args` would make the trace unreadable.
@@ -566,6 +607,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         openrouterLive: or.live,
       },
       webSearch: { available: true, default: WEB_SEARCH_DEFAULT, maxUses: WEB_SEARCH_MAX_USES },
+      depth: { default: "standard", options: ["standard", "deep"], rounds: { standard: DEFAULT_MAX_ROUNDS, deep: DEEP_MAX_ROUNDS, cap: MAX_ROUNDS_CAP } },
       localTools: LOCAL_TOOLS.map((t) => t.name),
       randallRelay: { configured: Boolean(process.env.RANDALL_MCP_URL) },
       toolCount: TOOLS.length,
@@ -627,8 +669,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? DEFAULT_ANTHROPIC_MODEL
       : DEFAULT_OPENROUTER_MODEL;
 
+  const depth: "standard" | "deep" = body.depth === "deep" ? "deep" : "standard";
   const maxRounds = Math.min(
-    Math.max(Number.isFinite(body.maxRounds) ? Number(body.maxRounds) : DEFAULT_MAX_ROUNDS, 1),
+    Math.max(Number.isFinite(body.maxRounds) ? Number(body.maxRounds) : depth === "deep" ? DEEP_MAX_ROUNDS : DEFAULT_MAX_ROUNDS, 1),
     MAX_ROUNDS_CAP
   );
 
@@ -651,7 +694,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : [];
 
   const messages = [...history, { role: "user", content: question }];
-  const system = buildSystemPrompt({ webSearch, excel: true });
+  const system = buildSystemPrompt({ webSearch, excel: true, depth });
   const ctx: AskContext = { attachments: [] };
   const startedAt = Date.now();
 
@@ -677,6 +720,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model,
       modelUsed: result.modelUsed,
       rounds: result.rounds,
+      depth,
       toolsExposed: tools.length + LOCAL_TOOLS.length,
       toolCalls: result.toolCalls,
       webSearch,

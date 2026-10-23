@@ -1,5 +1,5 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 140+ MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 137 MCP tools (v0.33).
  *
  * WHY THIS EXISTS
  * ---------------
@@ -35,6 +35,7 @@ import { MKTSTRUCT_DOMAIN } from "../market-structure";
 import { FUNDS_DOMAIN } from "../funds";
 import { FILPEOPLE_DOMAIN } from "../filings-people";
 import { LOCALWEALTH_DOMAIN } from "../local-wealth";
+import { SYNTHESIS_DOMAIN } from "../synthesis";
 
 export type ToolProbe =
   | "live" //      probed and returned real data
@@ -341,6 +342,7 @@ export const DOMAINS: CatalogDomain[] = [
   FUNDS_DOMAIN,
   FILPEOPLE_DOMAIN,
   LOCALWEALTH_DOMAIN,
+  SYNTHESIS_DOMAIN,
   {
     id: "system",
     label: "System",
