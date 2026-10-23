@@ -17,6 +17,7 @@ import AdmZip from "adm-zip";
 import { sql, type SQL } from "drizzle-orm";
 import { db, isDbReady } from "../db";
 import { politeFetch } from "../data/http";
+import { schHTableExists } from "../dol-5500/schedule-h";
 import {
   SCH_C_ROLE_CODES,
   buildCodeMap,
@@ -169,6 +170,18 @@ export async function ingestScheduleC(year: number): Promise<SchCIngestResult> {
 
 const DS = "DOL Form 5500 Schedule C Part I Item 2 (Postgres dol_sch_c_providers ⋈ plans)";
 
+/**
+ * Plan assets: F_5500 stopped carrying TOT_ASSETS_EOY_AMT in the 2024 files, so
+ * COALESCE with Schedule H/I (dol_sch_h_i, migration 0010) when that table
+ * exists. Returns the join fragment + the assets expression to use.
+ */
+async function assetsJoin(): Promise<{ join: SQL; assets: SQL }> {
+  if (await schHTableExists()) {
+    return { join: sql`LEFT JOIN dol_sch_h_i shi ON shi.ack_id = p.ack_id`, assets: sql`COALESCE(pl.tot_assets_eoy_amt, shi.tot_assets_eoy_amt)` };
+  }
+  return { join: sql``, assets: sql`pl.tot_assets_eoy_amt` };
+}
+
 function missingTable(e: unknown): boolean {
   const m = e instanceof Error ? e.message : String(e);
   // Only a missing RELATION (dol_sch_c_providers or plans) — not e.g. a missing column.
@@ -240,19 +253,20 @@ export async function schCProvidersByPlan(args: SchCByPlanArgs) {
     const role = roleCondition(args.role);
     if (role) conds.push(role);
     const where = sql.join(conds, sql` AND `);
-    const join = args.ackId ? sql`LEFT JOIN plans pl ON pl.ack_id = p.ack_id` : sql`JOIN plans pl ON pl.ack_id = p.ack_id`;
+    const shi = await assetsJoin();
+    const join = sql`${args.ackId ? sql`LEFT JOIN plans pl ON pl.ack_id = p.ack_id` : sql`JOIN plans pl ON pl.ack_id = p.ack_id`} ${shi.join}`;
 
     const planRows = rowsOf(
       await db.execute(sql`
         SELECT p.ack_id, MAX(p.filing_year) AS filing_year,
                MAX(pl.plan_name) AS plan_name, MAX(pl.spons_dfe_name) AS sponsor, MAX(pl.spons_dfe_ein) AS sponsor_ein,
                MAX(pl.spons_dfe_mail_city) AS city, MAX(pl.spons_dfe_mail_state) AS state,
-               MAX(pl.plan_year) AS plan_year, MAX(pl.tot_assets_eoy_amt) AS assets_eoy,
+               MAX(pl.plan_year) AS plan_year, MAX(${shi.assets}) AS assets_eoy,
                MAX(pl.tot_active_partcp_cnt) AS active_participants
         FROM dol_sch_c_providers p ${join}
         WHERE ${where}
         GROUP BY p.ack_id
-        ORDER BY MAX(pl.tot_assets_eoy_amt) DESC NULLS LAST, MAX(pl.tot_active_partcp_cnt) DESC NULLS LAST, MAX(p.filing_year) DESC
+        ORDER BY MAX(${shi.assets}) DESC NULLS LAST, MAX(pl.tot_active_partcp_cnt) DESC NULLS LAST, MAX(p.filing_year) DESC
         LIMIT ${limitPlans}`)
     );
     if (!planRows.length) {
@@ -319,29 +333,30 @@ export async function schCPlansByProvider(args: SchCByProviderArgs) {
     }
     if (args.state) conds.push(sql`pl.spons_dfe_mail_state = ${args.state.toUpperCase()}`);
     if (args.city) conds.push(sql`pl.spons_dfe_mail_city ILIKE ${args.city}`);
-    if (args.minAssets != null) conds.push(sql`pl.tot_assets_eoy_amt >= ${args.minAssets}`);
+    const shi = await assetsJoin();
+    if (args.minAssets != null) conds.push(sql`${shi.assets} >= ${args.minAssets}`);
     if (args.filingYear) conds.push(sql`p.filing_year = ${args.filingYear}`);
     const role = roleCondition(args.role);
     if (role) conds.push(role);
     const where = sql.join(conds, sql` AND `);
     const needPlans = !!(args.state || args.city || args.minAssets != null);
-    const join = needPlans ? sql`JOIN plans pl ON pl.ack_id = p.ack_id` : sql`LEFT JOIN plans pl ON pl.ack_id = p.ack_id`;
+    const join = sql`${needPlans ? sql`JOIN plans pl ON pl.ack_id = p.ack_id` : sql`LEFT JOIN plans pl ON pl.ack_id = p.ack_id`} ${shi.join}`;
 
     const [summary] = rowsOf(
       await db.execute(sql`
         SELECT COUNT(DISTINCT p.ack_id)::int AS plans,
                SUM(COALESCE(p.direct_comp,0) + COALESCE(p.indirect_comp,0))::bigint AS total_comp,
-               SUM(pl.tot_assets_eoy_amt)::bigint AS total_plan_assets,
+               SUM(${shi.assets})::bigint AS total_plan_assets,
                COUNT(DISTINCT p.provider_name_norm)::int AS name_variants
         FROM dol_sch_c_providers p ${join} WHERE ${where}`)
     );
     const rows = rowsOf(
       await db.execute(sql`
         SELECT p.*, pl.plan_name, pl.spons_dfe_name, pl.spons_dfe_ein, pl.spons_dfe_mail_city, pl.spons_dfe_mail_state,
-               pl.tot_assets_eoy_amt, pl.tot_active_partcp_cnt, pl.plan_year
+               ${shi.assets} AS tot_assets_eoy_amt, pl.tot_active_partcp_cnt, pl.plan_year
         FROM dol_sch_c_providers p ${join}
         WHERE ${where}
-        ORDER BY pl.tot_assets_eoy_amt DESC NULLS LAST, COALESCE(p.direct_comp,0) + COALESCE(p.indirect_comp,0) DESC, pl.tot_active_partcp_cnt DESC NULLS LAST
+        ORDER BY ${shi.assets} DESC NULLS LAST, COALESCE(p.direct_comp,0) + COALESCE(p.indirect_comp,0) DESC, pl.tot_active_partcp_cnt DESC NULLS LAST
         LIMIT ${limit} OFFSET ${offset}`)
     );
     if (!rows.length) {
@@ -378,7 +393,7 @@ export async function schCPlansByProvider(args: SchCByProviderArgs) {
       })),
       note:
         "Plans that report paying this provider on Schedule C (≥$5K comp; mostly 100+ participant plans). Provider names are free text — check providerNameVariants and prefer providerEin once you know it. " +
-        "Sponsor name/assets come from the plans table — null when that year isn't loaded, and currently null for ALL rows because the Form 5500 ingest misses those columns (plan name, sponsor EIN, city/state, participants are populated). minAssets therefore filters everything out until that's fixed. Sorted by plan assets, then comp. role: adviser | recordkeeper | broker | trustee | auditor | actuary | legal. Page with offset.",
+        "Sponsor name comes from the plans table — null when that year isn't loaded. Plan assets are F_5500 totals, falling back to Schedule H/I (dol_sch_h_i, migration 0010 + refresh-dol-sch-h) since DOL dropped them from F_5500 in 2024; null until that ingest runs. Sorted by plan assets, then comp. role: adviser | recordkeeper | broker | trustee | auditor | actuary | legal. Page with offset.",
     };
   } catch (e) {
     if (missingTable(e)) return emptyResponse("Table dol_sch_c_providers does not exist yet (migration 0009 not applied).");
