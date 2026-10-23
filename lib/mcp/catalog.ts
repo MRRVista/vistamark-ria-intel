@@ -48,6 +48,7 @@ import { WEBINTEL_DOMAIN } from "../web-intel";
 import { CRYPTO_DOMAIN } from "../crypto";
 import { DOLSCHH_DOMAIN } from "../dol-sch-h";
 import { IRSEOX_DOMAIN } from "../irs-eo-extras";
+import { COMPLIANCE_DOMAIN } from "../compliance";
 
 export type ToolProbe =
   | "live" //      probed and returned real data
@@ -367,6 +368,7 @@ export const DOMAINS: CatalogDomain[] = [
   CRYPTO_DOMAIN,
   DOLSCHH_DOMAIN,
   IRSEOX_DOMAIN,
+  COMPLIANCE_DOMAIN,
   {
     id: "system",
     label: "System",

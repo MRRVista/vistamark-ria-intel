@@ -34,6 +34,7 @@ import { WEBINTEL_CHECKS } from "../lib/web-intel";
 import { CRYPTO_CHECKS } from "../lib/crypto";
 import { DOLSCHH_CHECKS } from "../lib/dol-sch-h";
 import { IRSEOX_CHECKS } from "../lib/irs-eo-extras";
+import { COMPLIANCE_CHECKS } from "../lib/compliance";
 
 interface Check {
   name: string;
@@ -57,6 +58,7 @@ export const NEW_FAMILY_CHECKS: Check[] = [
   ...CRYPTO_CHECKS,
   ...DOLSCHH_CHECKS,
   ...IRSEOX_CHECKS,
+  ...COMPLIANCE_CHECKS,
 ];
 
 const CHECKS: Check[] = [
