@@ -62,11 +62,21 @@ const HEADER_KEYS = [
 
 export type HeaderKey = typeof HEADER_KEYS[number];
 
+/** [canonical key we read, alternate header DOL has used]. */
+const HEADER_ALIASES: Array<[HeaderKey, string]> = [
+  ["SPONS_DFE_NAME", "SPONSOR_DFE_NAME"],
+];
+
 export function buildHeaderIndex(headerRow: string[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (let i = 0; i < headerRow.length; i++) {
     const name = headerRow[i]!.trim().toUpperCase();
     map[name] = i;
+  }
+  // DOL renamed SPONS_DFE_NAME -> SPONSOR_DFE_NAME in the 2024 file (verified
+  // 2026-10-21); without this alias every plan's sponsor name ingests as null.
+  for (const [canonical, alt] of HEADER_ALIASES) {
+    if (map[canonical] == null && map[alt] != null) map[canonical] = map[alt]!;
   }
   return map;
 }

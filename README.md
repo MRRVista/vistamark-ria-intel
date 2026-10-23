@@ -1,6 +1,6 @@
 # Vistamark Intel
 
-A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **84 tools across 19 dataset families.** Queried in production by Randall, Vistamark's AI associate.
+A unified intelligence layer for RIA prospecting, nonprofit/endowment research, retirement-plan analysis, institutional-market intelligence, and macro/rate context — normalized Postgres (Neon) plus live public APIs, exposed to Claude via the Model Context Protocol (MCP). **131 tools across 26 dataset families.** Queried in production by Randall, Vistamark's AI associate.
 
 ## Data domains
 
@@ -10,6 +10,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 - **IRS Exempt Organizations BMF** — 6-region rotation; 1.7M+ tax-exempt orgs with asset/income/revenue bands.
 - **IRS Form 990 e-file returns** — every e-filed 990 / 990-EZ / 990-PF from the IRS TEOS bulk XML (index years 2021→current, ~750K returns/yr): financial summary (revenue, expenses, assets, net assets, invested securities, Schedule D endowment, investment-management fees paid — Part IX 11f) **plus every officer / director / trustee / key employee listed in Part VII** — the national nonprofit board-member index (`irs990_persons`, ~8 people per return, trigram-indexed on a normalized name; 990-PF rows carry the person's address). Loaded by the **`IRS 990 ingest` GitHub Actions workflow** (monthly, 8th) — not a Vercel cron, because one IRS batch is 50–500 MB. Ledger in `irs990_batches`; status at `GET /api/admin/irs990`.
 - **DOL Form 5500** — annual ERISA filings (sponsor, plan type, assets, participants, 401(k)/DB flags). Thursday refresh cron + manual admin backfill.
+- **DOL Form 5500 Schedule C** (v0.32, migration 0009) — every service provider paid by a plan (recordkeepers, consultants, investment advisers) with EIN, service codes and direct/indirect compensation, joined to the plan. Loaded by `POST /api/admin/refresh-dol-sch-c` (manual; ~265K rows for 2024 in ~25 s). Answers "who is the incumbent adviser on this plan" and "which plans pay this consultant".
 - **IPEDS Finance Survey Part H** — ~6,400 Title IV institutions' endowments, FY2003-04 onward, with peer sets, percentile ranks, and growth analytics.
 - **NACUBO** — public NCSE/NTSE benchmark aggregates by cohort.
 - **SBA PPP / SEC 13F** — schema live; loaded via manual admin ingests (the quarterly 13F cron is currently a deliberate no-op stub).
@@ -29,6 +30,18 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 - **USAspending** — federal awards by recipient + top-recipient screens.
 - **EODHD** (keyed) — global market data: symbol search, EOD price history (adjusted), delayed real-time quotes (batch ≤15), dividends/splits, fundamentals (section-filtered), news with sentiment, cross-market screener.
 - **Apollo.io** (keyed; Free plan includes API access) — B2B people/company search (free) and professional-email enrichment (1 credit per email found). Personal-email and phone reveal are off by default; `apollo_enrich_prospect` writes hits onto prospect rows as `unverified` with `append:apollo:tried` / `email:apollo` tags so nothing is re-billed.
+
+**Live-API, added in v0.32 (all free and keyless unless marked):**
+
+- **Research datasets** — Ken French library (FF3/FF5/momentum, any of ~300 files, 8 regions), AQR factors (QMJ, BAB, HML Devil, VME, TSMOM, Century), Damodaran implied ERP + industry WACC/multiples/betas, Shiller CAPE with percentiles, Cboe VIX/VIX9D/VIX3M/VIX6M/VVIX/SKEW with term structure.
+- **Fed regional** — NY Fed reference rates (SOFR/EFFR/OBFR/TGCR/BGCR with percentiles and volumes), primary dealer statistics, ON RRP/SRP/SOMA, ACM term premia, yield-curve recession probability; Atlanta Fed GDPNow and Wage Growth Tracker; Philadelphia Fed Survey of Professional Forecasters.
+- **International macro** — World Bank indicators, IMF World Economic Outlook (with projections) and IMF SDMX 3.0, OECD (CLI, rates, unemployment, CPI presets), BIS (policy rates, credit gaps, property prices, effective FX).
+- **Market structure** — FINRA Reg SHO daily short volume, FINRA consolidated short interest, SEC fails-to-deliver; FINRA TRACE aggregates (keyed, free FINRA API credentials).
+- **Funds & managers** — N-PORT holdings for any mutual fund/ETF, N-CEN service providers (advisers, sub-advisers, custodians, auditors), SEC Private Fund (Form PF) statistics from 2023Q4 xlsx, registered municipal advisors (Form MA).
+- **Filings people** — insider Forms 3/4/5 by issuer or owner with owner-address filter, insiders by location (e.g. Hinsdale), Form D related persons, ADV Part 2 brochures by CRD.
+- **Local wealth signals** — Cook County parcel sales (buyer/seller names, house characteristics), Illinois PTAX-203 transfer declarations statewide (weekly), DuPage sales via PTAX matched to county GIS owners (internal use only per DuPage terms), IDFPR licensees by zip/profession.
+- **Contact tools** (keyed) — Hunter.io domain search / email finder / verifier (professional emails only) and ZeroBounce validation (the required check before anything sends).
+- Not available free and programmatically, so not built: MSRB EMMA (paid feeds only), Illinois Secretary of State entity data (sold in bulk), ARDC attorneys. FEC contribution data is deliberately excluded (federal ban on commercial use).
 
 **First-party (PII — token-or-session gated, never on an open endpoint):**
 
@@ -56,7 +69,11 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | `FRED_API_KEY` | yes (macro tools) | Free key — https://fred.stlouisfed.org |
 | `EODHD_API_TOKEN` | yes (eodhd_* tools) | EODHD API token — https://eodhd.com |
 | `APOLLO_API_KEY` | yes (apollo_* tools) | Apollo.io API key — app.apollo.io → Settings → Integrations → API |
-| `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2) |
+| `DOL_5500_YEAR` | optional | Override ingest year (default = current − 2); also the default Schedule C year |
+| `FINRA_API_CLIENT_ID` / `FINRA_API_CLIENT_SECRET` | optional (`finra_trace_aggregates`) | Free FINRA API Console credentials; short volume and short interest need none |
+| `HUNTER_API_KEY` | optional (hunter_* tools) | Hunter.io key — free tier available |
+| `ZEROBOUNCE_API_KEY` | optional (zerobounce_* tools) | ZeroBounce key; `ZEROBOUNCE_API_BASE` picks the US/EU host |
+| `SOCRATA_APP_TOKEN` | optional | Higher rate limits on Cook County / data.illinois.gov |
 | `EIA_API_KEY` / `BLS_API_KEY` / `DATA_GOV_API_KEY` | future | Reserved for the keyed-API expansion tier |
 | `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | yes (Ask layer) | At least one. `ANTHROPIC_MODEL` / `OPENROUTER_MODEL` pin the defaults the picker opens on. |
 | `ASK_WEB_SEARCH` | optional | `0` turns hosted web search off by default (the console toggle still overrides per question). `ASK_WEB_SEARCH_MAX_USES` caps searches per answer (default 8). |
@@ -143,9 +160,9 @@ Per candidate: one web-search-backed model call finds the person's *professional
 
 Manual run: `curl -H "Authorization: Bearer $CRON_SECRET" "https://vistaintel.app/api/cron/prospect-engine?target=1&dryRun=1"`. Optional env: `OUTREACH_SENDER_NAME`, `OUTREACH_SENDER_TITLE`, `OUTREACH_FIRM_LEGAL`, `OUTREACH_FOOTER`, `PROSPECT_ENGINE_LOCAL_HOUR`.
 
-## MCP tools (84 total)
+## MCP tools (131 total)
 
-RIA / Form ADV (8) · Nonprofit (9, incl. `irs990_filing_search`, `irs990_filing_get`, `irs990_board`, `irs990_people_search`, `irs990_boards_of_person`) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Apollo contact enrichment (6: `apollo_people_search`, `apollo_person_enrich`, `apollo_people_bulk_enrich`, `apollo_org_search`, `apollo_org_enrich`, `apollo_enrich_prospect`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`)
+RIA / Form ADV (8) · Nonprofit (9, incl. `irs990_filing_search`, `irs990_filing_get`, `irs990_board`, `irs990_people_search`, `irs990_boards_of_person`) · Macro & Treasury (10, incl. `macro_market_signals`, `fred_batch_latest`, `morning_market_brief`, `treasury_daily_cash`, `treasury_daily_flows`) · DOL 5500 (2) · Endowments & NACUBO (7) · SBA PPP (2) · USAspending (2) · SEC 13F (2) · FDIC (3) · OFR (3) · EDGAR (6) · GLEIF (2) · BDC (3) · Public pensions (3) · EODHD market data (7: `eodhd_search`, `eodhd_eod_prices`, `eodhd_quote`, `eodhd_dividends_splits`, `eodhd_fundamentals`, `eodhd_news`, `eodhd_screener`) · Apollo contact enrichment (6: `apollo_people_search`, `apollo_person_enrich`, `apollo_people_bulk_enrich`, `apollo_org_search`, `apollo_org_enrich`, `apollo_enrich_prospect`) · Prospects (9: `prospects_zip_summary`, `prospects_search`, `prospect_lookup`, `prospects_upsert`, `prospects_import_csv`, `prospect_update`, `prospect_zip_targets`, `prospects_export_crm`, `prospect_imports`) · Research Datasets (French · AQR · Damodaran · Shiller · Cboe) (7: `kfrench_factors`, `kfrench_dataset`, `aqr_factors`, `damodaran_erp`, `damodaran_industry`, `shiller_cape`, `cboe_vol_history`) · Fed Regional Banks (NY · Atlanta · Philadelphia) (8: `nyfed_reference_rates`, `nyfed_primary_dealer`, `nyfed_operations`, `nyfed_term_premia`, `nyfed_recession_probability`, `atlfed_gdpnow`, `atlfed_wage_tracker`, `philfed_spf`) · International Macro (IMF · OECD · BIS · World Bank) (7: `worldbank_indicator`, `worldbank_indicator_search`, `imf_weo`, `imf_indicator_list`, `imf_sdmx_series`, `oecd_series`, `bis_series`) · Market Structure (FINRA · SEC FTD) (4: `finra_short_volume`, `finra_short_interest`, `finra_trace_aggregates`, `sec_fails_to_deliver`) · Funds & Managers (N-PORT · N-CEN · Form PF · Form MA) (5: `nport_fund_search`, `nport_holdings`, `ncen_service_providers`, `formpf_statistics`, `form_ma_search`) · Filings People (Insiders · Form D · ADV Brochures · 5500 Sch C) (6: `insider_transactions`, `insider_by_location`, `formd_related_persons`, `adv_brochures`, `dol_sch_c_providers_by_plan`, `dol_sch_c_plans_by_provider`) · Local Wealth Signals & Contact Tools (Cook/DuPage · IDFPR · Hunter · ZeroBounce) (10: `cook_parcel_sales`, `dupage_parcel_sales`, `il_ptax_transfers`, `idfpr_licensee_search`, `hunter_domain_search`, `hunter_email_finder`, `hunter_email_verifier`, `hunter_account`, `zerobounce_validate`, `zerobounce_credits`)
 
 Call `tools/list` on `/api/mcp` for full schemas and descriptions.
 

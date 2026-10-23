@@ -157,7 +157,10 @@ export async function formdSearch(args: FormdSearchArgs) {
       filings: [],
     };
   }
-  const forms = args.includeAmendments === false ? "D" : "D,D/A";
+  // EDGAR FTS quirk (verified 2026-10-21): forms=D already returns D AND D/A,
+  // while forms=D,D/A returns ONLY amendments — the old default silently
+  // dropped most original filings. Exclude amendments client-side instead.
+  const forms = "D";
   const res = await runFts({
     query: String(args.query).trim(),
     forms,
@@ -166,12 +169,17 @@ export async function formdSearch(args: FormdSearchArgs) {
     limit: args.limit,
     offset: args.offset,
   });
+  const initialOnly = args.includeAmendments === false;
+  const filings = initialOnly ? res.filings.filter((f: any) => f.form === "D") : res.filings;
   return {
     ...res,
+    filings,
+    returned: filings.length,
     dataSource: "SEC Form D search (EDGAR full-text, live)",
     request: {
       query: String(args.query).trim(),
       forms,
+      includeAmendments: !initialOnly,
       startDate: args.startDate ?? null,
       endDate: args.endDate ?? null,
       offset: args.offset ?? 0,
