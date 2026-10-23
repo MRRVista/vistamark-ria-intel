@@ -142,6 +142,7 @@ import { MKTSTRUCT_TOOLS } from "../market-structure";
 import { FUNDS_TOOLS } from "../funds";
 import { FILPEOPLE_TOOLS } from "../filings-people";
 import { LOCALWEALTH_TOOLS } from "../local-wealth";
+import { SYNTHESIS_TOOLS } from "../synthesis";
 
 export interface ToolDef {
   name: string;
@@ -629,5 +630,6 @@ export const TOOLS: ToolDef[] = [
   ...FUNDS_TOOLS,
   ...FILPEOPLE_TOOLS,
   ...LOCALWEALTH_TOOLS,
+  ...SYNTHESIS_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
