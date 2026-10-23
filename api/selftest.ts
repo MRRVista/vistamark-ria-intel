@@ -21,6 +21,20 @@ import { MKTSTRUCT_CHECKS } from "../lib/market-structure";
 import { FUNDS_CHECKS } from "../lib/funds";
 import { FILPEOPLE_CHECKS } from "../lib/filings-people";
 import { LOCALWEALTH_CHECKS } from "../lib/local-wealth";
+import { ENERGY_CHECKS } from "../lib/energy";
+import { LABORCENSUS_CHECKS } from "../lib/labor-census";
+import { BANKCREDIT_CHECKS } from "../lib/banking-credit";
+import { FEDBOARD_CHECKS } from "../lib/fed-board";
+import { REGULATORY_CHECKS } from "../lib/regulatory";
+import { HEALTHPRO_CHECKS } from "../lib/health-pro";
+import { GRANTS_CHECKS } from "../lib/grants-innovation";
+import { HOUSING_CHECKS } from "../lib/housing";
+import { OPENDATA_CHECKS } from "../lib/open-data";
+import { WEBINTEL_CHECKS } from "../lib/web-intel";
+import { CRYPTO_CHECKS } from "../lib/crypto";
+import { DOLSCHH_CHECKS } from "../lib/dol-sch-h";
+import { IRSEOX_CHECKS } from "../lib/irs-eo-extras";
+import { COMPLIANCE_CHECKS } from "../lib/compliance";
 
 interface Check {
   name: string;
@@ -28,6 +42,24 @@ interface Check {
   args: any;
   note?: string;
 }
+
+/** v0.33 families (data-everything). Exported so the parity script can run them cold. */
+export const NEW_FAMILY_CHECKS: Check[] = [
+  ...ENERGY_CHECKS,
+  ...LABORCENSUS_CHECKS,
+  ...BANKCREDIT_CHECKS,
+  ...FEDBOARD_CHECKS,
+  ...REGULATORY_CHECKS,
+  ...HEALTHPRO_CHECKS,
+  ...GRANTS_CHECKS,
+  ...HOUSING_CHECKS,
+  ...OPENDATA_CHECKS,
+  ...WEBINTEL_CHECKS,
+  ...CRYPTO_CHECKS,
+  ...DOLSCHH_CHECKS,
+  ...IRSEOX_CHECKS,
+  ...COMPLIANCE_CHECKS,
+];
 
 const CHECKS: Check[] = [
   { name: "db-status", tool: "database_status", args: {}, note: "pipeline-health probe — pipelineHealth lists each ingest family's LATEST run (errors sorted first, redacted + truncated errorMessage), so a failing scheduled ingest is visible here instead of hidden behind ok-only filtering; a family absent from the list has never created a run record, meaning its handler is not being reached at all" },
@@ -75,6 +107,7 @@ const CHECKS: Check[] = [
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
   ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS],
+  ...NEW_FAMILY_CHECKS,
 ];
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
