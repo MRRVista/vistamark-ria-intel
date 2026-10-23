@@ -1,0 +1,84 @@
+# IRS EO extras loader — Publication 78, Automatic Revocation list, 990-N e-Postcard.
+#
+# WHY GITHUB ACTIONS AND NOT A VERCEL CRON
+#   The three IRS zips are 30 / 48 / 93 MB and inflate to 100 / 148 / 286 MB
+#   of pipe-delimited text (1.4M / 1.25M / 1.55M rows). The loader streams
+#   each zip entry through zlib and bulk-inserts into <table>_new, builds the
+#   trigram indexes there, then swaps the table in one transaction — a full
+#   refresh that takes ~1–2 minutes per dataset on a hosted runner against a
+#   local Postgres and longer against Neon (index builds dominate). Far beyond
+#   a Vercel function's budget; same pattern as irs990-ingest.yml.
+#
+# SCHEDULE
+#   The IRS republishes all three roughly monthly (observed: 13th / 13th /
+#   19th of the month). We run on the 10th at 09:10 UTC, two days after the
+#   990 batch loader and a day after the BMF Wednesday would normally land,
+#   so the previous month's files are always present.
+#
+# SECRETS
+#   IRS990_DATABASE_URL — Neon Postgres URL (direct or pooled; `pg` driver).
+#   Falls back to DATABASE_URL if that secret exists instead. No new secret.
+#
+# MANUAL
+#   Actions → "IRS EO extras ingest" → Run workflow: pick datasets, dry
+#   (download + parse + count, no DB), max_rows (partial load), force_swap.
+
+name: IRS EO extras ingest
+
+on:
+  schedule:
+    - cron: "10 9 10 * *"
+  workflow_dispatch:
+    inputs:
+      datasets:
+        description: "Comma-separated subset of pub78,revocation,990n (blank = all three)"
+        required: false
+        default: ""
+      dry:
+        description: "Dry run — download + parse + count only, no database writes"
+        type: boolean
+        default: false
+      max_rows:
+        description: "Cap rows per dataset (partial load; still swaps the table)"
+        required: false
+        default: ""
+      force_swap:
+        description: "Swap even if the new load is < 80% of the live row count"
+        type: boolean
+        default: false
+
+concurrency:
+  group: irs-eo-extras-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DATABASE_URL: ${{ secrets.IRS990_DATABASE_URL != '' && secrets.IRS990_DATABASE_URL || secrets.DATABASE_URL }}
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Apply migrations (idempotent)
+        if: ${{ github.event.inputs.dry != 'true' }}
+        run: npx tsx scripts/migrate.ts
+
+      - name: Load IRS EO extras
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ -n "${{ github.event.inputs.datasets }}" ]; then ARGS="$ARGS --datasets ${{ github.event.inputs.datasets }}"; fi
+          if [ "${{ github.event.inputs.dry }}" = "true" ]; then ARGS="$ARGS --dry"; fi
+          if [ -n "${{ github.event.inputs.max_rows }}" ]; then ARGS="$ARGS --max-rows ${{ github.event.inputs.max_rows }}"; fi
+          if [ "${{ github.event.inputs.force_swap }}" = "true" ]; then ARGS="$ARGS --force-swap"; fi
+          echo "args: $ARGS"
+          npx tsx scripts/irs-eo-extras-ingest.ts $ARGS
