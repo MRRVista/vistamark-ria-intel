@@ -107,9 +107,8 @@ const CHECKS: Check[] = [
   { name: "prospects-60521", tool: "prospects_search", args: { zip: "60521", limit: 1 }, note: "read-only; total = people loaded for 60521 — 0 is a clean empty result until lists are funneled in, not an error" },
   { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
-  ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS],
-  ...NEW_FAMILY_CHECKS,
   ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS, ...SYNTHESIS_CHECKS],
+  ...NEW_FAMILY_CHECKS,
 ];
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
