@@ -14,6 +14,9 @@
     "api/admin/refresh-dol-sch-c.ts": {
       "maxDuration": 300
     },
+    "api/admin/refresh-dol-sch-h.ts": {
+      "maxDuration": 300
+    },
     "api/admin/refresh-ipeds.ts": {
       "maxDuration": 300
     },

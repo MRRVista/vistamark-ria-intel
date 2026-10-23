@@ -142,6 +142,19 @@ import { MKTSTRUCT_TOOLS } from "../market-structure";
 import { FUNDS_TOOLS } from "../funds";
 import { FILPEOPLE_TOOLS } from "../filings-people";
 import { LOCALWEALTH_TOOLS } from "../local-wealth";
+import { ENERGY_TOOLS } from "../energy";
+import { LABORCENSUS_TOOLS } from "../labor-census";
+import { BANKCREDIT_TOOLS } from "../banking-credit";
+import { FEDBOARD_TOOLS } from "../fed-board";
+import { REGULATORY_TOOLS } from "../regulatory";
+import { HEALTHPRO_TOOLS } from "../health-pro";
+import { GRANTS_TOOLS } from "../grants-innovation";
+import { HOUSING_TOOLS } from "../housing";
+import { OPENDATA_TOOLS } from "../open-data";
+import { WEBINTEL_TOOLS } from "../web-intel";
+import { CRYPTO_TOOLS } from "../crypto";
+import { DOLSCHH_TOOLS } from "../dol-sch-h";
+import { IRSEOX_TOOLS } from "../irs-eo-extras";
 
 export interface ToolDef {
   name: string;
@@ -629,5 +642,18 @@ export const TOOLS: ToolDef[] = [
   ...FUNDS_TOOLS,
   ...FILPEOPLE_TOOLS,
   ...LOCALWEALTH_TOOLS,
+  ...ENERGY_TOOLS,
+  ...LABORCENSUS_TOOLS,
+  ...BANKCREDIT_TOOLS,
+  ...FEDBOARD_TOOLS,
+  ...REGULATORY_TOOLS,
+  ...HEALTHPRO_TOOLS,
+  ...GRANTS_TOOLS,
+  ...HOUSING_TOOLS,
+  ...OPENDATA_TOOLS,
+  ...WEBINTEL_TOOLS,
+  ...CRYPTO_TOOLS,
+  ...DOLSCHH_TOOLS,
+  ...IRSEOX_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

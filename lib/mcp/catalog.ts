@@ -35,6 +35,19 @@ import { MKTSTRUCT_DOMAIN } from "../market-structure";
 import { FUNDS_DOMAIN } from "../funds";
 import { FILPEOPLE_DOMAIN } from "../filings-people";
 import { LOCALWEALTH_DOMAIN } from "../local-wealth";
+import { ENERGY_DOMAIN } from "../energy";
+import { LABORCENSUS_DOMAIN } from "../labor-census";
+import { BANKCREDIT_DOMAIN } from "../banking-credit";
+import { FEDBOARD_DOMAIN } from "../fed-board";
+import { REGULATORY_DOMAIN } from "../regulatory";
+import { HEALTHPRO_DOMAIN } from "../health-pro";
+import { GRANTS_DOMAIN } from "../grants-innovation";
+import { HOUSING_DOMAIN } from "../housing";
+import { OPENDATA_DOMAIN } from "../open-data";
+import { WEBINTEL_DOMAIN } from "../web-intel";
+import { CRYPTO_DOMAIN } from "../crypto";
+import { DOLSCHH_DOMAIN } from "../dol-sch-h";
+import { IRSEOX_DOMAIN } from "../irs-eo-extras";
 
 export type ToolProbe =
   | "live" //      probed and returned real data
@@ -341,6 +354,19 @@ export const DOMAINS: CatalogDomain[] = [
   FUNDS_DOMAIN,
   FILPEOPLE_DOMAIN,
   LOCALWEALTH_DOMAIN,
+  ENERGY_DOMAIN,
+  LABORCENSUS_DOMAIN,
+  BANKCREDIT_DOMAIN,
+  FEDBOARD_DOMAIN,
+  REGULATORY_DOMAIN,
+  HEALTHPRO_DOMAIN,
+  GRANTS_DOMAIN,
+  HOUSING_DOMAIN,
+  OPENDATA_DOMAIN,
+  WEBINTEL_DOMAIN,
+  CRYPTO_DOMAIN,
+  DOLSCHH_DOMAIN,
+  IRSEOX_DOMAIN,
   {
     id: "system",
     label: "System",
