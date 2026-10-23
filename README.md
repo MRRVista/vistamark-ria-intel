@@ -73,7 +73,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /api/mcp` | `ACCESS_TOKEN` header | MCP JSON-RPC (initialize, tools/list, tools/call) |
-| `GET /api/selftest` | none | Read-only diagnostic battery (106 checks; the keyed EIA/Census/Scorecard/HUD probes fail fast until their keys land). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
+| `GET /api/selftest` | none | Read-only diagnostic battery (108 checks; the keyed EIA/Census/Scorecard/HUD probes fail fast until their keys land). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
 | `GET /api/market-brief` | none | The morning composite, served for the vistamark-m365 pre-market digest cron. Aggregated public macro data only — same exposure posture as selftest. |
 | `GET/POST /api/prospects` | `ACCESS_TOKEN` or Entra session | Prospect database: search/filter, CSV download, VistaCRM feed (`?format=crm`), and intake — JSON records, inline CSV, raw CSV/TSV/XLSX body, or multipart file upload. |
 | `GET/POST /api/ask` | `ACCESS_TOKEN` or Entra session | "Ask Randall" natural-language layer: a server-side tool loop over the MCP tools plus hosted **web search** (Anthropic `web_search` / OpenRouter `web` plugin) and an Ask-only `export_excel` tool that returns a real .xlsx as a download. `GET` is the capability probe and the **model roster** (Anthropic lineup + live OpenRouter catalog); `POST { question, provider?, model?, webSearch?, domains?, maxRounds?, history? }`. Any model id is accepted; Mythos-class primaries fail over to the Opus line on 429/5xx. |
