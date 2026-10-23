@@ -156,6 +156,7 @@ import { CRYPTO_TOOLS } from "../crypto";
 import { DOLSCHH_TOOLS } from "../dol-sch-h";
 import { IRSEOX_TOOLS } from "../irs-eo-extras";
 import { COMPLIANCE_TOOLS } from "../compliance";
+import { SYNTHESIS_TOOLS } from "../synthesis";
 
 export interface ToolDef {
   name: string;
@@ -657,5 +658,6 @@ export const TOOLS: ToolDef[] = [
   ...DOLSCHH_TOOLS,
   ...IRSEOX_TOOLS,
   ...COMPLIANCE_TOOLS,
+  ...SYNTHESIS_TOOLS,
 ];
 export const TOOL_BY_NAME = Object.fromEntries(TOOLS.map((t) => [t.name, t]));

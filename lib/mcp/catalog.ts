@@ -1,5 +1,5 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 140+ MCP tools.
+ * VistaIntel tool catalog — navigation taxonomy for the 137 MCP tools (v0.33).
  *
  * WHY THIS EXISTS
  * ---------------
@@ -49,6 +49,7 @@ import { CRYPTO_DOMAIN } from "../crypto";
 import { DOLSCHH_DOMAIN } from "../dol-sch-h";
 import { IRSEOX_DOMAIN } from "../irs-eo-extras";
 import { COMPLIANCE_DOMAIN } from "../compliance";
+import { SYNTHESIS_DOMAIN } from "../synthesis";
 
 export type ToolProbe =
   | "live" //      probed and returned real data
@@ -369,6 +370,7 @@ export const DOMAINS: CatalogDomain[] = [
   DOLSCHH_DOMAIN,
   IRSEOX_DOMAIN,
   COMPLIANCE_DOMAIN,
+  SYNTHESIS_DOMAIN,
   {
     id: "system",
     label: "System",

@@ -35,6 +35,7 @@ import { CRYPTO_CHECKS } from "../lib/crypto";
 import { DOLSCHH_CHECKS } from "../lib/dol-sch-h";
 import { IRSEOX_CHECKS } from "../lib/irs-eo-extras";
 import { COMPLIANCE_CHECKS } from "../lib/compliance";
+import { SYNTHESIS_CHECKS } from "../lib/synthesis";
 
 interface Check {
   name: string;
@@ -108,6 +109,7 @@ const CHECKS: Check[] = [
   { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
   ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS],
   ...NEW_FAMILY_CHECKS,
+  ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS, ...SYNTHESIS_CHECKS],
 ];
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
