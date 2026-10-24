@@ -27,10 +27,11 @@
  *              personalization hooks. Other board seats come free from the
  *              local 990 people index when loaded.
  *   draft    → persona-driven model call; banned-phrase check; CAN-SPAM
- *              footer; a plain-text "[FOR MATT: …]" / "[FOR RYAN: …]"
- *              bracket line at the very top (no boxes, no styled fonts —
- *              2026-10-16 decision), real availability dates computed from
- *              the principal's calendar horizon.
+ *              footer; real availability dates computed from the
+ *              principal's calendar horizon. v0.31.0 (2026-10-24): the
+ *              "[FOR MATT: …]" briefing is no longer in the body -- it is an
+ *              internal note on the draft via VistaRandall (postInternalNote),
+ *              visible in the Outlook add-in, never to the recipient.
  *   deliver  → Outlook Drafts in the PRINCIPAL'S mailbox via Graph. Nothing
  *              is ever sent from here.
  *   crm      → once (and only once) the draft exists, the person is created
@@ -454,26 +455,51 @@ Write the email.`;
   return d;
 }
 
-function forNote(p: NonprofitProgram, org: OrgCandidate, pick: ApolloPick, role: string, r: ResearchOut, emailStatus: string | null): string {
-  const bits = [
+/** v0.31.0 (2026-10-24, Matt: "If this is sent, Susie will see note
+ *  right?"): the briefing is NO LONGER in the body. It is an internal note
+ *  on the draft, written through VistaRandall (POST /api/internal/email-notes,
+ *  lib/email-notes there): shown in the Outlook add-in's Internal notes pane
+ *  as "Randall", stamped on the partner's own copy, logged to VistaCRM when
+ *  the email goes out, and never part of what the recipient receives. */
+function forNote(_p: NonprofitProgram, org: OrgCandidate, pick: ApolloPick, role: string, r: ResearchOut, emailStatus: string | null): string {
+  return [
     `${org.name} (${org.city ?? ""}, ${org.state ?? ""}) — pool ${usd(org.poolValue)}`,
     `${pick.name}${pick.title ? `, ${pick.title}` : ""} (${role})`,
-    r.affinity ? `affinity: ${r.affinity}` : null,
-    org.investMgmtFees ? `pays outside mgrs (${usd(org.investMgmtFees)}/yr)` : null,
-    `email ${emailStatus ?? "unknown"} via Apollo${emailStatus === "guessed" ? " — VERIFY BEFORE SENDING" : ""}`,
-  ].filter(Boolean);
-  // Plain text, body style, [brackets] only — no boxes, no colored or sized
-  // fonts (2026-10-16 decision after the red box could not be deleted in Outlook).
-  return `[FOR ${p.draftNoteName}: ${bits.join(" · ")}]`;
+    r.affinity ? `Affinity: ${r.affinity}` : null,
+    org.investMgmtFees ? `Pays outside managers (${usd(org.investMgmtFees)}/yr)` : null,
+    `Email ${emailStatus ?? "unknown"} via Apollo${emailStatus === "guessed" ? " — VERIFY BEFORE SENDING" : ""}`,
+  ].filter(Boolean).join("\n");
 }
 
-/** [FOR X] note + the drafted body, nothing else. The draft already signs
- *  off with the sender's first name; the full signature comes from Sigsync
- *  at send time, so no signature block or footer is appended here
- *  (M. Rice, 2026-10-16). stripLegacySig removes the block from drafts
- *  produced before this change. */
-function finalBody(p: NonprofitProgram, note: string, d: DraftOut): string {
-  return `${note}\n\n${d.body}`;
+/** The drafted body, nothing else. The draft already signs off with the
+ *  sender's first name; the full signature comes from Sigsync at send time,
+ *  so no signature block or footer is appended here (M. Rice, 2026-10-16).
+ *  stripLegacySig removes the block from drafts produced before that change;
+ *  the pre-v0.31.0 "[FOR X: …]" line is no longer produced at all. */
+function finalBody(_p: NonprofitProgram, d: DraftOut): string {
+  return d.body;
+}
+
+/** v0.31.0: write Randall's briefing as an internal note on the Graph draft.
+ *  Best-effort: a failed note never costs a draft. Same secret the
+ *  remote-config read uses. */
+async function postInternalNote(mailbox: string, draftId: string, text: string, label: string): Promise<{ ok: boolean; error?: string }> {
+  const secret = process.env.VISTACRM_BRIDGE_SECRET;
+  if (!secret) return { ok: false, error: "VISTACRM_BRIDGE_SECRET not set" };
+  const base = (process.env.VISTARANDALL_BASE_URL || "https://vistarandall.app").replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/api/internal/email-notes`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({ mailbox, draft_id: draftId, text, label }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const j: any = await res.json().catch(() => null);
+    if (!res.ok || !j?.ok) return { ok: false, error: `${res.status} ${String(j?.error || "").slice(0, 160)}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err).slice(0, 160) };
+  }
 }
 
 export function stripLegacySig(p: NonprofitProgram, body: string): string {
@@ -758,18 +784,27 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
       await fail("draft_error", pick.name, { error: String(err) }); continue;
     }
     const note = forNote(p, org, pick, role, research, emailStatus);
-    const body = finalBody(p, note, d);
+    const body = finalBody(p, d);
+    const cardLabel = opts.card?.label || `${p.key} Nonprofit Outreach`;
 
     let delivery = "pending";
     let graph: { id: string; webLink: string | null } | null = null;
-    if (opts.dryRun) delivery = "dry_run";
+    let noteState = "skipped";
+    if (opts.dryRun) { delivery = "dry_run"; noteState = "dry_run"; }
     else if (graphConfigured()) {
-      try { graph = await createDraft(p.mailbox, email, pick.name, d.subject, body, nonprofitDraftCategories(opts.card?.directiveDnum ?? null, opts.card?.label || `${p.key} Nonprofit Outreach`)); delivery = "outlook_draft"; }
+      try { graph = await createDraft(p.mailbox, email, pick.name, d.subject, body, nonprofitDraftCategories(opts.card?.directiveDnum ?? null, cardLabel)); delivery = "outlook_draft"; }
       catch (err) { s.warnings.push(`graph draft failed for ${pick.name} (${p.mailbox}): ${String(err).slice(0, 180)} — queued`); }
+      // v0.31.0: the briefing rides the draft as an internal note, not body text.
+      if (graph?.id) {
+        const n = await postInternalNote(p.mailbox, graph.id, note, `${cardLabel} briefing`);
+        noteState = n.ok ? "internal_note" : "note_failed";
+        if (!n.ok) s.warnings.push(`internal note not written for ${pick.name} (draft IS placed; briefing is in np_events): ${n.error}`);
+      }
     }
     if (!opts.dryRun && leadId != null) {
       await logEvent(leadId, "deliver", `draft → ${email}: ${d.subject}`, {
         delivery, to: email, toName: pick.name, mailbox: p.mailbox, subject: d.subject, body,
+        briefing: note, briefingDelivery: noteState,
         emailStatus, graphMessageId: graph?.id ?? null, graphWebLink: graph?.webLink ?? null, model: MODEL,
       }, opts.actor);
       await updateLead(leadId, { status: "drafted", draft_subject: d.subject, graph_message_id: graph?.id ?? null });
