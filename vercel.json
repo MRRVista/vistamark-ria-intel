@@ -54,6 +54,9 @@
     "api/cron/refresh-dol-5500.ts": {
       "maxDuration": 300
     },
+    "api/cron/refresh-dol-sch-h.ts": {
+      "maxDuration": 300
+    },
     "api/cron/refresh-ipeds.ts": {
       "maxDuration": 300,
       "includeFiles": "migrations/**"
@@ -108,6 +111,10 @@
     {
       "path": "/api/cron/refresh-dol-5500",
       "schedule": "0 5 * * 4"
+    },
+    {
+      "path": "/api/cron/refresh-dol-sch-h",
+      "schedule": "40 5 * * *"
     },
     {
       "path": "/api/cron/refresh-ipeds",
