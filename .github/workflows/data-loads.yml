@@ -1,0 +1,94 @@
+# Bulk data loads that do not fit a Vercel lambda: DOL 5500 Schedule H/I,
+# SBA PPP loan-level files, SEC Form 13F quarterly data sets, and the IRS
+# Form 990 e-file index (same loader as the "IRS 990 ingest" workflow).
+#
+# Runs straight into Neon over `pg` using the IRS990_DATABASE_URL secret
+# (falls back to DATABASE_URL). Applies pending migrations first. Every job
+# writes ingest_runs rows, so database_status and the console Status page see
+# them like the Vercel crons.
+#
+# SCHEDULE: Thursdays 06:30 UTC (after the 05:00 UTC Form 5500 Vercel cron) —
+# Schedule H/I only, so plan assets stay in step with the plan table. PPP, 13F
+# and 990 are manual (workflow_dispatch) because they are multi-GB loads.
+
+name: Data loads
+
+on:
+  schedule:
+    - cron: "30 6 * * 4"
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Comma list: sch-h, ppp, 13f, irs990"
+        required: false
+        default: "sch-h,ppp,13f,irs990"
+      year:
+        description: "DOL filing year for sch-h (blank = DOL_5500_YEAR / current-2)"
+        required: false
+        default: ""
+      ppp_files:
+        description: "ppp: 150k_plus (default) or all (adds the twelve <=150K chunks, ~10M rows)"
+        required: false
+        default: "150k_plus"
+      f13_url:
+        description: "13f: quarterly zip URL (blank = newest on sec.gov)"
+        required: false
+        default: ""
+      f13_manager:
+        description: "13f: only ingest holdings for managers whose name contains this (blank = all)"
+        required: false
+        default: ""
+      irs990_years:
+        description: "irs990: index years, comma-separated (blank = 2021→current, all pending batches)"
+        required: false
+        default: ""
+
+concurrency:
+  group: data-loads
+  cancel-in-progress: false
+
+jobs:
+  loads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DATABASE_URL: ${{ secrets.IRS990_DATABASE_URL != '' && secrets.IRS990_DATABASE_URL || secrets.DATABASE_URL }}
+      DATABASE_DRIVER: pg
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Apply migrations (idempotent)
+        run: npx tsx scripts/migrate.ts
+
+      - name: DOL Sch H/I · PPP · 13F
+        run: |
+          set -euo pipefail
+          JOBS="${{ github.event.inputs.jobs }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then JOBS="sch-h"; fi
+          [ -z "$JOBS" ] && JOBS="sch-h,ppp,13f,irs990"
+          CORE=$(echo "$JOBS" | tr ',' '\n' | grep -v '^irs990$' | paste -sd, -)
+          if [ -z "$CORE" ]; then echo "no core jobs"; exit 0; fi
+          ARGS="--jobs $CORE"
+          [ -n "${{ github.event.inputs.year }}" ] && ARGS="$ARGS --year ${{ github.event.inputs.year }}"
+          [ -n "${{ github.event.inputs.ppp_files }}" ] && ARGS="$ARGS --ppp-files ${{ github.event.inputs.ppp_files }}"
+          [ -n "${{ github.event.inputs.f13_url }}" ] && ARGS="$ARGS --f13-url ${{ github.event.inputs.f13_url }}"
+          [ -n "${{ github.event.inputs.f13_manager }}" ] && ARGS="$ARGS --f13-manager ${{ github.event.inputs.f13_manager }}"
+          echo "args: $ARGS"
+          npx tsx scripts/data-loads.ts $ARGS
+
+      - name: IRS 990 e-file index
+        if: ${{ github.event_name == 'workflow_dispatch' && contains(github.event.inputs.jobs, 'irs990') }}
+        run: |
+          set -euo pipefail
+          ARGS=""
+          [ -n "${{ github.event.inputs.irs990_years }}" ] && ARGS="--years ${{ github.event.inputs.irs990_years }}"
+          echo "args: $ARGS"
+          npx tsx scripts/irs990-ingest.ts $ARGS
