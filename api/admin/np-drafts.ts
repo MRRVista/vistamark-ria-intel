@@ -4,6 +4,7 @@ import { requireCron } from "../../lib/auth";
 import { db, isDbReady } from "../../lib/db";
 import { createDraft, updateDraftBody, stripLegacySig } from "../../lib/nonprofit/engine";
 import { PROGRAMS } from "../../lib/nonprofit/programs";
+import { nonprofitDraftCategories } from "../../lib/nonprofit/draft-categories"; // v0.34.1
 
 /**
  * Nonprofit-engine draft queue — v0.29.3.
@@ -96,7 +97,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ?? (r.program === "ryan" ? PROGRAMS.ryan.mailbox : PROGRAMS.matt.mailbox);
     try {
       const prog = r.program === "ryan" ? PROGRAMS.ryan : PROGRAMS.matt;
-      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripLegacySig(prog, String(m.body ?? "")));
+      // v0.34.1: flushed drafts carry the same categories a live run stamps. The
+      // card's D-number is not known here (file defaults only), so the chip
+      // names the program without it.
+      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripLegacySig(prog, String(m.body ?? "")), nonprofitDraftCategories(null, `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH`));
       await db.execute(sql`
         UPDATE np_events
         SET meta = meta || ${JSON.stringify({ delivery: "outlook_draft", graphMessageId: g.id, graphWebLink: g.webLink, flushedAt: new Date().toISOString() })}::jsonb

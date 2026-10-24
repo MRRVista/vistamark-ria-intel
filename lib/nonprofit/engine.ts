@@ -47,6 +47,7 @@ import { apolloPeopleSearch, apolloPersonEnrich } from "../apollo/tools";
 import { irs990BoardsOfPerson } from "../irs990/queries";
 import { PROGRAMS, NonprofitProgram, personaFactsBlock, availabilityDates } from "./programs";
 import { loadEffectivePrograms } from "./remote-config"; // v0.30.0: live settings = the VistaRandall directive cards
+import { nonprofitDraftCategories } from "./draft-categories"; // v0.34.1: Outlook categories on every draft
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -501,7 +502,10 @@ async function graphToken(): Promise<string> {
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-export async function createDraft(mailbox: string, to: string, toName: string, subject: string, body: string): Promise<{ id: string; webLink: string | null }> {
+/** v0.34.1: `categories` are the Outlook categories stamped on the draft at
+ *  creation (lib/nonprofit/draft-categories.ts). Graph accepts them on the
+ *  POST, so the chips are on the draft the moment it exists. */
+export async function createDraft(mailbox: string, to: string, toName: string, subject: string, body: string, categories: string[] = nonprofitDraftCategories(null, "Nonprofit Outreach")): Promise<{ id: string; webLink: string | null }> {
   const token = await graphToken();
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages`, {
     method: "POST",
@@ -510,6 +514,7 @@ export async function createDraft(mailbox: string, to: string, toName: string, s
       subject,
       body: { contentType: "Text", content: body },
       toRecipients: [{ emailAddress: { address: to, name: toName } }],
+      categories,
       internetMessageHeaders: [{ name: "X-Vistamark-Source", value: ENGINE_ACTOR }],
     }),
   });
@@ -647,7 +652,7 @@ async function logEvent(leadId: number | null, kind: string, detail: string, met
 
 const ACCEPT_GUESSED = process.env.NONPROFIT_ACCEPT_GUESSED !== "0"; // default on; status is flagged everywhere
 
-async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<Pick<NpEngineOptions, "target" | "maxCandidates" | "dryRun">> & { actor: string; deadline: number }): Promise<NpProgramSummary> {
+async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<Pick<NpEngineOptions, "target" | "maxCandidates" | "dryRun">> & { actor: string; deadline: number; card?: { directiveDnum: number | null; label: string } }): Promise<NpProgramSummary> {
   const s: NpProgramSummary = {
     program: p.key, target: opts.target, examined: 0, drafted: 0,
     skipped: [], drafts: [], budgetExhausted: false, candidatesExhausted: false, warnings: [],
@@ -759,7 +764,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
     let graph: { id: string; webLink: string | null } | null = null;
     if (opts.dryRun) delivery = "dry_run";
     else if (graphConfigured()) {
-      try { graph = await createDraft(p.mailbox, email, pick.name, d.subject, body); delivery = "outlook_draft"; }
+      try { graph = await createDraft(p.mailbox, email, pick.name, d.subject, body, nonprofitDraftCategories(opts.card?.directiveDnum ?? null, opts.card?.label || `${p.key} Nonprofit Outreach`)); delivery = "outlook_draft"; }
       catch (err) { s.warnings.push(`graph draft failed for ${pick.name} (${p.mailbox}): ${String(err).slice(0, 180)} — queued`); }
     }
     if (!opts.dryRun && leadId != null) {
@@ -835,7 +840,7 @@ export async function runNonprofitEngine(opts: NpEngineOptions = {}): Promise<Np
     // The card's target governs scheduled runs; a manual ?target= still overrides.
     const target = Math.max(1, Math.min(opts.target ?? eff.target, 10));
     const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 40));
-    const s = await runProgram(eff.program, has990, { target, maxCandidates, dryRun: !!opts.dryRun, actor, deadline });
+    const s = await runProgram(eff.program, has990, { target, maxCandidates, dryRun: !!opts.dryRun, actor, deadline, card: { directiveDnum: eff.directiveDnum, label: eff.label } });
     s.directiveDnum = eff.directiveDnum;
     programs.push(s);
   }
