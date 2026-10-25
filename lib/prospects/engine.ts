@@ -30,6 +30,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db, isDbReady, schema } from "../db";
 import { PERSONA, personaFactsBlock } from "./persona";
+import { openingRule, normalizeOpening } from "../outreach/opening"; // v0.36.0: "Name," / "Hope all is well." house opening
 
 const { prospects, prospectHouseholds, prospectEvents } = schema;
 
@@ -234,7 +235,8 @@ Only permitted ask: ${PERSONA.callToAction}
 
 Rules:
 - 110 to 170 words in the body. Plain text. No bullet points, no bold, no subject-line clichés.
-- Open with something specific about the RECIPIENT drawn from the hooks provided — their role, firm, board, or work — in one or two sentences. Make it clear a person noticed, not a mail merge. Do not mention their home, its value, or that they live at a particular address.
+${openingRule()}
+- After "Hope all is well.", lead with something specific about the RECIPIENT drawn from the hooks provided — their role, firm, board, or work — in one or two sentences. Make it clear a person noticed, not a mail merge. Do not mention their home, its value, or that they live at a particular address.
 - Then at most TWO sender facts, chosen because they connect to the recipient (an executive gets the CIO/institutional fact; a nonprofit board member gets the family-office/institution fact; anyone gets the Hinsdale/Robbins Park/Central fact). Weave them in; do not list.
 - Close with the permitted ask, phrased as an easy no.
 - No performance claims, no promises, no numbers about returns. The $260 billion figure describes assets the prior firm oversaw, and must be framed that way if used.
@@ -256,7 +258,7 @@ Write the email.`;
   const d = extractJson<DraftResult>(finalText(blocks));
   if (typeof d.subject !== "string" || typeof d.body !== "string") throw new Error("draft missing subject/body");
   d.subject = d.subject.trim().replace(/\s+/g, " ").slice(0, 120);
-  d.body = d.body.trim();
+  d.body = normalizeOpening(d.body.trim(), p.firstName); // v0.36.0: never trust the model's salutation
 
   const lower = d.body.toLowerCase() + " " + d.subject.toLowerCase();
   const hit = PERSONA.banned.find((b) => lower.includes(b.toLowerCase()));
