@@ -1,7 +1,7 @@
 /**
  * IRS Form 990 e-file loader — CLI entry point (runs in GitHub Actions).
  *
- *   npx tsx scripts/irs990-ingest.ts                         # load every un-loaded batch, 2021→current
+ *   npx tsx scripts/irs990-ingest.ts                         # load every un-loaded batch, 2024→current
  *   npx tsx scripts/irs990-ingest.ts --years 2025,2026       # restrict index years
  *   npx tsx scripts/irs990-ingest.ts --batch 2025_TEOS_XML_10A   # one batch (re-load if already ok)
  *   npx tsx scripts/irs990-ingest.ts --list                  # show index batches vs ledger, load nothing

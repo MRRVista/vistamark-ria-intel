@@ -30,7 +30,19 @@ import { parseReturnXml } from "./parse";
 import type { ParsedFiling, ParsedPerson } from "./parse";
 
 export const IRS_XML_BASE = "https://apps.irs.gov/pub/epostcard/990/xml";
-export const DEFAULT_INDEX_YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+// v0.35.1 (2026-10-25): the first live run (Matt, Actions #1) died on
+// "index_2021.csv has no XML_BATCH_ID column". The IRS only added that column
+// to the yearly index starting with 2024; 2021-2023 indexes list returns but
+// not which zip holds them, so the diff loader cannot address those years.
+// Default is now 2024 -> current calendar year (computed, so January picks up
+// the new index without a code change). Pre-2024 years are skipped with a log
+// line instead of throwing, so an explicit years=2021,... input still runs
+// the years it can.
+export const FIRST_BATCHED_INDEX_YEAR = 2024;
+export const DEFAULT_INDEX_YEARS: number[] = Array.from(
+  { length: Math.max(1, new Date().getUTCFullYear() - FIRST_BATCHED_INDEX_YEAR + 1) },
+  (_, i) => FIRST_BATCHED_INDEX_YEAR + i,
+);
 
 const USER_AGENT =
   process.env.VISTAMARK_USER_AGENT ??
@@ -100,7 +112,11 @@ export async function listIndexBatches(year: number): Promise<IndexBatch[]> {
   const header = (lines.shift() ?? "").split(",");
   const iBatch = header.indexOf("XML_BATCH_ID");
   const iType = header.indexOf("RETURN_TYPE");
-  if (iBatch < 0) throw new Error(`index_${year}.csv has no XML_BATCH_ID column`);
+  if (iBatch < 0) {
+    // Pre-2024 IRS indexes carry no batch id (see FIRST_BATCHED_INDEX_YEAR).
+    console.warn(`[irs990] index_${year}.csv has no XML_BATCH_ID column - skipping ${year} (IRS added batch ids to the index in ${FIRST_BATCHED_INDEX_YEAR})`);
+    return [];
+  }
   const map = new Map<string, IndexBatch>();
   for (const line of lines) {
     if (!line) continue;

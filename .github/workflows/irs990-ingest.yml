@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       years:
-        description: "Index years, comma-separated (default 2021→current)"
+        description: "Index years, comma-separated (default 2024→current; pre-2024 IRS indexes have no batch ids and are skipped)"
         required: false
         default: ""
       batch:
