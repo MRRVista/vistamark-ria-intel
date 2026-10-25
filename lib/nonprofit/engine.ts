@@ -49,6 +49,7 @@ import { irs990BoardsOfPerson } from "../irs990/queries";
 import { PROGRAMS, NonprofitProgram, personaFactsBlock, availabilityDates } from "./programs";
 import { loadEffectivePrograms } from "./remote-config"; // v0.30.0: live settings = the VistaRandall directive cards
 import { nonprofitDraftCategories } from "./draft-categories"; // v0.34.1: Outlook categories on every draft
+import { openingRule, normalizeOpening } from "../outreach/opening"; // v0.36.0: "Name," / "Hope all is well." house opening
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -423,7 +424,8 @@ ${roleLine}
 
 Rules:
 - 110 to 180 words in the body. Plain text. No bullet points, no bold.
-- Open with something specific about the RECIPIENT — at most ONE personal hook (the shared affinity when provided, else their role/career). One or two sentences; a person noticed, not a mail merge.
+${openingRule()}
+- After "Hope all is well.", lead with something specific about the RECIPIENT — at most ONE personal hook (the shared affinity when provided, else their role/career). One or two sentences; a person noticed, not a mail merge.
 - Then ONE sentence about the ORGANIZATION drawn from the org angle provided — specific to them. Never quote their own fee or dollar figures back at them; size the problem, don't recite their filing.
 - Then at most TWO sender facts, chosen to connect to the recipient. Weave them in; do not list.
 - Close by requesting a brief phone call and offer exactly these two slots: ${d1} or ${d2}, with a line that you'll work around their (or the committee's) calendar.
@@ -446,7 +448,7 @@ Write the email.`;
   const d = extractJson<DraftOut>(finalText(blocks));
   if (typeof d.subject !== "string" || typeof d.body !== "string") throw new Error("draft missing subject/body");
   d.subject = d.subject.trim().replace(/\s+/g, " ").slice(0, 120);
-  d.body = d.body.trim();
+  d.body = normalizeOpening(d.body.trim(), pick.firstName); // v0.36.0: never trust the model's salutation
   const lower = `${d.body.toLowerCase()} ${d.subject.toLowerCase()}`;
   const hit = p.persona.banned.find((b) => lower.includes(b.toLowerCase()));
   if (hit) throw new Error(`draft used banned phrase: "${hit}"`);
