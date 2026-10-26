@@ -27,9 +27,8 @@
  *              personalization hooks. Other board seats come free from the
  *              local 990 people index when loaded.
  *   draft    → persona-driven model call; banned-phrase check; CAN-SPAM
- *              footer; a plain-text "[FOR MATT: …]" / "[FOR RYAN: …]"
- *              bracket line at the very top (no boxes, no styled fonts —
- *              2026-10-16 decision), real availability dates computed from
+ *              footer; NO note to the principal in the draft (2026-10-20 --
+ *              everything for the partner is on the CRM note), real availability dates computed from
  *              the principal's calendar horizon.
  *   deliver  → Outlook Drafts in the PRINCIPAL'S mailbox via Graph. Nothing
  *              is ever sent from here.
@@ -453,28 +452,10 @@ Write the email.`;
   return d;
 }
 
-function forNote(p: NonprofitProgram, org: OrgCandidate, pick: ApolloPick, role: string, r: ResearchOut, emailStatus: string | null): string {
-  const bits = [
-    `${org.name} (${org.city ?? ""}, ${org.state ?? ""}) — pool ${usd(org.poolValue)}`,
-    `${pick.name}${pick.title ? `, ${pick.title}` : ""} (${role})`,
-    r.affinity ? `affinity: ${r.affinity}` : null,
-    org.investMgmtFees ? `pays outside mgrs (${usd(org.investMgmtFees)}/yr)` : null,
-    `email ${emailStatus ?? "unknown"} via Apollo${emailStatus === "guessed" ? " — VERIFY BEFORE SENDING" : ""}`,
-  ].filter(Boolean);
-  // Plain text, body style, [brackets] only — no boxes, no colored or sized
-  // fonts (2026-10-16 decision after the red box could not be deleted in Outlook).
-  return `[FOR ${p.draftNoteName}: ${bits.join(" · ")}]`;
-}
-
-/** [FOR X] note + the drafted body, nothing else. The draft already signs
- *  off with the sender's first name; the full signature comes from Sigsync
- *  at send time, so no signature block or footer is appended here
- *  (M. Rice, 2026-10-16). stripLegacySig removes the block from drafts
- *  produced before this change. */
-function finalBody(p: NonprofitProgram, note: string, d: DraftOut): string {
-  return `${note}\n\n${d.body}`;
-}
-
+/** 2026-10-20 (M. Rice): NO notes to the principal inside any outreach draft --
+ *  no [FOR ...] bracket line, no red or styled text. The draft body is the
+ *  email and nothing else; every research fact, the Apollo email status and
+ *  the verify-before-sending flag live on the VistaCRM note (crmCreateLead). */
 export function stripLegacySig(p: NonprofitProgram, body: string): string {
   const marker = `\n\n${p.persona.senderName}\n${p.persona.senderTitle}`;
   const i = body.indexOf(marker);
@@ -752,8 +733,7 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
     try { d = await draftEmail(org, pick, role, research, p, 45_000); } catch (err) {
       await fail("draft_error", pick.name, { error: String(err) }); continue;
     }
-    const note = forNote(p, org, pick, role, research, emailStatus);
-    const body = finalBody(p, note, d);
+    const body = d.body; // 2026-10-20: no in-draft note (see stripLegacySig header)
 
     let delivery = "pending";
     let graph: { id: string; webLink: string | null } | null = null;
