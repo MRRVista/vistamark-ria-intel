@@ -476,6 +476,7 @@ You write exactly TWO paragraphs. The greeting, the closing question and the sig
 Paragraph 1 (personal, 1 to 2 sentences, about 25 to 40 words):
 - Begin immediately with the specific reason you are writing to THIS person at THIS organization (e.g. "I'm reaching out because ..."). No pleasantries, no "hope all is well", no self-introduction.
 - Build it from the shared affinity when one is provided, otherwise from something specific about the organization: its mission, the org angle provided, a local tie, recent news.
+- An affinity is the RECIPIENT's tie. Call it shared ("fellow ...", "as a fellow alum") only when the sender's side of it is stated in the facts above, and then only at the level stated (e.g. "Northwestern", never a school, program or degree within it that the facts don't name). Otherwise mention the recipient's tie without claiming one for the sender.
 - Do NOT recap the recipient's career or résumé.
 - Never quote their own fee or dollar figures back at them.
 
