@@ -485,7 +485,7 @@ function finalBody(_p: NonprofitProgram, d: DraftOut): string {
 /** v0.31.0: write Randall's briefing as an internal note on the Graph draft.
  *  Best-effort: a failed note never costs a draft. Same secret the
  *  remote-config read uses. */
-async function postInternalNote(mailbox: string, draftId: string, text: string, label: string): Promise<{ ok: boolean; error?: string }> {
+export async function postInternalNote(mailbox: string, draftId: string, text: string, label: string): Promise<{ ok: boolean; error?: string }> {
   const secret = process.env.VISTACRM_BRIDGE_SECRET;
   if (!secret) return { ok: false, error: "VISTACRM_BRIDGE_SECRET not set" };
   const base = (process.env.VISTARANDALL_BASE_URL || "https://vistarandall.app").replace(/\/+$/, "");
@@ -549,6 +549,31 @@ export async function createDraft(mailbox: string, to: string, toName: string, s
   if (!res.ok) throw new Error(`graph draft ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = (await res.json()) as { id: string; webLink?: string };
   return { id: j.id, webLink: j.webLink ?? null };
+}
+
+/** v0.36.1: read one message (body as stored, and whether it is still a
+ *  draft). null when it no longer exists (sent drafts get a new id, deleted). */
+export async function getMessageBody(mailbox: string, messageId: string): Promise<{ isDraft: boolean; contentType: string; content: string; subject: string } | null> {
+  const token = await graphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}?$select=isDraft,body,subject`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`graph get ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const j: any = await res.json();
+  return { isDraft: !!j.isDraft, contentType: String(j.body?.contentType || "text"), content: String(j.body?.content ?? ""), subject: String(j.subject ?? "") };
+}
+
+/** v0.36.1: replace a draft's body keeping its content type (HTML once Outlook
+ *  has re-saved it). */
+export async function patchDraftBodyAs(mailbox: string, messageId: string, contentType: string, content: string): Promise<void> {
+  const token = await graphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ body: { contentType: /html/i.test(contentType) ? "HTML" : "Text", content } }),
+  });
+  if (!res.ok) throw new Error(`graph patch ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
 
 /** Replace the body of an existing (unsent) draft in a mailbox. */
