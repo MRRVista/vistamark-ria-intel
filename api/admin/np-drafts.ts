@@ -43,7 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rowsPending = await pending();
 
-  if (req.method === "GET") {
+  // v0.36.2: the one-shot Vercel cron (vercel.json, CRON_SECRET bearer) can
+  // only GET, so GET ?action=strip_note runs the cleanup for real.
+  const getAction = req.method === "GET" ? String((req.query as any)?.action || "") : "";
+
+  if (req.method === "GET" && getAction !== "strip_note") {
     res.status(200).json({
       ok: true,
       pending: rowsPending.map((r) => ({
@@ -57,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (typeof req.body === "object" && req.body) || {};
-  const action = (body as any).action;
+  const action = getAction || (body as any).action;
 
   if (action === "strip_sig") {
     // One-time cleanup (v0.29.4): remove the appended signature block + footer
