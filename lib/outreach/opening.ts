@@ -55,3 +55,34 @@ export function normalizeOpening(body: string, firstName: string | null | undefi
   const greeting = first ? `${displayName(first)},` : "Hello,";
   return `${greeting}\n\n${HOPE_LINE} ${rest}`;
 }
+
+// ---------------------------------------------------------------------------
+// v0.37.0 (2026-10-26, M. Rice on the nonprofit drafts: "Get rid of hope all
+// is well. Dive into it. Need to get to 'My reason for reachout is X'
+// faster."). The nonprofit programs (D-097 / D-098) open "Name," and the
+// first paragraph begins straight away with the reason for writing. The
+// prospect engine keeps the "Hope all is well." house opening above.
+// ---------------------------------------------------------------------------
+
+/** Prompt line: "Name," then straight into the reason for writing. */
+export function directOpeningRule(): string {
+  return `- Opening (house rule, no exceptions): the first line is the recipient's first name followed by a comma and nothing else (e.g. "Michael,"). No "Hi", "Hello" or "Dear" before it, and never a dash after the name. Then a blank line, then the first paragraph begins IMMEDIATELY with why you are writing to this person (e.g. "I'm reaching out because ..."). No pleasantries: no "Hope all is well", no "I hope you're doing well", no "I wanted to introduce myself".`;
+}
+
+const HOPE_RX = /^(?:i\s+)?hope (?:all is|everything is|things are|you(?:'|\u2019)re|you are|this (?:note|email) finds you)(?: doing)?(?: well)?[^.!?\n]*[.!?\u2026]*\s*/i;
+
+/** "Name," + blank line + the body with any salutation / pleasantry removed. */
+export function normalizeDirectOpening(body: string, firstName: string | null | undefined): string {
+  const first = (firstName || "").trim();
+  let rest = body.replace(/^\s+/, "");
+  const lead = "(?:(?:hi|hello|hey|dear|good (?:morning|afternoon|evening))\\s+)";
+  const salute = first
+    ? new RegExp(`^${lead}?${esc(first)}\\s*(?:,|:|${DASH})\\s*`, "i")
+    : new RegExp(`^(?:hi|hello|hey|dear|good (?:morning|afternoon|evening))(?:\\s+there)?\\s*(?:,|:|${DASH})\\s*`, "i");
+  rest = rest.replace(salute, "");
+  for (let i = 0; i < 2; i++) rest = rest.replace(HOPE_RX, "");
+  rest = rest.charAt(0).toUpperCase() + rest.slice(1);
+  const greeting = first ? `${displayName(first)},` : "Hello,";
+  return `${greeting}\n\n${rest}`;
+}
+

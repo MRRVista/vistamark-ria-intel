@@ -151,10 +151,6 @@
     {
       "path": "/api/cron/ingest-parcels",
       "schedule": "0 7 3 * *"
-    },
-    {
-      "path": "/api/admin/np-drafts?action=strip_note",
-      "schedule": "50 12 26 10 *"
     }
   ],
   "redirects": [

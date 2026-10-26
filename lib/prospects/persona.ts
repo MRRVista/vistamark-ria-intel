@@ -24,7 +24,7 @@ export const PERSONA = {
    * a neighbor writing a note, not a resume.
    */
   facts: [
-    "Started Vistamark to serve Hinsdale — a wealth firm made in Hinsdale, for Hinsdale residents.",
+    "Started Vistamark to serve Hinsdale: a wealth firm made in Hinsdale, for Hinsdale residents.",
     "Spent two decades as Chief Investment Officer at Fiducient Advisors, where the firm oversaw roughly $260 billion in client assets for institutions and family offices.",
     "Brings that institutional and family-office discipline to individual families in town.",
     "Lives in Hinsdale on Robbins Park.",
@@ -34,11 +34,11 @@ export const PERSONA = {
 
   /** The one-sentence framing the model should orbit. */
   thesis:
-    "Institutional-grade investment counsel from a neighbor, not a downtown Chicago firm — made in Hinsdale to serve Hinsdale.",
+    "Institutional-grade investment counsel from a neighbor, not a downtown Chicago firm, made in Hinsdale to serve Hinsdale.",
 
   /** The only call to action permitted: a low-pressure local meeting. */
   callToAction:
-    "A coffee at the office on Chestnut, or a walk around Robbins Park — twenty minutes, no pitch deck.",
+    "A coffee at the office on Chestnut, or a walk around Robbins Park (twenty minutes, no pitch deck).",
 
   /** Words and constructions the model must not use. */
   banned: [
