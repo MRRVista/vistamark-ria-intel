@@ -124,7 +124,7 @@ export const PROGRAMS: Record<"matt" | "ryan", NonprofitProgram> = {
         "Founder and Chief Investment Officer of Vistamark Investments, an independent investment office in Hinsdale, Illinois.",
         "Spent two decades as Chief Investment Officer at Fiducient Advisors, where the firm oversaw roughly $260 billion in client assets for institutions, endowments, foundations, retirement plans, and family offices.",
         "Holds the CFA and CAIA designations.",
-        "Built Vistamark to give mid-sized institutions the kind of investment office the largest consultants reserve for their biggest clients — flexible, customized, and at a cost that makes sense at this size.",
+        "Built Vistamark to give mid-sized institutions the kind of investment office the largest consultants reserve for their biggest clients: flexible, customized, and at a cost that makes sense at this size.",
         "Works directly with investment committees: manager research, portfolio construction, fiduciary governance support, and committee-meeting preparation.",
       ],
       thesis:
@@ -164,7 +164,7 @@ export const PROGRAMS: Record<"matt" | "ryan", NonprofitProgram> = {
       officeShort: OFFICE,
       facts: [
         "Partner and Director of Institutional Advisory at Vistamark Investments, an independent investment office in Hinsdale, Illinois.",
-        "Vistamark's principals bring decades of institutional investment experience — the firm's founder spent two decades as Chief Investment Officer at Fiducient Advisors, where the firm oversaw roughly $260 billion in client assets.",
+        "[ALWAYS] Works alongside Vistamark's founder and Chief Investment Officer, Matt Rice, whose multidecade career at Fiducient Advisors and NEPC was spent advising nonprofits and institutional investors.",
         "Works with Midwest endowments, foundations, and nonprofit retirement plans in the $25 million to $110 million range.",
         "The practice covers manager research, portfolio construction, fiduciary governance support, and investment-committee support, at fees built for organizations this size.",
         "Engagements are flexible and customized to how each committee works, not a packaged model.",
@@ -177,8 +177,14 @@ export const PROGRAMS: Record<"matt" | "ryan", NonprofitProgram> = {
   },
 };
 
+/** v0.37.0: a card fact that starts with "[ALWAYS]" must appear in every
+ *  draft's paragraph 2 (e.g. Ryan's line about working alongside Matt). */
+export const ALWAYS_TAG = /^\s*\[ALWAYS\]\s*/i;
+
 export function personaFactsBlock(p: NonprofitProgram): string {
-  return p.persona.facts.map((f, i) => `${i + 1}. ${f}`).join("\n");
+  const always = p.persona.facts.filter((f) => ALWAYS_TAG.test(f));
+  const lines = p.persona.facts.map((f, i) => `${i + 1}. ${f.replace(ALWAYS_TAG, "")}${ALWAYS_TAG.test(f) ? "  (REQUIRED: use this one in paragraph 2 of every email)" : ""}`);
+  return lines.join("\n") + (always.length ? "\nThe REQUIRED fact counts toward the two-fact limit." : "");
 }
 
 /** Next two weekday call slots, skipping the next two business days so the

@@ -31,6 +31,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db, isDbReady, schema } from "../db";
 import { PERSONA, personaFactsBlock } from "./persona";
 import { openingRule, normalizeOpening } from "../outreach/opening"; // v0.36.0: "Name," / "Hope all is well." house opening
+import { dashRule, stripDashes, assertNoDashes } from "../outreach/dashes"; // v0.37.0: firm-wide, no em/en dashes or "--"
 
 const { prospects, prospectHouseholds, prospectEvents } = schema;
 
@@ -236,6 +237,7 @@ Only permitted ask: ${PERSONA.callToAction}
 Rules:
 - 110 to 170 words in the body. Plain text. No bullet points, no bold, no subject-line clichés.
 ${openingRule()}
+${dashRule()}
 - After "Hope all is well.", lead with something specific about the RECIPIENT drawn from the hooks provided — their role, firm, board, or work — in one or two sentences. Make it clear a person noticed, not a mail merge. Do not mention their home, its value, or that they live at a particular address.
 - Then at most TWO sender facts, chosen because they connect to the recipient (an executive gets the CIO/institutional fact; a nonprofit board member gets the family-office/institution fact; anyone gets the Hinsdale/Robbins Park/Central fact). Weave them in; do not list.
 - Close with the permitted ask, phrased as an easy no.
@@ -259,6 +261,7 @@ Write the email.`;
   if (typeof d.subject !== "string" || typeof d.body !== "string") throw new Error("draft missing subject/body");
   d.subject = d.subject.trim().replace(/\s+/g, " ").slice(0, 120);
   d.body = normalizeOpening(d.body.trim(), p.firstName); // v0.36.0: never trust the model's salutation
+  d.subject = stripDashes(d.subject); d.body = stripDashes(d.body); assertNoDashes(d.subject, d.body); // v0.37.0
 
   const lower = d.body.toLowerCase() + " " + d.subject.toLowerCase();
   const hit = PERSONA.banned.find((b) => lower.includes(b.toLowerCase()));
@@ -269,7 +272,7 @@ Write the email.`;
 }
 
 export function finalBody(d: DraftResult): string {
-  return `${d.body}\n\n${PERSONA.senderName}\n${PERSONA.senderTitle}, ${PERSONA.firm}\n${PERSONA.office}\n\n—\n${PERSONA.footer}`;
+  return `${d.body}\n\n${PERSONA.senderName}\n${PERSONA.senderTitle}, ${PERSONA.firm}\n${PERSONA.office}\n\n${PERSONA.footer}`; // v0.37.0: no "—" separator
 }
 
 // ── Delivery: Microsoft Graph draft ────────────────────────────────────────

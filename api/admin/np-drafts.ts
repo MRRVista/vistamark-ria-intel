@@ -2,7 +2,11 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sql } from "drizzle-orm";
 import { requireCron } from "../../lib/auth";
 import { db, isDbReady } from "../../lib/db";
-import { createDraft, updateDraftBody, stripLegacySig, getMessageBody, patchDraftBodyAs, postInternalNote } from "../../lib/nonprofit/engine";
+import { createDraft, updateDraftBody, stripLegacySig, getMessageBody, patchDraftBodyAs, postInternalNote, draftEmail, patchDraft } from "../../lib/nonprofit/engine";
+import type { OrgCandidate, ApolloPick, ResearchOut } from "../../lib/nonprofit/engine";
+import { loadEffectivePrograms } from "../../lib/nonprofit/remote-config"; // v0.37.0
+import { normalizeDirectOpening } from "../../lib/outreach/opening"; // v0.37.0
+import { stripDashes } from "../../lib/outreach/dashes"; // v0.37.0
 import { stripLegacyBriefingText, stripLegacyBriefingHtml, fixLegacyOpeningText, fixLegacyOpeningHtml } from "../../lib/nonprofit/legacy-note"; // v0.36.1
 import { PROGRAMS } from "../../lib/nonprofit/programs";
 import { nonprofitDraftCategories } from "../../lib/nonprofit/draft-categories"; // v0.34.1
@@ -47,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // only GET, so GET ?action=strip_note runs the cleanup for real.
   const getAction = req.method === "GET" ? String((req.query as any)?.action || "") : "";
 
-  if (req.method === "GET" && getAction !== "strip_note") {
+  if (req.method === "GET" && getAction !== "strip_note" && getAction !== "reformat") {
     res.status(200).json({
       ok: true,
       pending: rowsPending.map((r) => ({
@@ -151,6 +155,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  if (action === "reformat") {
+    // v0.37.0 (2026-10-26, Matt + Ryan): bring nonprofit drafts still sitting
+    // in Drafts up to the new format (two short paragraphs, "Name," then
+    // straight into the reason, the fixed coffee/call ask, "Best," + first
+    // name, no em dashes). Each one is RE-DRAFTED from the research already
+    // stored on its lead, with the live card settings, then the draft's
+    // subject and body are replaced in place (same message, so its internal
+    // note stays). Sent/deleted messages are left alone, and so is any draft
+    // the partner has already edited (live text no longer matches what the
+    // engine wrote).
+    const dryRun = (body as any).dryRun === true;
+    const deadline = Date.now() + 270_000;
+    const cfg = await loadEffectivePrograms();
+    if (!cfg.ok) { res.status(503).json({ ok: false, error: `card settings unreachable: ${cfg.error}` }); return; }
+    const delivered = rows(await db.execute(sql`
+      SELECT e.id, e.meta, e.created_at AS "createdAt", l.id AS "leadId", l.program, l.ein, l.org_name, l.org_city, l.org_state, l.org_zip,
+             l.pool_value, l.pool_source, l.invest_mgmt_fees, l.person_name, l.first_name, l.last_name, l.person_title,
+             l.person_role, l.research
+      FROM np_events e JOIN np_leads l ON l.id = e.lead_id
+      WHERE e.kind = 'deliver' AND e.meta->>'graphMessageId' IS NOT NULL
+        AND e.created_at > NOW() - INTERVAL '21 days'
+      ORDER BY e.id DESC`));
+    const done: any[] = []; const skipped: any[] = []; const failed: any[] = [];
+    for (const r of delivered) {
+      if (Date.now() > deadline) { skipped.push({ eventId: r.id, reason: "time budget" }); continue; }
+      const m = r.meta ?? {};
+      const key = r.program === "ryan" ? "ryan" : "matt";
+      const prog = cfg.programs[key].program;
+      const mailbox = m.mailbox ?? prog.mailbox;
+      try {
+        if (m.reformattedAt) { skipped.push({ eventId: r.id, reason: "already reformatted" }); continue; }
+        const msg = await getMessageBody(mailbox, m.graphMessageId);
+        if (!msg) { skipped.push({ eventId: r.id, reason: "gone" }); continue; }
+        if (!msg.isDraft) { skipped.push({ eventId: r.id, reason: "sent" }); continue; }
+        const live = textOf(msg.content, msg.contentType);
+        const sim = overlap(live, String(m.body ?? ""));
+        if (sim < 0.8) { skipped.push({ eventId: r.id, mailbox, subject: msg.subject, reason: `edited by partner (match ${sim.toFixed(2)})` }); continue; }
+        const research = (r.research && typeof r.research === "object" ? r.research : {}) as ResearchOut;
+        if (!research.personalization_hooks) research.personalization_hooks = [];
+        const org = { ein: r.ein, name: r.org_name, city: r.org_city, state: r.org_state, zip: r.org_zip, poolValue: Number(r.pool_value ?? 0), poolSource: r.pool_source, investMgmtFees: r.invest_mgmt_fees } as unknown as OrgCandidate;
+        const pick = { apolloId: null, name: r.person_name ?? m.toName ?? "", firstName: r.first_name ?? (m.toName ? String(m.toName).split(/\s+/)[0] : null), lastName: r.last_name, title: r.person_title, headline: null, linkedinUrl: null, employmentHistory: [], location: null } as ApolloPick;
+        const d = await draftEmail(org, pick, r.person_role ?? "staff", research, prog, 45_000);
+        const html = /html/i.test(msg.contentType);
+        const content = html ? toHtml(d.body) : d.body;
+        if (!dryRun) {
+          await patchDraft(mailbox, m.graphMessageId, d.subject, msg.contentType, content);
+          const after = await getMessageBody(mailbox, m.graphMessageId);
+          if (!after || after.subject !== d.subject || overlap(textOf(after.content, after.contentType), d.body) < 0.9) throw new Error("patched, but the new text does not read back from the draft");
+          await db.execute(sql`UPDATE np_events SET meta = meta || ${JSON.stringify({ subject: d.subject, body: d.body, previousSubject: m.subject, previousBody: m.body, reformattedAt: new Date().toISOString() })}::jsonb WHERE id = ${r.id}`);
+          await db.execute(sql`UPDATE np_leads SET draft_subject = ${d.subject}, updated_at = NOW() WHERE id = ${r.leadId}`);
+        }
+        done.push({ eventId: r.id, mailbox, org: r.org_name, oldSubject: msg.subject, subject: d.subject, body: d.body });
+      } catch (err) {
+        failed.push({ eventId: r.id, mailbox, org: r.org_name, error: String(err).slice(0, 240) });
+      }
+    }
+    console.log(`[np-drafts reformat] dryRun=${dryRun} reformatted=${done.length} skipped=${skipped.length} failed=${failed.length}`, JSON.stringify({ done: done.map((x) => ({ e: x.eventId, s: x.subject })), skipped, failed }).slice(0, 3500));
+    res.status(200).json({ ok: failed.length === 0, dryRun, checked: delivered.length, reformatted: done.length, skipped, failed, drafts: done });
+    return;
+  }
+
   if (action !== "flush") { res.status(400).json({ error: "POST body must be {\"action\":\"flush\"}, {\"action\":\"strip_sig\"} or {\"action\":\"strip_note\"}" }); return; }
 
   const delivered: any[] = [];
@@ -164,7 +229,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // v0.34.1: flushed drafts carry the same categories a live run stamps. The
       // card's D-number is not known here (file defaults only), so the chip
       // names the program without it.
-      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", fixLegacyOpeningText(stripLegacyBriefingText(stripLegacySig(prog, String(m.body ?? ""))).body, m.toName ? String(m.toName).split(/\s+/)[0] : r.personName ? String(r.personName).split(/\s+/)[0] : null).body, nonprofitDraftCategories(null, `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH`));
+      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripDashes(normalizeDirectOpening(stripLegacyBriefingText(stripLegacySig(prog, String(m.body ?? ""))).body, m.toName ? String(m.toName).split(/\s+/)[0] : r.personName ? String(r.personName).split(/\s+/)[0] : null)), nonprofitDraftCategories(null, `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH`));
       await db.execute(sql`
         UPDATE np_events
         SET meta = meta || ${JSON.stringify({ delivery: "outlook_draft", graphMessageId: g.id, graphWebLink: g.webLink, flushedAt: new Date().toISOString() })}::jsonb
@@ -177,3 +242,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   res.status(200).json({ ok: failed.length === 0, delivered: delivered.length, failed, drafts: delivered });
 }
+
+// v0.37.0 helpers for reformat.
+function textOf(content: string, contentType: string): string {
+  const t = /html/i.test(contentType)
+    ? content.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(Number(n)))
+    : content;
+  return t.replace(/\s+/g, " ").trim();
+}
+
+/** Share of the stored engine body's words still present in the live draft. */
+function overlap(live: string, stored: string): number {
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9$' ]+/g, " ").split(/\s+/).filter((w) => w.length > 2);
+  const a = new Set(norm(live)); const b = norm(stored);
+  if (!b.length) return 0;
+  return b.filter((w) => a.has(w)).length / b.length;
+}
+
+function toHtml(text: string): string {
+  const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<html><body>${text.split(/\n\s*\n/).map((para) => `<p>${esc(para).replace(/\n/g, "<br>")}</p>`).join("")}</body></html>`;
+}
+

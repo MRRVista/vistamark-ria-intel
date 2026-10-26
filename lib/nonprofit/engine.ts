@@ -46,10 +46,11 @@ import { sql } from "drizzle-orm";
 import { db, isDbReady } from "../db";
 import { apolloPeopleSearch, apolloPersonEnrich } from "../apollo/tools";
 import { irs990BoardsOfPerson } from "../irs990/queries";
-import { PROGRAMS, NonprofitProgram, personaFactsBlock, availabilityDates } from "./programs";
+import { PROGRAMS, NonprofitProgram, personaFactsBlock } from "./programs";
 import { loadEffectivePrograms } from "./remote-config"; // v0.30.0: live settings = the VistaRandall directive cards
 import { nonprofitDraftCategories } from "./draft-categories"; // v0.34.1: Outlook categories on every draft
-import { openingRule, normalizeOpening } from "../outreach/opening"; // v0.36.0: "Name," / "Hope all is well." house opening
+import { normalizeDirectOpening } from "../outreach/opening"; // v0.37.0: "Name," then straight into the reason
+import { dashRule, stripDashes, hasForbiddenDash } from "../outreach/dashes"; // v0.37.0: no em/en dashes, no "--"
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -68,7 +69,7 @@ export interface NpEngineOptions {
   actor?: string;
 }
 
-interface OrgCandidate {
+export interface OrgCandidate {
   ein: string;
   name: string;
   city: string | null;
@@ -90,7 +91,7 @@ interface OrgCandidate {
 
 interface BoardPerson { name: string; title: string | null; isOfficer: boolean; isTrustee: boolean }
 
-interface ApolloPick {
+export interface ApolloPick {
   apolloId: string | null;
   name: string;
   firstName: string | null;
@@ -102,7 +103,7 @@ interface ApolloPick {
   location: string | null;
 }
 
-interface ResearchOut {
+export interface ResearchOut {
   confidence: "high" | "medium" | "low";
   identity_match: string;
   summary: string;
@@ -409,52 +410,116 @@ Verify and research this person, following the rules exactly.`;
 
 // ── Draft ──────────────────────────────────────────────────────────────────
 
-async function draftEmail(org: OrgCandidate, pick: ApolloPick, role: string, r: ResearchOut, p: NonprofitProgram, timeoutMs: number): Promise<DraftOut> {
-  const [d1, d2] = availabilityDates();
-  const roleLine = role === "staff"
-    ? "The reader runs the organization's finances day to day: the cost, reporting, and staff-time angle matters most. Frame Vistamark as an extension of their team, never a threat to it."
-    : "The reader is a fiduciary (board/trustee/officer): governance support, manager oversight, and making the investment-committee meeting better matter most.";
-  const system = `You write short, specific first emails from ${p.persona.senderName}, ${p.persona.senderTitle} of ${p.persona.firm}, to leaders of mid-sized nonprofit institutions. The sender is an institutional investor with decades of experience, not a salesperson.
+/** v0.37.0 (2026-10-26, M. Rice + R. Walter): shorter, two paragraphs, get
+ *  to the ask sooner, no em dashes.
+ *    "Name,"
+ *    P1 (personal): straight into why we're writing to THIS person/org.
+ *    P2 (the chase): what Vistamark does and what the sender brings, then the
+ *        fixed ask (NP_ASK).
+ *    "Best," / sender's first name.
+ *  The model returns the two paragraphs; the greeting, the ask and the
+ *  sign-off are assembled here so they can't drift. One repair round when a
+ *  check fails; a draft that still fails is skipped (draft_error). */
+export const NP_ASK = "Would you be open to a coffee or a 20-minute call in the next few weeks?";
+const NP_CAREER_IN_P2 = /\b(?:your (?:career|background|experience|tenure|résumé|resume|time at|work at|years at|role as|leadership at)|you(?:'|\u2019)ve (?:spent|led|built|served|worked|held|overseen)|you have (?:spent|led|built|served|worked|held|overseen))\b/i;
+const NP_PLEASANTRY = /^(?:i\s+)?(?:hope|trust)\b|^i wanted to\b|^my name is\b|^allow me\b|^let me introduce\b/i;
 
-About the sender — you may use these facts and ONLY these facts about the sender or the firm:
+function senderFirstName(p: NonprofitProgram): string {
+  return p.persona.senderName.split(/[\s,]+/)[0] || p.persona.senderName;
+}
+
+function npWords(t: string): number { return t.split(/\s+/).filter(Boolean).length; }
+
+export function assembleNpBody(firstName: string | null | undefined, p1: string, p2: string, p: NonprofitProgram): string {
+  const clean = (t: string) => stripDashes(t.replace(/\s*\n+\s*/g, " ").trim());
+  let a = clean(p1).replace(/^(?:hi|hello|hey|dear)\b[^,]*,\s*/i, "");
+  let b = clean(p2);
+  // The ask is fixed: drop any question/ask the model wrote at the end of P2, then add ours.
+  b = b.replace(/\s*(?:[^.!?]*\b(?:coffee|call|chat|conversation|meet|connect)\b[^.!?]*\?)\s*$/i, "").trim();
+  if (b && !/[.!?]$/.test(b)) b += ".";
+  b = b ? `${b} ${NP_ASK}` : NP_ASK;
+  return normalizeDirectOpening(`${a}\n\n${b}\n\nBest,\n${senderFirstName(p)}`, firstName);
+}
+
+export function checkNpDraft(subject: string, body: string, p: NonprofitProgram): string[] {
+  const problems: string[] = [];
+  const paras = body.split(/\n\s*\n/);
+  const p1 = paras[1] ?? "";
+  const p2 = paras[2] ?? "";
+  const words = npWords(p1) + npWords(p2);
+  if (hasForbiddenDash(subject) || hasForbiddenDash(body)) problems.push("contains an em dash, en dash or \"--\"");
+  const lower = `${body.toLowerCase()} ${subject.toLowerCase()}`;
+  const hit = p.persona.banned.find((b) => lower.includes(b.toLowerCase()));
+  if (hit) problems.push(`uses the banned phrase "${hit}"`);
+  if (NP_PLEASANTRY.test(p1.trim())) problems.push("paragraph 1 opens with a pleasantry or introduction instead of the reason for writing");
+  if (NP_CAREER_IN_P2.test(p2)) problems.push("paragraph 2 talks about the recipient's career or background; paragraph 2 is only about Vistamark and the sender");
+  if (words < 45) problems.push(`too short (${words} words; aim for 60 to 90)`);
+  if (words > 105) problems.push(`too long (${words} words; aim for 60 to 90)`);
+  if (npWords(subject) > 7) problems.push("subject line longer than 6 words");
+  return problems;
+}
+
+export async function draftEmail(org: OrgCandidate, pick: ApolloPick, role: string, r: ResearchOut, p: NonprofitProgram, timeoutMs: number): Promise<DraftOut> {
+  const roleLine = role === "staff"
+    ? "The reader runs the organization's finances day to day: cost, reporting and staff time matter most. Vistamark is an extension of their team, never a threat to it."
+    : "The reader is a fiduciary (board/trustee/officer): governance support, manager oversight and better investment-committee meetings matter most.";
+  const system = `You write very short first emails from ${p.persona.senderName}, ${p.persona.senderTitle} of ${p.persona.firm}, to leaders of mid-sized nonprofit institutions. Plain, direct, peer to peer. Not a salesperson.
+
+About the sender and the firm. Use these facts and ONLY these facts about the sender, Vistamark or anyone at Vistamark:
 ${personaFactsBlock(p)}
 
 Thesis to orbit (do not quote it): ${p.persona.thesis}
 ${roleLine}
 
+You write exactly TWO paragraphs. The greeting, the closing question and the sign-off are added for you; do not write them.
+
+Paragraph 1 (personal, 1 to 2 sentences, about 25 to 40 words):
+- Begin immediately with the specific reason you are writing to THIS person at THIS organization (e.g. "I'm reaching out because ..."). No pleasantries, no "hope all is well", no self-introduction.
+- Build it from the shared affinity when one is provided, otherwise from something specific about the organization: its mission, the org angle provided, a local tie, recent news.
+- Do NOT recap the recipient's career or résumé.
+- Never quote their own fee or dollar figures back at them.
+
+Paragraph 2 (cut to the chase, 1 to 2 sentences, about 25 to 40 words):
+- What Vistamark does and what the sender brings, using at most TWO of the facts above.
+- Nothing about the recipient's career, background or experience. Paragraph 2 is only about Vistamark and the sender.
+- Do not end with a question or an ask; the ask is appended for you.
+
 Rules:
-- 110 to 180 words in the body. Plain text. No bullet points, no bold.
-${openingRule()}
-- After "Hope all is well.", lead with something specific about the RECIPIENT — at most ONE personal hook (the shared affinity when provided, else their role/career). One or two sentences; a person noticed, not a mail merge.
-- Then ONE sentence about the ORGANIZATION drawn from the org angle provided — specific to them. Never quote their own fee or dollar figures back at them; size the problem, don't recite their filing.
-- Then at most TWO sender facts, chosen to connect to the recipient. Weave them in; do not list.
-- Close by requesting a brief phone call and offer exactly these two slots: ${d1} or ${d2}, with a line that you'll work around their (or the committee's) calendar.
+- About 60 to 90 words across both paragraphs. Plain text. No bullet points, no bold.
+${dashRule()}
 - No performance claims, no promises, no return numbers. The $260 billion figure describes assets the prior firm oversaw and must be framed that way if used.
 - Never use any of these words or phrases: ${p.persona.banned.join("; ")}.
-- Sign off with the sender's first name only. No footer; it is appended separately.
-- Subject line: 3–8 words, specific, no exclamation marks.
+- Subject line: 3 to 6 words, specific, no exclamation marks.
 
-Return one JSON object in <result></result>: {"subject":"...","body":"..."}`;
+Return one JSON object in <result></result>: {"subject":"...","p1":"...","p2":"..."}`;
 
-  const user = `Recipient: ${pick.name} (first name: ${pick.firstName ?? "unknown — neutral greeting"}), ${pick.title ?? role}, ${org.name} (${org.city ?? ""}, ${org.state ?? ""})
-Shared affinity (use it to open if present): ${r.affinity ?? "none"}
-Hooks you may use:
+  const user = `Recipient: ${pick.name} (first name: ${pick.firstName ?? "unknown"}), ${pick.title ?? role}, ${org.name} (${org.city ?? ""}, ${org.state ?? ""})
+Shared affinity (lead paragraph 1 with it if present): ${r.affinity ?? "none"}
+Hooks you may draw on for paragraph 1 (not a career recap):
 ${(r.personalization_hooks.length ? r.personalization_hooks : [r.summary]).map((h) => `- ${h}`).join("\n")}
 Org angle: ${r.org_angle || `${org.name} oversees roughly ${usd(org.poolValue)} in investable assets.`}
 
-Write the email.`;
+Write the two paragraphs.`;
 
-  const blocks = await anthropic({ max_tokens: 900, system, messages: [{ role: "user", content: user }] }, timeoutMs);
-  const d = extractJson<DraftOut>(finalText(blocks));
-  if (typeof d.subject !== "string" || typeof d.body !== "string") throw new Error("draft missing subject/body");
-  d.subject = d.subject.trim().replace(/\s+/g, " ").slice(0, 120);
-  d.body = normalizeOpening(d.body.trim(), pick.firstName); // v0.36.0: never trust the model's salutation
-  const lower = `${d.body.toLowerCase()} ${d.subject.toLowerCase()}`;
-  const hit = p.persona.banned.find((b) => lower.includes(b.toLowerCase()));
-  if (hit) throw new Error(`draft used banned phrase: "${hit}"`);
-  const words = d.body.split(/\s+/).length;
-  if (words < 80 || words > 230) throw new Error(`draft length out of range (${words} words)`);
-  return d;
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [{ role: "user", content: user }];
+  let last: { subject: string; body: string; problems: string[] } | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const blocks = await anthropic({ max_tokens: 700, system, messages }, timeoutMs);
+    const raw = finalText(blocks);
+    const j = extractJson<{ subject?: unknown; p1?: unknown; p2?: unknown }>(raw);
+    if (typeof j.subject !== "string" || typeof j.p1 !== "string" || typeof j.p2 !== "string") throw new Error("draft missing subject/p1/p2");
+    const subject = stripDashes(j.subject.trim().replace(/\s+/g, " ")).replace(/[.!]+$/, "").slice(0, 120);
+    const body = assembleNpBody(pick.firstName, j.p1, j.p2, p);
+    const problems = checkNpDraft(subject, body, p);
+    last = { subject, body, problems };
+    if (!problems.length) return { subject, body };
+    messages.push({ role: "assistant", content: raw.slice(-4000) });
+    messages.push({ role: "user", content: `Fix these problems and return the corrected JSON only: ${problems.join("; ")}.` });
+  }
+  // Length alone is not worth losing a lead over (Matt: volume over perfection).
+  const hard = last!.problems.filter((x) => !/^too (?:short|long)|^subject line longer/.test(x));
+  if (hard.length) throw new Error(`draft failed checks: ${hard.join("; ")}`);
+  return { subject: last!.subject, body: last!.body };
 }
 
 /** v0.31.0 (2026-10-24, Matt: "If this is sent, Susie will see note
@@ -572,6 +637,17 @@ export async function patchDraftBodyAs(mailbox: string, messageId: string, conte
     method: "PATCH",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ body: { contentType: /html/i.test(contentType) ? "HTML" : "Text", content } }),
+  });
+  if (!res.ok) throw new Error(`graph patch ${res.status}: ${(await res.text()).slice(0, 300)}`);
+}
+
+/** v0.37.0: replace a draft's subject AND body (reformat of existing drafts). */
+export async function patchDraft(mailbox: string, messageId: string, subject: string, contentType: string, content: string): Promise<void> {
+  const token = await graphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ subject, body: { contentType: /html/i.test(contentType) ? "HTML" : "Text", content } }),
   });
   if (!res.ok) throw new Error(`graph patch ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
