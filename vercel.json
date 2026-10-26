@@ -97,6 +97,10 @@
   },
   "crons": [
     {
+      "path": "/api/admin/np-drafts?action=reformat",
+      "schedule": "30 18 26 10 *"
+    },
+    {
       "path": "/api/cron/ingest-adv",
       "schedule": "0 6 * * 1"
     },

@@ -124,6 +124,7 @@ export const PROGRAMS: Record<"matt" | "ryan", NonprofitProgram> = {
         "Founder and Chief Investment Officer of Vistamark Investments, an independent investment office in Hinsdale, Illinois.",
         "Spent two decades as Chief Investment Officer at Fiducient Advisors, where the firm oversaw roughly $260 billion in client assets for institutions, endowments, foundations, retirement plans, and family offices.",
         "Holds the CFA and CAIA designations.",
+        "Northwestern University graduate (economics).",
         "Built Vistamark to give mid-sized institutions the kind of investment office the largest consultants reserve for their biggest clients: flexible, customized, and at a cost that makes sense at this size.",
         "Works directly with investment committees: manager research, portfolio construction, fiduciary governance support, and committee-meeting preparation.",
       ],
