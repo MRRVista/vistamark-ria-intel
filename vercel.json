@@ -89,7 +89,7 @@
       "maxDuration": 60
     },
     "api/admin/np-drafts.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "api/np-draft-now.ts": {
       "maxDuration": 300

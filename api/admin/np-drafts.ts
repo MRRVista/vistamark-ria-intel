@@ -2,7 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sql } from "drizzle-orm";
 import { requireCron } from "../../lib/auth";
 import { db, isDbReady } from "../../lib/db";
-import { createDraft, updateDraftBody, stripLegacySig } from "../../lib/nonprofit/engine";
+import { createDraft, updateDraftBody, stripLegacySig, getMessageBody, patchDraftBodyAs, postInternalNote } from "../../lib/nonprofit/engine";
+import { stripLegacyBriefingText, stripLegacyBriefingHtml } from "../../lib/nonprofit/legacy-note"; // v0.36.1
 import { PROGRAMS } from "../../lib/nonprofit/programs";
 import { nonprofitDraftCategories } from "../../lib/nonprofit/draft-categories"; // v0.34.1
 
@@ -87,7 +88,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (action !== "flush") { res.status(400).json({ error: "POST body must be {\"action\":\"flush\"} or {\"action\":\"strip_sig\"}" }); return; }
+  if (action === "strip_note") {
+    // v0.36.1 (2026-10-26, Matt: "Still coming with verbiage."): drafts made
+    // before v0.31.0 still open with the "[FOR MATT: ...]" / "[FOR RYAN: ...]"
+    // briefing. Take it out of every one that is STILL A DRAFT, reading the
+    // live body from Outlook (so the partner's own edits survive), and move it
+    // into the draft's internal note. Sent or deleted messages are left alone.
+    // {"action":"strip_note","dryRun":true} reports without changing anything.
+    const dryRun = (body as any).dryRun === true;
+    const delivered = rows(await db.execute(sql`
+      SELECT e.id, e.meta, l.program
+      FROM np_events e JOIN np_leads l ON l.id = e.lead_id
+      WHERE e.kind = 'deliver' AND e.meta->>'graphMessageId' IS NOT NULL
+      ORDER BY e.id`));
+    const patched: any[] = []; const failed: any[] = [];
+    let gone = 0, sent = 0, clean = 0;
+    for (const r of delivered) {
+      const m = r.meta ?? {};
+      const prog = r.program === "ryan" ? PROGRAMS.ryan : PROGRAMS.matt;
+      const mailbox = m.mailbox ?? prog.mailbox;
+      try {
+        const msg = await getMessageBody(mailbox, m.graphMessageId);
+        if (!msg) { gone += 1; continue; }
+        if (!msg.isDraft) { sent += 1; continue; }
+        const html = /html/i.test(msg.contentType);
+        const out = html ? stripLegacyBriefingHtml(msg.content) : stripLegacyBriefingText(msg.content);
+        if (!out.briefing) { clean += 1; continue; }
+        if (!dryRun) {
+          await patchDraftBodyAs(mailbox, m.graphMessageId, msg.contentType, out.body);
+          const after = await getMessageBody(mailbox, m.graphMessageId);
+          const still = after && (/\[(?:<[^>]*>|\s|&nbsp;)*FOR(?:<[^>]*>|\s|&nbsp;)+(?:MATT|RYAN):/.test(after.content));
+          if (!after || still) throw new Error("patched, but the briefing still reads back in the draft");
+          const label = `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH briefing`;
+          const n = await postInternalNote(mailbox, m.graphMessageId, out.briefing.replace(/^FOR [A-Z]+:\s*/, ""), label);
+          await db.execute(sql`
+            UPDATE np_events SET meta = meta || ${JSON.stringify({ briefing: m.briefing ?? out.briefing, briefingDelivery: n.ok ? "internal_note" : "note_failed", legacyNoteStrippedAt: new Date().toISOString() })}::jsonb
+            WHERE id = ${r.id}`);
+          patched.push({ eventId: r.id, mailbox, subject: msg.subject, internalNote: n.ok ? "written" : `failed: ${n.error}` });
+        } else {
+          patched.push({ eventId: r.id, mailbox, subject: msg.subject, wouldStrip: out.briefing.slice(0, 120) });
+        }
+      } catch (err) {
+        failed.push({ eventId: r.id, mailbox, subject: m.subject, error: String(err).slice(0, 220) });
+      }
+    }
+    res.status(200).json({ ok: failed.length === 0, dryRun, checked: delivered.length, stripped: patched.length, alreadyClean: clean, sentOrNotDraft: sent, gone, failed, drafts: patched });
+    return;
+  }
+
+  if (action !== "flush") { res.status(400).json({ error: "POST body must be {\"action\":\"flush\"}, {\"action\":\"strip_sig\"} or {\"action\":\"strip_note\"}" }); return; }
 
   const delivered: any[] = [];
   const failed: any[] = [];
@@ -100,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // v0.34.1: flushed drafts carry the same categories a live run stamps. The
       // card's D-number is not known here (file defaults only), so the chip
       // names the program without it.
-      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripLegacySig(prog, String(m.body ?? "")), nonprofitDraftCategories(null, `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH`));
+      const g = await createDraft(mailbox, m.to, m.toName ?? r.personName ?? "", m.subject ?? "", stripLegacyBriefingText(stripLegacySig(prog, String(m.body ?? ""))).body, nonprofitDraftCategories(null, `${r.program === "ryan" ? "RYAN" : "MATT"} -- NONPROFIT OUTREACH`));
       await db.execute(sql`
         UPDATE np_events
         SET meta = meta || ${JSON.stringify({ delivery: "outlook_draft", graphMessageId: g.id, graphWebLink: g.webLink, flushedAt: new Date().toISOString() })}::jsonb
