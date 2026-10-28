@@ -20,6 +20,13 @@
  * Every sender fact below is a claim the sender is willing to stand behind in
  * an SEC exam. The engine forbids the model from inventing facts about
  * Vistamark that are not in this file.
+ *
+ * v0.38.0 (2026-10-28): Ryan's [ALWAYS] fact had said Matt's career was at
+ * "Fiducient Advisors and NEPC". Matt never worked at NEPC; the line was
+ * written in v0.37.0 / vistarandall v1.165.0 and every Ryan draft since then
+ * carried it. Corrected here and on the card (vistarandall repairs the saved
+ * value). The engine's affinity and shared-tie guards were tightened in the
+ * same release (lib/nonprofit/engine.ts).
  */
 
 export interface GeoRule {
@@ -165,7 +172,7 @@ export const PROGRAMS: Record<"matt" | "ryan", NonprofitProgram> = {
       officeShort: OFFICE,
       facts: [
         "Partner and Director of Institutional Advisory at Vistamark Investments, an independent investment office in Hinsdale, Illinois.",
-        "[ALWAYS] Works alongside Vistamark's founder and Chief Investment Officer, Matt Rice, whose multidecade career at Fiducient Advisors and NEPC was spent advising nonprofits and institutional investors.",
+        "[ALWAYS] Works alongside Vistamark's founder and Chief Investment Officer, Matt Rice, who spent two decades as Chief Investment Officer at Fiducient Advisors, where the firm oversaw roughly $260 billion in client assets for institutions, endowments, foundations and retirement plans.",
         "Works with Midwest endowments, foundations, and nonprofit retirement plans in the $25 million to $110 million range.",
         "The practice covers manager research, portfolio construction, fiduciary governance support, and investment-committee support, at fees built for organizations this size.",
         "Engagements are flexible and customized to how each committee works, not a packaged model.",

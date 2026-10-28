@@ -40,13 +40,17 @@
  *              duplicate → the note lands on the existing contact instead.
  *
  * Every step writes an np_events row.
+ *
+ * v0.38.0 (2026-10-28): affinity must be on the program's list (affinityOnList)
+ * and a draft may claim a shared tie only when the sender's facts back it
+ * (sharedTieBacked, enforced in checkNpDraft). Both were prompt-only before.
  */
 
 import { sql } from "drizzle-orm";
 import { db, isDbReady } from "../db";
 import { apolloPeopleSearch, apolloPersonEnrich } from "../apollo/tools";
 import { irs990BoardsOfPerson } from "../irs990/queries";
-import { PROGRAMS, NonprofitProgram, personaFactsBlock } from "./programs";
+import { PROGRAMS, NonprofitProgram, personaFactsBlock, ALWAYS_TAG } from "./programs";
 import { loadEffectivePrograms } from "./remote-config"; // v0.30.0: live settings = the VistaRandall directive cards
 import { nonprofitDraftCategories } from "./draft-categories"; // v0.34.1: Outlook categories on every draft
 import { normalizeDirectOpening } from "../outreach/opening"; // v0.37.0: "Name," then straight into the reason
@@ -424,6 +428,50 @@ export const NP_ASK = "Would you be open to a coffee or a 20-minute call in the 
 const NP_CAREER_IN_P2 = /\b(?:your (?:career|background|experience|tenure|résumé|resume|time at|work at|years at|role as|leadership at)|you(?:'|\u2019)ve (?:spent|led|built|served|worked|held|overseen)|you have (?:spent|led|built|served|worked|held|overseen))\b/i;
 const NP_PLEASANTRY = /^(?:i\s+)?(?:hope|trust)\b|^i wanted to\b|^my name is\b|^allow me\b|^let me introduce\b/i;
 
+// v0.38.0 (2026-10-28, Ryan's "fellow Wittenberg alum" draft): the affinity
+// rules were prompt-only. Two deterministic guards now back them.
+//   affinityOnList  -- the research model may only return an affinity that
+//                      names something on the program's affinities list
+//                      (Ohio State, Northwestern, Chicago, ...). Wittenberg is
+//                      not on Ryan's list, so it is dropped before drafting.
+//   sharedTieBacked -- a draft may say "fellow ..." / "alum" / "we both" only
+//                      when the sender's facts name the same thing.
+const TIE_STOP = new Set([
+  "university", "college", "school", "alumni", "alumnus", "alumna", "alum", "faculty", "board",
+  "ties", "tie", "with", "from", "and", "the", "this", "that", "area", "region", "metro", "civic",
+  "professional", "member", "chicagoland", "suburban", "west", "north", "south", "east",
+  "years", "year", "decades", "decade", "graduate", "degree", "program", "chapter", "native",
+]);
+export function tieTokens(s: string): string[] {
+  return (String(s || "").toLowerCase().match(/[a-z][a-z'-]{3,}/g) || []).filter((w) => !TIE_STOP.has(w));
+}
+/** The affinity names something on the program's list. Each list entry is
+ *  split on commas, slashes, parentheses and "or" into alternatives ("The Ohio
+ *  State University", "Cleveland OH", ...); an alternative matches when all of
+ *  its significant words (up to two) appear in the affinity, so "Ohio State"
+ *  needs both words and a bare "Ohio" is not Ohio State. */
+export function affinityOnList(affinity: string | null | undefined, affinities: string[]): boolean {
+  if (!affinity) return false;
+  const have = new Set(tieTokens(affinity));
+  if (!have.size) return false;
+  for (const entry of affinities) {
+    for (const alt of String(entry).split(/[,;/()]|\bor\b|\band\b/i)) {
+      const need = tieTokens(alt).slice(0, 2);
+      if (need.length && need.every((w) => have.has(w))) return true;
+    }
+  }
+  return false;
+}
+const SHARED_TIE_CLAIM = /\bfellow\b|\balum(?:nus|na|ni)?\b|\balma mater\b|\bwe both\b|\blike you,? i\b|\bi (?:also|too) (?:went|attended|graduated|grew up|live|lived|served|sit|sat)\b|\bmy own (?:years|time) (?:at|in)\b/i;
+/** A shared-tie claim is backed only when some sender fact names the tie. */
+export function sharedTieBacked(affinity: string | null | undefined, facts: string[]): boolean {
+  if (!affinity) return false;
+  const have = tieTokens(affinity);
+  if (!have.length) return false;
+  const factWords = new Set(facts.flatMap(tieTokens));
+  return have.some((w) => factWords.has(w));
+}
+
 function senderFirstName(p: NonprofitProgram): string {
   return p.persona.senderName.split(/[\s,]+/)[0] || p.persona.senderName;
 }
@@ -441,11 +489,15 @@ export function assembleNpBody(firstName: string | null | undefined, p1: string,
   return normalizeDirectOpening(`${a}\n\n${b}\n\nBest,\n${senderFirstName(p)}`, firstName);
 }
 
-export function checkNpDraft(subject: string, body: string, p: NonprofitProgram): string[] {
+export function checkNpDraft(subject: string, body: string, p: NonprofitProgram, affinity: string | null = null): string[] {
   const problems: string[] = [];
   const paras = body.split(/\n\s*\n/);
   const p1 = paras[1] ?? "";
   const p2 = paras[2] ?? "";
+  // v0.38.0: "fellow ... alum" and the like are fine only when the sender's facts back the tie.
+  if (SHARED_TIE_CLAIM.test(`${p1} ${p2}`) && !sharedTieBacked(affinity, p.persona.facts.map((f) => f.replace(ALWAYS_TAG, "")))) {
+    problems.push("claims a shared tie with the recipient (\"fellow\", \"alum\", \"we both\"...) that the sender's facts do not state; mention the recipient's tie without claiming it for the sender");
+  }
   const words = npWords(p1) + npWords(p2);
   if (hasForbiddenDash(subject) || hasForbiddenDash(body)) problems.push("contains an em dash, en dash or \"--\"");
   const lower = `${body.toLowerCase()} ${subject.toLowerCase()}`;
@@ -511,7 +563,7 @@ Write the two paragraphs.`;
     if (typeof j.subject !== "string" || typeof j.p1 !== "string" || typeof j.p2 !== "string") throw new Error("draft missing subject/p1/p2");
     const subject = stripDashes(j.subject.trim().replace(/\s+/g, " ")).replace(/[.!]+$/, "").slice(0, 120);
     const body = assembleNpBody(pick.firstName, j.p1, j.p2, p);
-    const problems = checkNpDraft(subject, body, p);
+    const problems = checkNpDraft(subject, body, p, r.affinity);
     last = { subject, body, problems };
     if (!problems.length) return { subject, body };
     messages.push({ role: "assistant", content: raw.slice(-4000) });
@@ -876,6 +928,16 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
     try {
       research = await researchPerson(org, pick, role, p, extraSeats, planLines, Math.min(70_000, Math.max(30_000, remaining() - 50_000)));
     } catch (err) { await fail("research_error", pick.name, { error: String(err) }); continue; }
+    // v0.38.0: the affinity must name something on the program's list; anything else
+    // (a school or city the model found on its own) is kept as a hook, never as shared.
+    if (research.affinity && !affinityOnList(research.affinity, p.affinities)) {
+      console.log(`[nonprofit-engine] ${pick.name}: affinity "${research.affinity}" is not on the ${p.key} list; dropped`);
+      if (!research.personalization_hooks.some((h) => h.toLowerCase().includes(research.affinity!.toLowerCase().slice(0, 20)))) {
+        research.personalization_hooks.unshift(research.affinity);
+      }
+      research.affinity = null;
+      research.affinity_kind = null;
+    }
     if (!opts.dryRun && leadId != null) {
       await updateLead(leadId, { affinity: research.affinity, research });
       await logEvent(leadId, "research", `(${research.confidence}) ${research.summary}`.slice(0, 1800), { research, extraSeats, planLines }, opts.actor);
