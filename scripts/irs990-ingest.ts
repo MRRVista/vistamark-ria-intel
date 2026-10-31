@@ -7,6 +7,7 @@
  *   npx tsx scripts/irs990-ingest.ts --list                  # show index batches vs ledger, load nothing
  *   npx tsx scripts/irs990-ingest.ts --batch ... --max-entries 500 --dry-run   # parse only, no DB writes
  *   npx tsx scripts/irs990-ingest.ts --parse-file path/to/return.xml           # print one parsed return
+ *   npx tsx scripts/irs990-ingest.ts --refresh-latest                       # recompute is_latest for the whole table (migration 0012 backfill)
  *
  * Needs DATABASE_URL (a Neon *direct* or pooled Postgres URL works; `pg` driver).
  * GitHub Actions passes it from the IRS990_DATABASE_URL repository secret.
@@ -21,6 +22,7 @@ import {
   listIndexBatches,
   loadBatch,
   loadNewBatches,
+  refreshLatestAll,
 } from "../lib/irs990/ingest";
 import type { IndexBatch } from "../lib/irs990/ingest";
 import { parseReturnXml } from "../lib/irs990/parse";
@@ -36,6 +38,13 @@ async function main() {
   if (parseFile) {
     const r = parseReturnXml(readFileSync(parseFile, "utf8"));
     console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+
+  if (has("refresh-latest")) {
+    const started = Date.now();
+    const r = await refreshLatestAll();
+    console.log(JSON.stringify({ ...r, seconds: Math.round((Date.now() - started) / 1000) }));
     return;
   }
 

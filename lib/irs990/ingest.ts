@@ -247,6 +247,58 @@ async function flushBatch(
 }
 
 // ---------------------------------------------------------------------------
+// is_latest maintenance (migration 0012)
+// ---------------------------------------------------------------------------
+//
+// irs990_latest_filings is `SELECT * FROM irs990_filings WHERE is_latest`.
+// The flag means "newest return we hold for this EIN" (latest tax period,
+// then latest return timestamp). It is recomputed here, never by trigger, so
+// the multi-row upserts above stay cheap.
+
+const LATEST_EIN_CHUNK = 5000;
+
+/** Re-flag is_latest for the given EINs only (what a batch just touched). */
+export async function refreshLatestForEins(pool: Pool, eins: Iterable<string>): Promise<number> {
+  const all = [...new Set(eins)];
+  let changed = 0;
+  for (let i = 0; i < all.length; i += LATEST_EIN_CHUNK) {
+    const chunk = all.slice(i, i + LATEST_EIN_CHUNK);
+    const r = await pool.query(
+      `UPDATE irs990_filings f SET is_latest = (f.object_id = w.object_id)
+       FROM (
+         SELECT DISTINCT ON (ein) ein, object_id
+         FROM irs990_filings
+         WHERE ein = ANY($1::text[])
+         ORDER BY ein, tax_period_end DESC NULLS LAST, return_ts DESC NULLS LAST
+       ) w
+       WHERE f.ein = w.ein
+         AND f.is_latest IS DISTINCT FROM (f.object_id = w.object_id)`,
+      [chunk]
+    );
+    changed += r.rowCount ?? 0;
+  }
+  return changed;
+}
+
+/**
+ * Recompute is_latest for the whole table (first-time backfill, or repair
+ * after a hand edit). Two statements: clear flags that should be off, set
+ * flags that should be on. Both are no-ops when the table is already right.
+ */
+export async function refreshLatestAll(opts: LoaderOptions = {}): Promise<{ cleared: number; flagged: number }> {
+  const pool = makePool(opts.databaseUrl);
+  try {
+    const winners = `SELECT DISTINCT ON (ein) object_id FROM irs990_filings
+                     ORDER BY ein, tax_period_end DESC NULLS LAST, return_ts DESC NULLS LAST`;
+    const c = await pool.query(`UPDATE irs990_filings SET is_latest = FALSE WHERE is_latest AND object_id NOT IN (${winners})`);
+    const f = await pool.query(`UPDATE irs990_filings SET is_latest = TRUE WHERE NOT is_latest AND object_id IN (${winners})`);
+    return { cleared: c.rowCount ?? 0, flagged: f.rowCount ?? 0 };
+  } finally {
+    await pool.end();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // batch loader
 // ---------------------------------------------------------------------------
 
@@ -257,6 +309,7 @@ export async function loadBatch(batch: IndexBatch, opts: LoaderOptions = {}): Pr
   const runner = opts.runner ?? (process.env.GITHUB_RUN_ID ? `github-actions:${process.env.GITHUB_RUN_ID}` : "local");
   const errors: Array<{ entry: string; error: string }> = [];
   let filesTotal = 0, filingsLoaded = 0, filingsSkipped = 0, personsLoaded = 0, parseErrors = 0, bytes = 0;
+  const touchedEins = new Set<string>();
 
   await pool.query(
     `INSERT INTO irs990_batches (batch_id, index_year, url, status, started_at, finished_at, runner,
@@ -314,6 +367,7 @@ export async function loadBatch(batch: IndexBatch, opts: LoaderOptions = {}): Pr
         continue;
       }
       pending.push({ objectId, filing: r.filing });
+      touchedEins.add(r.filing.ein);
       if (pending.length >= FLUSH_EVERY) {
         const f = await flushBatch(pool, batch.batchId, pending);
         filingsLoaded += f.filings;
@@ -328,6 +382,13 @@ export async function loadBatch(batch: IndexBatch, opts: LoaderOptions = {}): Pr
     const f = await flushBatch(pool, batch.batchId, pending);
     filingsLoaded += f.filings;
     personsLoaded += f.persons;
+
+    // Keep irs990_latest_filings (WHERE is_latest) correct for every EIN this
+    // batch touched. A new return for an EIN we already held flips the flag
+    // from the older row to the newer one; an amended return with the same
+    // period wins on return_ts.
+    const reflagged = await refreshLatestForEins(pool, touchedEins);
+    log(`${batch.batchId}: is_latest refreshed for ${touchedEins.size} EINs (${reflagged} rows changed)`);
 
     await pool.query(
       `UPDATE irs990_batches SET status='ok', finished_at=NOW(), files_total=$2, filings_loaded=$3, filings_skipped=$4,
