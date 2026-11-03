@@ -91,6 +91,16 @@
     "api/admin/np-drafts.ts": {
       "maxDuration": 300
     },
+    "api/cron/lawyer-engine.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/lawyer-draft-now.ts": {
+      "maxDuration": 300
+    },
+    "api/lawyer-status.ts": {
+      "maxDuration": 30
+    },
     "api/np-draft-now.ts": {
       "maxDuration": 300
     }
@@ -151,6 +161,14 @@
     {
       "path": "/api/cron/nonprofit-engine?program=ryan",
       "schedule": "25 1 * * *"
+    },
+    {
+      "path": "/api/cron/lawyer-engine",
+      "schedule": "5 1 * * *"
+    },
+    {
+      "path": "/api/cron/lawyer-engine",
+      "schedule": "5 2 * * *"
     },
     {
       "path": "/api/cron/ingest-parcels",
