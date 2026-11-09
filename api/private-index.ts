@@ -10,8 +10,9 @@
  *        parameter VistaBuilder needs. 404 when nothing is loaded yet —
  *        never an empty 200 that a consumer could mistake for "zero".
  *   GET  /api/private-index            -> list of loaded index ids + counts
+ *   DELETE /api/private-index?id=X[&period=2026Q3]  (same write auth) -> remove one period or the whole index
  *
- *   POST /api/private-index            (ACCESS_TOKEN / Bearer — Randall, scripts, Matt)
+ *   POST /api/private-index            (Bearer ACCESS_TOKEN or Bearer CRON_SECRET — Randall, scripts, Matt)
  *        Body (JSON): { "id": "ncreif-timberland", "source": "NCREIF NTI 3Q2026 release",
  *                       "rows": [ { "period": "2026Q3", "total": 0.0123,
  *                                   "income": 0.0061, "appreciation": 0.0062 }, ... ] }
@@ -28,6 +29,22 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { neon } from "@neondatabase/serverless";
 import { requireAccess } from "../lib/auth";
+
+/**
+ * Write auth: ACCESS_TOKEN (the standing automation credential) OR
+ * Authorization: Bearer CRON_SECRET (the admin/migration credential Matt
+ * already holds — added 2026-11-09 so the quarterly upload needs no second
+ * secret). Deliberately NOT requireCron(): that helper also accepts a bare
+ * x-vercel-cron header, which must never unlock a write.
+ */
+function requireWrite(req: VercelRequest): { ok: true } | { ok: false; reason: string } {
+  const a = requireAccess(req);
+  if (a.ok) return a;
+  const cron = process.env.CRON_SECRET;
+  const auth = req.headers.authorization;
+  if (cron && auth === `Bearer ${cron}`) return { ok: true };
+  return { ok: false, reason: "Missing or invalid credential: send ACCESS_TOKEN header or Authorization: Bearer <ACCESS_TOKEN | CRON_SECRET>" };
+}
 
 function allowOrigin(origin: string | undefined): string | null {
   if (!origin) return null;
@@ -125,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Vary", "Origin");
   }
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ACCESS_TOKEN, access_token");
     res.setHeader("Access-Control-Max-Age", "86400");
     res.status(204).end();
@@ -212,8 +229,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    if (req.method === "DELETE") {
+      const auth = requireWrite(req);
+      if (!auth.ok) {
+        res.status(401).json({ error: auth.reason });
+        return;
+      }
+      const id = String(Array.isArray(req.query.id) ? req.query.id[0] : req.query.id ?? "").toLowerCase();
+      if (!ID_RE.test(id)) {
+        res.status(400).json({ error: "DELETE requires ?id=<slug>" });
+        return;
+      }
+      const periodRaw = Array.isArray(req.query.period) ? req.query.period[0] : req.query.period;
+      if (periodRaw) {
+        const p = normPeriod(String(periodRaw));
+        if (!p) {
+          res.status(400).json({ error: `bad period '${periodRaw}'` });
+          return;
+        }
+        const r = (await sql`DELETE FROM private_index_obs WHERE index_id = ${id} AND period = ${p} RETURNING period`) as any[];
+        res.status(200).json({ ok: true, indexId: id, deleted: r.length, period: p });
+        return;
+      }
+      const r = (await sql`DELETE FROM private_index_obs WHERE index_id = ${id} RETURNING period`) as any[];
+      res.status(200).json({ ok: true, indexId: id, deleted: r.length });
+      return;
+    }
+
     if (req.method === "POST") {
-      const auth = requireAccess(req);
+      const auth = requireWrite(req);
       if (!auth.ok) {
         res.status(401).json({ error: auth.reason });
         return;
@@ -300,7 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    res.status(405).json({ error: "GET or POST" });
+    res.status(405).json({ error: "GET, POST or DELETE" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Table missing -> migration 0013 not applied yet. Say so plainly.
