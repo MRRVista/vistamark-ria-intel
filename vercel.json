@@ -93,6 +93,15 @@
     },
     "api/np-draft-now.ts": {
       "maxDuration": 300
+    },
+    "api/farmland.ts": {
+      "maxDuration": 60
+    },
+    "api/timberland.ts": {
+      "maxDuration": 60
+    },
+    "api/private-index.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
