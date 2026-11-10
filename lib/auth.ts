@@ -1,14 +1,16 @@
 import type { VercelRequest } from "@vercel/node";
 import { verifySession, readCookie, SESSION_COOKIE } from "./session";
 
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN?.trim();
 const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
  * Validate the inbound request carries either:
  *   - ACCESS_TOKEN header (matching env var) — MCP client auth
- *   - Authorization: Bearer ACCESS_TOKEN — alt form
+ *   - Authorization: Bearer ACCESS_TOKEN — alt form (used by Claude custom connectors)
  *   - Standard Vercel cron header (for cron endpoints, validated separately)
+ * Values are trimmed and the Bearer scheme is matched case-insensitively so a
+ * stray space or newline from a pasted token doesn't cause a silent 401.
  */
 export function requireAccess(req: VercelRequest): { ok: true } | { ok: false; reason: string } {
   if (!ACCESS_TOKEN) {
@@ -17,13 +19,15 @@ export function requireAccess(req: VercelRequest): { ok: true } | { ok: false; r
     return { ok: false, reason: "Server is missing ACCESS_TOKEN env var" };
   }
 
-  const headerToken =
+  const rawHeader =
     (req.headers["access_token"] as string | undefined) ??
     (req.headers["access-token"] as string | undefined);
+  const headerToken = rawHeader?.trim();
   if (headerToken && headerToken === ACCESS_TOKEN) return { ok: true };
 
-  const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ") && auth.slice(7) === ACCESS_TOKEN) return { ok: true };
+  const auth = req.headers.authorization?.trim();
+  const bearer = auth?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearer && bearer === ACCESS_TOKEN) return { ok: true };
 
   return { ok: false, reason: "Missing or invalid ACCESS_TOKEN" };
 }
