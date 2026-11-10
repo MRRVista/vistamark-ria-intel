@@ -129,7 +129,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const result = await tool.handler(toolArgs);
           return res.status(200).json(rpcResult(id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            structuredContent: result,
+            // MCP structuredContent must be a JSON object; omit it for arrays/primitives.
+            ...(result && typeof result === "object" && !Array.isArray(result) ? { structuredContent: result } : {}),
             isError: false,
           }));
         } catch (err) {
