@@ -41,6 +41,7 @@ import { createDraft, postInternalNote, affinityOnList, sharedTieBacked } from "
 import { PROGRAM, LawyerProgram, LawyerCategory, LaneConfig, GeoBand, personaFactsBlock, ALWAYS_TAG, LAWYER_CATEGORIES } from "./programs";
 import { loadEffectiveLawyerProgram } from "./remote-config";
 import { lawyerDraftCategories } from "./draft-categories";
+import { crmLookup, conversationIdOf, threadState, createFollowUpDraft, followUpText } from "./followup";
 import { normalizeDirectOpening } from "../outreach/opening";
 import { dashRule, stripDashes, hasForbiddenDash } from "../outreach/dashes";
 
@@ -59,6 +60,8 @@ export interface LawyerEngineOptions {
   budgetMs?: number;
   dryRun?: boolean;
   actor?: string;
+  /** v0.41.0: run the follow-up pass first (default true; ad hoc chunks pass false). */
+  followUps?: boolean;
 }
 
 export interface Candidate {
@@ -125,7 +128,11 @@ export interface LawyerRunSummary {
   directiveDnum?: number | null;
   error?: string;
   config: { source: string; fetchedAt: string } | null;
+  /** v0.41.0: the follow-up pass, when it ran. */
+  followUps?: FollowUpSummary;
 }
+
+export interface FollowUpSummary { checked: number; drafted: number; replied: number; notSent: number; waiting: number; errors: string[] }
 
 // -- Model plumbing ------------------------------------------------------------
 
@@ -575,6 +582,8 @@ async function updateLead(id: number, fields: Record<string, unknown>): Promise<
     person_title: sql`person_title`, apollo_id: sql`apollo_id`, linkedin_url: sql`linkedin_url`, headline: sql`headline`,
     email: sql`email`, email_status: sql`email_status`, affinity: sql`affinity`, expert_witness: sql`expert_witness`,
     crm_contact_id: sql`crm_contact_id`, draft_subject: sql`draft_subject`, graph_message_id: sql`graph_message_id`, research: sql`research`,
+    conversation_id: sql`conversation_id`, sent_at: sql`sent_at`, replied_at: sql`replied_at`, followup_state: sql`followup_state`,
+    followup_at: sql`followup_at`, followup_message_id: sql`followup_message_id`, followup_checked_at: sql`followup_checked_at`,
   };
   for (const [k, v] of Object.entries(fields)) {
     if (!(k in map)) continue;
@@ -594,6 +603,78 @@ async function logEvent(leadId: number | null, kind: string, detail: string, met
 async function ardcIdClaimed(ardcId: string, exceptLeadId: number | null): Promise<boolean> {
   const r = rows<{ id: number }>(await db.execute(sql`SELECT id FROM lawyer_leads WHERE ardc_id = ${ardcId} AND id <> ${exceptLeadId ?? -1} LIMIT 1`));
   return r.length > 0;
+}
+
+// -- v0.41.0: schema for the follow-up columns (same statements as migration 0015) ---------
+
+let schemaReady = false;
+export async function ensureLawyerSchema(): Promise<void> {
+  if (schemaReady) return;
+  await db.execute(sql`ALTER TABLE lawyer_leads
+    ADD COLUMN IF NOT EXISTS conversation_id TEXT, ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP, ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS followup_state VARCHAR(24), ADD COLUMN IF NOT EXISTS followup_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS followup_message_id TEXT, ADD COLUMN IF NOT EXISTS followup_checked_at TIMESTAMP`);
+  schemaReady = true;
+}
+
+// -- v0.41.0: one draft per firm inside the card's spacing window ----------------------------
+
+async function recentlyDraftedFirms(days: number): Promise<Set<string>> {
+  if (days <= 0) return new Set();
+  const r = rows<{ firm_norm: string }>(await db.execute(sql`
+    SELECT DISTINCT firm_norm FROM lawyer_leads
+    WHERE draft_subject IS NOT NULL AND firm_norm IS NOT NULL AND firm_norm <> '' AND created_at > NOW() - make_interval(days => ${days})`));
+  return new Set(r.map((x) => x.firm_norm));
+}
+
+// -- v0.41.0: the follow-up pass -------------------------------------------------------------
+// A lead whose note the partner SENT and nobody answered gets ONE reply draft
+// in the same thread, followUpDays after the send. A thread that was answered
+// is marked replied (VistaRandall's reply watch does the Teams ping). A draft
+// that was never sent is left alone and given up on after GIVE_UP_DAYS.
+
+const FOLLOWUP_BATCH = 8;
+const GIVE_UP_DAYS = 75;
+
+export async function runLawyerFollowUps(mailbox: string, senderFirst: string, followUpDays: number, categories: string[], actor: string, deadline: number): Promise<FollowUpSummary> {
+  const out: FollowUpSummary = { checked: 0, drafted: 0, replied: 0, notSent: 0, waiting: 0, errors: [] };
+  const due = rows<{ id: number; first_name: string | null; person_name: string; conversation_id: string; created_at: string }>(await db.execute(sql`
+    SELECT id, first_name, person_name, conversation_id, created_at FROM lawyer_leads
+    WHERE status = 'drafted' AND conversation_id IS NOT NULL AND followup_state IS NULL
+      AND created_at < NOW() - make_interval(days => ${followUpDays})
+    ORDER BY COALESCE(followup_checked_at, created_at) ASC LIMIT ${FOLLOWUP_BATCH}`));
+  for (const l of due) {
+    if (Date.now() > deadline) break;
+    out.checked += 1;
+    try {
+      const t = await threadState(mailbox, l.conversation_id);
+      const ageDays = (Date.now() - new Date(l.created_at).getTime()) / 86_400_000;
+      if (t.reply) {
+        await updateLead(l.id, { followup_state: "replied", replied_at: t.reply.at, sent_at: t.sent ? t.sent.at : null, followup_checked_at: new Date().toISOString() });
+        await logEvent(l.id, "followup", `replied by ${t.reply.from}; no follow-up`, { reply: t.reply }, actor);
+        out.replied += 1; continue;
+      }
+      if (!t.sent) {
+        if (ageDays > GIVE_UP_DAYS) {
+          await updateLead(l.id, { followup_state: "not_sent", followup_checked_at: new Date().toISOString() });
+          await logEvent(l.id, "followup", `first note never sent after ${Math.round(ageDays)} days; closed`, {}, actor);
+          out.notSent += 1;
+        } else { await updateLead(l.id, { followup_checked_at: new Date().toISOString() }); out.waiting += 1; }
+        continue;
+      }
+      const sentAgeDays = (Date.now() - new Date(t.sent.at).getTime()) / 86_400_000;
+      if (sentAgeDays < followUpDays) { await updateLead(l.id, { sent_at: t.sent.at, followup_checked_at: new Date().toISOString() }); out.waiting += 1; continue; }
+      const text = followUpText(l.first_name || splitName(l.person_name).first, senderFirst);
+      const d = await createFollowUpDraft(mailbox, t.sent.id, text, categories);
+      await updateLead(l.id, { followup_state: "drafted", followup_at: new Date().toISOString(), followup_message_id: d.id, sent_at: t.sent.at, followup_checked_at: new Date().toISOString() });
+      await logEvent(l.id, "followup", `follow-up draft placed (${Math.round(sentAgeDays)} days after the send, no reply)`, { graphMessageId: d.id, graphWebLink: d.webLink, body: text, sentAt: t.sent.at }, actor);
+      out.drafted += 1;
+    } catch (err) {
+      out.errors.push(`${l.person_name}: ${String(err).slice(0, 180)}`);
+      try { await updateLead(l.id, { followup_checked_at: new Date().toISOString() }); } catch { /* next run retries */ }
+    }
+  }
+  return out;
 }
 
 // -- Orchestration -------------------------------------------------------------------------
@@ -629,10 +710,20 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
   }
 
   const p = eff.program;
+  if (!opts.dryRun) await ensureLawyerSchema();
+  let followUps: FollowUpSummary | undefined;
+  if (!opts.dryRun && opts.followUps !== false && eff.followUpDays > 0 && graphConfigured()) {
+    try {
+      followUps = await runLawyerFollowUps(p.mailbox, p.persona.senderName.split(/[\s,]+/)[0] || "Matt", eff.followUpDays,
+        lawyerDraftCategories(eff.directiveDnum, eff.label || "Lawyer COI Outreach", "reply"), actor, Math.min(deadline - 200_000, Date.now() + 45_000));
+      if (followUps.checked) console.log(`[lawyer-engine] follow-ups: ${JSON.stringify({ ...followUps, errors: followUps.errors.length })}`);
+    } catch (err) { followUps = { checked: 0, drafted: 0, replied: 0, notSent: 0, waiting: 0, errors: [String(err).slice(0, 200)] }; }
+  }
   const target = Math.max(1, Math.min(opts.target ?? eff.target, 15));
   const category = opts.category ?? eff.category;
   const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? Math.max(15, target * 4), 60));
-  const s = base({ target, category, maxBand: eff.maxBand, directiveDnum: eff.directiveDnum, config: { source: cfg.url, fetchedAt: cfg.fetchedAt } });
+  const s = base({ target, category, maxBand: eff.maxBand, directiveDnum: eff.directiveDnum, config: { source: cfg.url, fetchedAt: cfg.fetchedAt }, ...(followUps ? { followUps } : {}) });
+  if (followUps?.errors.length) s.warnings.push(`follow-up pass: ${followUps.errors.slice(0, 3).join(" | ")}`);
   if (!graphConfigured()) s.warnings.push("MS_GRAPH_* not set -- Outlook drafts cannot be created");
   if (!crmConfigured()) s.warnings.push("VISTACRM_BRIDGE_SECRET not set -- CRM lead creation skipped");
   const log = (m: string) => console.log(`[lawyer-engine] ${m}`);
@@ -641,12 +732,17 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
   // spreads its drafts (erisa, divorce, te, transaction, tax, erisa, ...).
   const lanes: LawyerCategory[] = category ? [category] : p.laneOrder.filter((l) => LAWYER_CATEGORIES.includes(l));
   const touched = await alreadyTouched();
+  // v0.41.0: a firm that got a draft inside the spacing window waits; its
+  // attorneys are not claimed, so they come back once the window has passed.
+  const busyFirms = await recentlyDraftedFirms(eff.firmSpacingDays);
+  const firmBusy = (c: Candidate) => { const f = normFirm(c.firm); return !!f && busyFirms.has(f); };
   const perLane = new Map<LawyerCategory, Candidate[]>();
   for (const lane of lanes) {
     if (remaining() < 120_000) { s.budgetExhausted = true; break; }
     const found = await discoverLane(p.lanes[lane], p, eff.maxBand, log);
-    const fresh = found.filter((c) => !touched.has(personKey(c.name, c.firm, null)) && !touched.has(`name:${normName(c.name)}`));
-    log(`${lane}: ${found.length} found, ${fresh.length} untouched`);
+    const untouched = found.filter((c) => !touched.has(personKey(c.name, c.firm, null)) && !touched.has(`name:${normName(c.name)}`));
+    const fresh = untouched.filter((c) => !firmBusy(c));
+    log(`${lane}: ${found.length} found, ${untouched.length} untouched, ${untouched.length - fresh.length} held for firm spacing`);
     perLane.set(lane, fresh);
   }
   const candidates: Candidate[] = [];
@@ -664,8 +760,19 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
   for (const c of candidates.slice(0, maxCandidates)) {
     if (s.drafted >= target) break;
     if (remaining() < 85_000) { s.budgetExhausted = true; break; }
-    s.examined += 1;
     const lane = p.lanes[c.category];
+    // v0.41.0: a second attorney at a firm drafted earlier in this run waits (not claimed).
+    if (eff.firmSpacingDays > 0 && firmBusy(c)) { s.skipped.push({ reason: "firm_spacing", person: c.name, firm: c.firm, lane: c.category }); continue; }
+    s.examined += 1;
+
+    // v0.41.0: already a VistaCRM contact -> never a cold introduction. Asked
+    // BEFORE the attorney is claimed; when the CRM cannot be asked the person
+    // is left unclaimed for a later run.
+    let known: Awaited<ReturnType<typeof crmLookup>> = null;
+    if (crmConfigured()) {
+      try { known = await crmLookup(c.firstName, c.lastName, c.email); }
+      catch (err) { s.skipped.push({ reason: "crm_unreachable", person: c.name, firm: c.firm, lane: c.category, error: String(err).slice(0, 200) }); continue; }
+    }
 
     const leadId = opts.dryRun ? null : await insertLead(p, c);
     if (!opts.dryRun && leadId == null) { s.skipped.push({ reason: "already_claimed", person: c.name, firm: c.firm, lane: c.category }); continue; }
@@ -678,6 +785,8 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
         await logEvent(leadId, "gate", `skipped: ${reason}`, meta, opts.actor ?? actor);
       }
     };
+
+    if (known) { await fail("already_in_crm", { crmId: known.crmId, crmName: known.name, matchedBy: known.matchedBy, roles: known.roles }); if (leadId != null) await updateLead(leadId, { crm_contact_id: known.crmId }); continue; }
 
     // verify (ARDC)
     let ardc: ArdcOut;
@@ -709,6 +818,13 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
     }
     if (!email) { await fail("no_email"); continue; }
     if (emailStatus === "guessed" && !ACCEPT_GUESSED) { await fail("apollo_email_guessed"); continue; }
+    // v0.41.0: the address may belong to a CRM contact filed under another spelling of the name.
+    if (crmConfigured() && email !== c.email) {
+      try {
+        const byEmail = await crmLookup(null, null, email);
+        if (byEmail) { await fail("already_in_crm", { crmId: byEmail.crmId, crmName: byEmail.name, matchedBy: "email", roles: byEmail.roles }); if (leadId != null) await updateLead(leadId, { crm_contact_id: byEmail.crmId }); continue; }
+      } catch (err) { s.warnings.push(`crm email check failed for ${c.name}: ${String(err).slice(0, 120)}`); }
+    }
     if (!opts.dryRun && leadId != null) await updateLead(leadId, { email, email_status: emailStatus, apollo_id: apolloId, linkedin_url: linkedinUrl, headline, person_title: title });
 
     // research
@@ -750,7 +866,9 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
         delivery, to: email, toName: c.name, mailbox: p.mailbox, subject: d.subject, body: d.body, briefing: note, briefingDelivery: noteState,
         emailStatus, graphMessageId: graph?.id ?? null, graphWebLink: graph?.webLink ?? null, model: MODEL, lane: c.category, band: c.band,
       }, actor);
-      await updateLead(leadId, { status: "drafted", draft_subject: d.subject, graph_message_id: graph?.id ?? null });
+      let conversationId: string | null = null;
+      if (graph?.id) { try { conversationId = await conversationIdOf(p.mailbox, graph.id); } catch (err) { s.warnings.push(`conversation id not read for ${c.name} (no follow-up will be drafted): ${String(err).slice(0, 120)}`); } }
+      await updateLead(leadId, { status: "drafted", draft_subject: d.subject, graph_message_id: graph?.id ?? null, conversation_id: conversationId });
     }
 
     // crm -- only after the draft exists
@@ -770,6 +888,7 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
     } else crmState = "dry_run";
 
     s.drafted += 1;
+    { const f = normFirm(c.firm); if (f && eff.firmSpacingDays > 0) busyFirms.add(f); }
     s.byLane[c.category] = (s.byLane[c.category] ?? 0) + 1;
     s.drafts.push({ leadId: lid, person: c.name, firm: c.firm, lane: c.category, band: c.band, email, emailStatus, subject: d.subject, delivery, crm: crmState });
   }

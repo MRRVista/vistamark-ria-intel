@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const target of chunks) {
         if (Date.now() - started > 280_000 - CHUNK_BUDGET_MS / 3) break;
         try {
-          const r = await runLawyerEngine({ target, category, maxCandidates: 40, budgetMs: Math.min(CHUNK_BUDGET_MS, 290_000 - (Date.now() - started)), actor });
+          const r = await runLawyerEngine({ target, category, maxCandidates: 40, followUps: false, budgetMs: Math.min(CHUNK_BUDGET_MS, 290_000 - (Date.now() - started)), actor });
           if (!r.ok) { errors.push(String(r.error || "run failed").slice(0, 300)); continue; }
           drafted += r.drafted; skipped += r.skipped.filter((x) => x.reason !== "already_claimed").length;
           if (r.candidatesExhausted) exhausted = true;

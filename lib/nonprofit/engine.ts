@@ -639,7 +639,7 @@ function graphConfigured(): boolean {
   return !!(process.env.MS_GRAPH_TENANT_ID && process.env.MS_GRAPH_CLIENT_ID && process.env.MS_GRAPH_CLIENT_SECRET);
 }
 
-async function graphToken(): Promise<string> {
+export async function graphToken(): Promise<string> {
   const body = new URLSearchParams({
     client_id: process.env.MS_GRAPH_CLIENT_ID!,
     client_secret: process.env.MS_GRAPH_CLIENT_SECRET!,
