@@ -7,7 +7,7 @@
  *            ContribHistory (contributions to growth, same layout), CurrentQtrEvolution (every nowcast
  *            this quarter, in 3 side-by-side Date/Major Releases/GDP* column blocks), Table (latest BEA
  *            estimates of previous quarters + nowcast by release).
- *   WGT      /-/media/Project/Atlanta/FRBA/Documents/datafiles/chcs/wage-growth-tracker/wage-growth-data.xlsx (~340KB)
+ *   WGT      /-/media/Project/Atlanta/FRBA/Documents/research-and-data/data/wage-growth-tracker/wage-growth-data.xlsx (~340KB; moved from datafiles/chcs/ in 2026-11)
  *            Sheet data_overall: row 2 headers (Overall, Job Stayer, Job Switcher, ...), 3mma of median wage growth.
  */
 import { HOUR, cached, clampInt, fetchBuffer, num, round } from "./common";
@@ -15,7 +15,7 @@ import { openXlsx, type Cell, type Grid, type XlsxBook } from "./xlsx";
 
 const ATL = "https://www.atlantafed.org/-/media/Project/Atlanta/FRBA/Documents";
 const GDPNOW_URL = `${ATL}/research-and-data/data/gdpnow/GDPTrackingModelDataAndForecasts.xlsx`;
-const WGT_URL = `${ATL}/datafiles/chcs/wage-growth-tracker/wage-growth-data.xlsx`;
+const WGT_URL = `${ATL}/research-and-data/data/wage-growth-tracker/wage-growth-data.xlsx`;
 
 const isDate = (c: Cell): c is string => typeof c === "string" && /^\d{4}-\d{2}-\d{2}$/.test(c);
 

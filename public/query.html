@@ -9,25 +9,27 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <style>
   :root {
-    --bg: #f8f7f5;
-    --bg-2: #ffffff;
-    --bg-3: #f1efe8;
-    --ink: #1a1a1a;
-    --ink-dim: #6b6b6b;
-    --ink-faint: #9a958c;
-    --rule: rgba(0,0,0,0.10);
-    --rule-mid: rgba(0,0,0,0.18);
-    --accent: #185FA5;
-    --accent-strong: #0C447C;
-    --accent-bg: #E6F1FB;
-    --green: #3B6D11;
-    --green-bg: #EAF3DE;
-    --red: #A32D2D;
-    --red-bg: #FCEBEB;
-    --purple: #534AB7;
-    --blue: #185FA5;
-    --gold: #185FA5;          /* legacy alias — accent */
-    --gold-bright: #0C447C;   /* legacy alias — accent strong */
+    /* VistaIntel dark/gold — same palette as console.html (was the light-blue v0.1x theme) */
+    color-scheme: dark;
+    --bg: #080B0F;
+    --bg-2: #101720;
+    --bg-3: #151D27;
+    --ink: #E4E7EA;
+    --ink-dim: #8794A1;
+    --ink-faint: #5A6672;
+    --rule: rgba(255,255,255,0.08);
+    --rule-mid: rgba(200,165,92,0.30);
+    --accent: #C8A55C;
+    --accent-strong: #E8D9AE;
+    --accent-bg: rgba(200,165,92,0.10);
+    --green: #6FBF95;
+    --green-bg: rgba(111,191,149,0.12);
+    --red: #D9705E;
+    --red-bg: rgba(217,112,94,0.12);
+    --purple: #A79FEA;
+    --blue: #6E8BA8;
+    --gold: #C8A55C;
+    --gold-bright: #E8D9AE;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
@@ -92,7 +94,7 @@
   .btn:disabled:hover { background: var(--bg-2); }
   .btn.ghost { border-color: var(--rule); color: var(--ink-dim); background: transparent; }
   .btn.ghost:hover { border-color: var(--rule-mid); color: var(--ink); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #080B0F; font-weight: 500; }
   .btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
   .auth-status { font-size: 12px; color: var(--ink-dim); margin-left: auto; }
   .auth-status .ok { color: var(--green); font-weight: 500; }

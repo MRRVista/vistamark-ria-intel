@@ -31,6 +31,8 @@ export default function handler(req: VercelRequest, res: VercelResponse): void {
   authorize.searchParams.set("scope", "openid profile email");
   authorize.searchParams.set("state", state);
   authorize.searchParams.set("prompt", "select_account");
-  authorize.searchParams.set("domain_hint", "vistamarkllc.com");
+  // vistamark.com has been the primary sign-in domain since 2026-10; vistamarkllc.com is
+  // a permanent alias in the same tenant and the callback canonicalizes either form.
+  authorize.searchParams.set("domain_hint", "vistamark.com");
   res.redirect(302, authorize.toString());
 }

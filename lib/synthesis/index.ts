@@ -25,7 +25,6 @@ import { marketRegimeBrief } from "./regime";
 import { PLAYBOOKS, DOCTRINE, renderPlaybookFull, renderDoctrine } from "./playbooks";
 
 export { PLAYBOOKS, DOCTRINE, renderDoctrine, renderPlaybookIndex, renderPlaybookFull } from "./playbooks";
-export { SIGNAL_WEIGHTS, wealthSignalScore } from "./core";
 
 export const SYNTHESIS_TOOLS: ToolDef[] = [
   {

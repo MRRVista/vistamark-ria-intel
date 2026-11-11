@@ -7,7 +7,7 @@
 import { politeFetch, redactUrl } from "../data/http";
 import { round } from "../research/common";
 
-export { cached, clampInt, round, toNum, HOUR } from "../research/common";
+export { cached, clampInt, round, HOUR } from "../research/common";
 
 /** Split one CSV line honouring double-quoted fields (Zillow quotes "Chicago, IL"). */
 export function splitCsv(line: string): string[] {

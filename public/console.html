@@ -271,7 +271,7 @@ summary:hover{color:var(--gold-hi)}
       <input type="text" id="filter" placeholder="Filter tools…" autocomplete="off">
     </div>
     <div class="navscroll" id="nav"><div class="empty-state"><span class="spin"></span></div></div>
-    <div class="railstamp"><em>V</em>0.18 &middot; VistaIntel&trade;</div>
+    <div class="railstamp"><em>V</em><span data-ver></span> &middot; VistaIntel&trade;</div>
   </aside>
 
   <main>
@@ -280,9 +280,9 @@ summary:hover{color:var(--gold-hi)}
       <div id="toolView">
         <div class="eyebrow">Data Domain Explorer</div>
         <h2 class="display">Vista<br>of <em>Intelligence.</em></h2>
-        <p class="lede">64 tools across 17 data domains — SEC Form ADV, EDGAR, IRS EO, DOL Form 5500,
+        <p class="lede"><span id="ledeCounts">Every tool, grouped by data domain</span> — SEC Form ADV, EDGAR, IRS EO, DOL Form 5500,
           IPEDS endowments, FDIC, OFR, GLEIF, Treasury and FRED. Select a domain on the left to begin.</p>
-        <div class="stamp"><em>V</em>0.18 BUILD &middot; 08.19.2026</div>
+        <div class="stamp"><em>V</em><span data-ver></span> &middot; VistaIntel&trade;</div>
       </div>
     </section>
 
@@ -358,13 +358,13 @@ summary:hover{color:var(--gold-hi)}
         <div id="pipeBox" class="meta">Loading…</div>
       </div>
       <details>
-        <summary>Run full selftest — 36 live checks, ~8s</summary>
+        <summary>Run full selftest — a live check on every data family (can take up to a minute)</summary>
         <div style="margin-top:14px">
           <button class="go ghost" id="stBtn">Run selftest</button>
           <div id="stOut"></div>
         </div>
       </details>
-      <div class="stamp"><em>V</em>0.18 BUILD &middot; 08.19.2026 &middot; Vistamark Investments LLC</div>
+      <div class="stamp"><em>V</em><span data-ver></span> &middot; Vistamark Investments LLC</div>
     </section>
   </main>
 </div>
@@ -468,6 +468,13 @@ function renderNav(){
 
   document.getElementById("pillTools").textContent=CAT.counts.tools+" tools";
   document.getElementById("pillDomains").textContent=CAT.counts.domains+" domains";
+  /* Counts and version come from /api/catalog, never from text typed into this page. */
+  var lc=document.getElementById("ledeCounts");
+  if(lc) lc.textContent=CAT.counts.tools+" tools across "+CAT.counts.domains+" data domains";
+  if(CAT.version){
+    var vs=document.querySelectorAll("[data-ver]");
+    for(var vi=0;vi<vs.length;vi++) vs[vi].textContent=CAT.version;
+  }
   var dbp=document.getElementById("pillDb");
   if(CAT.health&&CAT.health.ok){
     dbp.textContent="db "+(CAT.health.dbReady?"ready":"down")+" · "+fmt(CAT.health.firmCount)+" firms";

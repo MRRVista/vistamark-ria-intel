@@ -1,11 +1,23 @@
 /**
- * Shared migration runner. Used by:
- *   - api/admin/migrate.ts        (manual trigger, Bearer CRON_SECRET)
- *   - api/cron/refresh-ipeds.ts   (auto-bootstrap when v0.4.0 tables missing)
- *   - api/cron/refresh-nacubo.ts  (same)
+ * The one migration runner. Used by:
+ *   - api/admin/migrate.ts          (manual trigger, Bearer CRON_SECRET)
+ *   - api/admin/bootstrap-once.ts
+ *   - api/cron/refresh-ipeds.ts, refresh-nacubo.ts, prospect-engine.ts,
+ *     nonprofit-engine.ts           (auto-bootstrap when their tables are missing)
+ *   - scripts/migrate.ts            (local + the GitHub Actions data loaders)
  *
- * Idempotent: statements failing with "already exists" or "duplicate" are
- * silently skipped, so re-running is safe.
+ * Ledger (v0.39): each file that applies cleanly is recorded in
+ * schema_migrations and never replayed. Before the ledger every call re-ran
+ * all files and leaned on every statement being idempotent — true so far, but
+ * it meant a single UPDATE or DROP in a future migration would fire on every
+ * cron bootstrap. The first run against an existing database replays the
+ * (idempotent) history once and records it; from then on only new files run.
+ *
+ * Within a file, statements failing with "already exists" or "duplicate" are
+ * still skipped, so a file interrupted halfway can simply be run again.
+ *
+ * DATABASE_DRIVER=pg runs the same thing over node-postgres (local / tests);
+ * the default is Neon's HTTP driver, as in lib/db.
  */
 
 import { readFileSync, readdirSync } from "fs";
@@ -36,7 +48,36 @@ export interface MigrationFileResult {
   file: string;
   statements: number;
   skipped: number;
+  /** True when the ledger already had this file and nothing was executed. */
+  alreadyApplied?: boolean;
 }
+
+type Exec = (text: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
+
+async function connect(url: string): Promise<{ exec: Exec; close: () => Promise<void> }> {
+  if (process.env.DATABASE_DRIVER === "pg") {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Client } = require("pg") as typeof import("pg");
+    const client = new Client({ connectionString: url });
+    await client.connect();
+    return {
+      exec: async (text, params) => (await client.query(text, params as any[])).rows,
+      close: () => client.end(),
+    };
+  }
+  const sql = neon(url);
+  return {
+    exec: async (text, params) => (await sql(text, (params ?? []) as any[])) as Array<Record<string, unknown>>,
+    close: async () => {},
+  };
+}
+
+const LEDGER_DDL = `CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename   TEXT PRIMARY KEY,
+  applied_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  statements INTEGER NOT NULL DEFAULT 0,
+  skipped    INTEGER NOT NULL DEFAULT 0
+)`;
 
 export type MigrationRunSummary =
   | { ok: true; dir: string; applied: MigrationFileResult[] }
@@ -54,11 +95,19 @@ export async function runMigrations(): Promise<MigrationRunSummary> {
     };
   }
 
-  const sql = neon(url);
   const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
   const applied: MigrationFileResult[] = [];
+  const { exec, close } = await connect(url);
+
+  try {
+    await exec(LEDGER_DDL);
+    const done = new Set((await exec("SELECT filename FROM schema_migrations")).map((r) => String(r.filename)));
 
   for (const file of files) {
+    if (done.has(file)) {
+      applied.push({ file, statements: 0, skipped: 0, alreadyApplied: true });
+      continue;
+    }
     const content = readFileSync(join(dir, file), "utf-8");
     const statements = content
       .split(/-->\s*statement-breakpoint/i)
@@ -75,7 +124,7 @@ export async function runMigrations(): Promise<MigrationRunSummary> {
     let skipped = 0;
     for (const stmt of statements) {
       try {
-        await sql(stmt);
+        await exec(stmt);
         ran++;
       } catch (err: any) {
         if (/already exists|duplicate/i.test(err?.message ?? "")) {
@@ -90,10 +139,17 @@ export async function runMigrations(): Promise<MigrationRunSummary> {
         };
       }
     }
+    await exec(
+      "INSERT INTO schema_migrations (filename, statements, skipped) VALUES ($1, $2, $3) ON CONFLICT (filename) DO NOTHING",
+      [file, ran, skipped]
+    );
     applied.push({ file, statements: ran, skipped });
   }
 
   return { ok: true, dir, applied };
+  } finally {
+    await close().catch(() => {});
+  }
 }
 
 /**

@@ -86,7 +86,7 @@ A unified intelligence layer for RIA prospecting, nonprofit/endowment research, 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /api/mcp` | `ACCESS_TOKEN` header | MCP JSON-RPC (initialize, tools/list, tools/call) |
-| `GET /api/selftest` | none | Read-only diagnostic battery (113 checks; the keyed EIA/Census/Scorecard/HUD probes fail fast until their keys land). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms). Gate or remove after validation. |
+| `GET /api/selftest` | none | Read-only diagnostic battery (122 checks as of v0.39, run 10 at a time; the keyed EIA/Census/Scorecard/HUD probes fail fast until their keys land). `?only=` substring filter, `?t=` per-check timeout (1000–9000ms), `?c=` checks in flight (1–24, default 10). Gate or remove after validation. |
 | `GET /api/market-brief` | none | The morning composite, served for the vistamark-m365 pre-market digest cron. Aggregated public macro data only — same exposure posture as selftest. |
 | `GET/POST /api/prospects` | `ACCESS_TOKEN` or Entra session | Prospect database: search/filter, CSV download, VistaCRM feed (`?format=crm`), and intake — JSON records, inline CSV, raw CSV/TSV/XLSX body, or multipart file upload. |
 | `GET/POST /api/ask` | `ACCESS_TOKEN` or Entra session | "Ask Randall" natural-language layer: a server-side tool loop over the MCP tools plus hosted **web search** (Anthropic `web_search` / OpenRouter `web` plugin) and an Ask-only `export_excel` tool that returns a real .xlsx as a download. `GET` is the capability probe and the **model roster** (Anthropic lineup + live OpenRouter catalog); `POST { question, provider?, model?, webSearch?, domains?, maxRounds?, history? }`. Any model id is accepted; Mythos-class primaries fail over to the Opus line on 429/5xx. |
@@ -153,7 +153,10 @@ DATABASE_URL=... npx tsx scripts/irs990-ingest.ts --years 2025,2026   # diff-loa
 | `refresh-ipeds` | daily 06:00 | IPEDS freshness check |
 | `refresh-nacubo` | Feb 15 yearly | Annual NACUBO study refresh |
 | `prospect-engine` | daily 00:00 & 01:00 (runs only at 7 PM Chicago) | 3 researched, personalized outreach drafts → Outlook Drafts |
-| `refresh-13f` | quarterly (1st, 08:00) | **Stub** — returns 200, no-op; real 13F loads are manual admin ingests |
+| `nonprofit-engine` | daily 00:05/01:05 (matt) and 00:25/01:25 (ryan); runs only at 7 PM Chicago | Nonprofit outreach drafts into each partner's own Outlook Drafts |
+| `refresh-dol-sch-h` | daily 05:40 (freshness-guarded to weekly) | Schedule H/I plan financials |
+| `ingest-parcels` | 3rd of month 07:00 | DuPage + Cook parcel rolls → prospects |
+| `Data loads` (GitHub Actions, not Vercel) | manual / scheduled in the workflow | PPP, 13F, Schedule H/I and IRS 990 bulk loads over pg. There is no Vercel cron for 13F (the no-op `refresh-13f` stub was removed in v0.39) |
 | `IRS 990 ingest` (GitHub Actions, not Vercel) | 8th 08:10 | Diff-loads new IRS TEOS 990 XML batches → `irs990_filings` / `irs990_persons`; writes `irs-990/<batch>` rows to `ingest_runs` |
 
 `database_status` reports per-pipeline health: each ingest family's latest run, errors sorted first with redacted error messages — a failing scheduled ingest surfaces there instead of failing silently. A family absent from `pipelineHealth` has never created a run record, meaning its handler is not being reached.

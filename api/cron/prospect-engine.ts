@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireCron } from "../../lib/auth";
+import { requireCron, isVercelCronRequest } from "../../lib/auth";
 import { runMigrations } from "../../lib/migrate";
 import { db, isDbReady, schema } from "../../lib/db";
 import { runProspectEngine } from "../../lib/prospects/engine";
@@ -36,7 +36,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cron = requireCron(req);
   if (!cron.ok) { res.status(401).json({ error: cron.reason }); return; }
 
-  const isVercelCron = !!req.headers["x-vercel-cron"];
+  // Same detection the nonprofit engine has used since v0.30.1. Header-only
+  // detection made every scheduled call look manual, which bypassed both
+  // PROSPECT_ENGINE_ENABLED and the 19:00 Chicago gate below.
+  const isVercelCron = isVercelCronRequest(req);
   const q = req.query as Record<string, string | undefined>;
   const force = q.force === "1" || !isVercelCron;
 

@@ -1,13 +1,41 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAccess } from "../lib/auth";
 import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
+import { DOMAINS } from "../lib/mcp/catalog";
+import { VERSION } from "../lib/version";
 
 const SERVER_INFO = {
   name: "vistamark-ria-intel",
-  version: "0.17.1",
+  version: VERSION,
 };
 
-const PROTOCOL_VERSION = "2024-11-05";
+/**
+ * initialize.instructions, built from the catalog so it cannot fall behind the
+ * registry (the hand-written paragraph it replaces still described the 64
+ * tools of v0.17 when the server exposed 234). It names each data domain and
+ * its tool count; per-tool detail is in tools/list.
+ */
+const INSTRUCTIONS =
+  `Vistamark Intel v${VERSION} \u2014 ${TOOLS.length} tools across ${DOMAINS.length} data domains: RIA / nonprofit / ` +
+  "endowment / retirement-plan / public-pension prospecting, filings and people, markets and macro, local wealth " +
+  "signals, and the first-party prospect database. Start broad questions with the synthesis composites " +
+  "(prospect_360, org_360, liquidity_event_radar, relationship_graph, market_regime_brief); morning_market_brief " +
+  "is the one-call pre-market composite; database_status reports ingest freshness for the Postgres-backed " +
+  "sources. Tools marked as writing or spending credits in their description (prospects_*, apollo_* enrich) " +
+  "change data or cost money \u2014 read the description first. Domains: " +
+  DOMAINS.map((d) => `${d.label} (${d.tools.length})`).join(", ") +
+  ". tools/list carries every tool's name, description and input schema.";
+
+// Newest first. initialize echoes the client's version when we support it,
+// otherwise offers our newest (MCP version negotiation).
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+const PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
+
+function negotiateProtocolVersion(requested: unknown): string {
+  return typeof requested === "string" && SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+    ? requested
+    : PROTOCOL_VERSION;
+}
 
 const SERVER_CAPABILITIES = {
   tools: {},
@@ -34,24 +62,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, ACCESS_TOKEN, access_token, MCP-Protocol-Version"
+    "Content-Type, Authorization, ACCESS_TOKEN, access_token, MCP-Protocol-Version, Mcp-Session-Id"
   );
 
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
   if (req.method === "GET") {
+    // Streamable HTTP: a client opening the server->client SSE stream sends
+    // Accept: text/event-stream. We don't offer one, and the spec requires 405
+    // in that case (a 200 JSON body makes Claude reject the server).
+    const accept = String(req.headers.accept ?? "");
+    if (accept.includes("text/event-stream")) {
+      res.setHeader("Allow", "POST, OPTIONS");
+      res.status(405).json(rpcError(null, -32600, "Server-initiated SSE stream not supported; use POST"));
+      return;
+    }
     res.status(200).json({
       name: SERVER_INFO.name,
       version: SERVER_INFO.version,
       protocol: PROTOCOL_VERSION,
       transport: "streamable-http",
       tools: TOOLS.map((t) => t.name),
-      note: "POST JSON-RPC 2.0 requests with an ACCESS_TOKEN header. See README for connection instructions.",
+      note: "POST JSON-RPC 2.0 requests with an ACCESS_TOKEN header or Authorization: Bearer <ACCESS_TOKEN>. See README for connection instructions.",
     });
     return;
   }
 
   if (req.method !== "POST") {
+    res.setHeader("Allow", "GET, POST, OPTIONS");
     res.status(405).json(rpcError(null, -32600, "Method not allowed"));
     return;
   }
@@ -75,21 +113,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // JSON-RPC notifications carry no id and get no response body: 202 Accepted.
+  if (body.id === undefined || body.method.startsWith("notifications/")) {
+    res.status(202).end();
+    return;
+  }
+
   const { id = null, method, params = {} } = body;
 
   try {
     switch (method) {
       case "initialize":
         return res.status(200).json(rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
+          protocolVersion: negotiateProtocolVersion(params?.protocolVersion),
           capabilities: SERVER_CAPABILITIES,
           serverInfo: SERVER_INFO,
-          instructions: "Vistamark Intel — query SEC RIAs (Form ADV), tax-exempt orgs (IRS BMF + ProPublica 990s), ERISA retirement plans (DOL Form 5500), U.S. higher-ed endowments (IPEDS Finance Survey Part H), NACUBO public benchmarks, SBA PPP loans, USAspending federal awards, SEC Form 13F institutional holdings, FDIC-insured banks, OFR systemic-risk/funding data, SEC EDGAR public-company intelligence (incl. full-text search, Form D exempt offerings, and cross-market XBRL frames), GLEIF LEI entity resolution and corporate family trees, listed Business Development Companies (BDCs, EDGAR-backed), U.S. state & local public pension plans (Public Plans Database), and macro/rate data (FRED, Treasury) including a curated MACRO MARKET-SIGNALS layer, the Daily Treasury Statement, and a one-call MORNING MARKET BRIEF. RIA tools: search_rias, get_ria_profile, find_alumni, get_aum_history, firms_using_custodian, top_rias_by. Nonprofit tools: irs_eo_search, irs_eo_lookup, propublica_org_search, propublica_org_990. Retirement plan tools: dol_plan_search, dol_plan_lookup. Endowment tools: endowment_search, endowment_lookup, endowment_peer_set, endowment_percentile_rank, endowment_growth_history, endowment_decade_comparison (~6,400 Title IV institutions, FY2003-04 to FY2022-23). NACUBO tools: nacubo_benchmark_lookup (FY2020-FY2025 public aggregates). PPP tools: ppp_search, ppp_lookup (SBA Paycheck Protection Program FOIA loan-level data). USAspending tools: usaspending_awards_search (award-level federal grants/contracts/loans/direct payments; obligations in whole USD; default 3-year window), usaspending_top_recipients (aggregated top recipients by state/type/period — pairs with irs_eo_search for nonprofit prospecting). 13F tools: holdings_by_manager, holders_of_security (ingested managers only; 13(f) securities over the $100M threshold). FDIC tools: fdic_bank_search, fdic_bank_financials, fdic_failed_banks (BankFind Suite API, live). OFR tools: ofr_financial_stress_index (daily systemic-stress gauge), ofr_series_search, ofr_series (repo, MMF, commercial paper). EDGAR tools: edgar_company_lookup, edgar_company_filings, edgar_financial_concept (XBRL time series with freshness-aware tag fallback), edgar_concept_frame (rank ALL SEC filers by one concept for one period — duration vs instantaneous frame mismatches retried automatically), edgar_fulltext_search (text search across ALL filings 2001+; date-bounded it doubles as a near-real-time filing monitor), formd_search (Form D / Reg D exempt-offering lens — who's raising; velocity doubles as a private-market risk-appetite gauge). GLEIF tools: gleif_entity_search (any legal entity worldwide to its LEI; legal-name matches ranked first), gleif_entity_profile (LEI record + accounting-consolidation parents and children — corporate family trees). BDC tools: bdc_list, bdc_profile, bdc_screen (curated BIZD-style universe on live EDGAR XBRL — the listed private-credit vehicles). Public pension tools: ppd_plan_search, ppd_plan_profile, ppd_list_variables (Public Plans Database, live — the ~230 largest state/local plans; ERISA-exempt so NOT in DOL 5500). Macro tools: morning_market_brief (THE one-call pre-market composite — signals board + net liquidity + daily TGA + withheld-tax payroll tape + full curve + OFR FSI, with briefMarkdown ready for the morning note; also served unauthenticated at GET /api/market-brief for cron consumption), macro_market_signals (22 indicators across curve/credit/liquidity/growth/inflation/sentiment pillars with inversion flags, Sahm trigger, HY OAS stress tiers, VIX regimes, and computed Fed NET LIQUIDITY = WALCL − RRP − TGA; firing signals roll into highlights; indicators not predictions), fred_batch_latest (latest + 1m/3m priors for any list of up to 15 FRED series), fred_series_search, fred_get_series, fred_yield_curve, treasury_avg_rates, treasury_debt_outstanding, treasury_daily_cash (daily TGA balance from the Daily Treasury Statement — the daily liquidity read), treasury_daily_flows (daily deposits/withdrawals by category incl. the withheld individual/FICA tax deposits that track payrolls with ~1-day lag; negated 'Non Withheld' categories are excluded from the default focus). database_status reports ingest freshness and per-pipeline failure visibility (pipelineHealth — each ingest family's latest run, errors first) across DB-backed sources (FDIC/OFR/EDGAR/GLEIF/BDC/PPD/USAspending/Treasury-DTS/macro-signals/morning-brief are live-API and not tracked there).",
+          instructions: INSTRUCTIONS,
         }));
-
-      case "notifications/initialized":
-      case "initialized":
-        return res.status(204).end();
 
       case "ping":
         return res.status(200).json(rpcResult(id, {}));
@@ -108,7 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const result = await tool.handler(toolArgs);
           return res.status(200).json(rpcResult(id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            structuredContent: result,
+            // MCP structuredContent must be a JSON object; omit it for arrays/primitives.
+            ...(result && typeof result === "object" && !Array.isArray(result) ? { structuredContent: result } : {}),
             isError: false,
           }));
         } catch (err) {

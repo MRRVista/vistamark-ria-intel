@@ -185,16 +185,6 @@ export function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
 }
 
-/** Trim a row to a handful of fields for compact output. */
-export function compactRow(row: any, keys: string[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const k of keys) {
-    const v = pick(row, k);
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
-}
-
 /* ---------------------------- evidence & scoring --------------------------- */
 
 export interface Evidence {

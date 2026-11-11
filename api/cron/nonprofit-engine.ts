@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireCron } from "../../lib/auth";
+import { requireCron, isVercelCronRequest } from "../../lib/auth";
 import { runMigrations } from "../../lib/migrate";
 import { db, isDbReady } from "../../lib/db";
 import { sql } from "drizzle-orm";
@@ -12,7 +12,7 @@ import { runNonprofitEngine } from "../../lib/nonprofit/engine";
  * Vercel crons are UTC and can't express a local time across DST, so
  * vercel.json fires each program at BOTH 00:xx and 01:xx UTC and the handler
  * runs only when it is actually 19:00 in America/Chicago. The programs are
- * staggered (:00 matt, :20 ryan) so each invocation only carries one
+ * staggered (:05 matt, :25 ryan) so each invocation only carries one
  * program's three research+draft cycles.
  *
  * Scheduled runs are ON by default (M. Rice, 2026-10-16: "running every
@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CRON_SECRET bearer); it does not reliably send x-vercel-cron. Without this a scheduled call
   // reads as "manual": the 19:00 Chicago gate and NONPROFIT_ENGINE_ENABLED were bypassed and each
   // program ran at BOTH its 00:xx and 01:xx UTC slots (np_leads 10/16-10/18: two runs a night).
-  const isVercelCron = !!req.headers["x-vercel-cron"] || /vercel-cron/i.test(String(req.headers["user-agent"] || ""));
+  const isVercelCron = isVercelCronRequest(req);
   const q = req.query as Record<string, string | undefined>;
   const force = q.force === "1" || !isVercelCron;
 

@@ -257,7 +257,11 @@ export async function selectOrgs(p: NonprofitProgram, has990: boolean, limit: nu
       AND COALESCE(n.foundation, 0) <> 10                       -- churches out
       AND ${where}
       AND ${pool} BETWEEN ${p.minPool} AND ${p.maxPool}
-      AND NOT EXISTS (SELECT 1 FROM np_leads l WHERE l.ein = n.ein)
+      AND NOT EXISTS (
+        SELECT 1 FROM np_leads l
+        WHERE l.ein = n.ein
+          AND NOT (l.program = ${p.key} AND l.status LIKE 'retry:%')     -- one retry after a transient failure
+      )
     ORDER BY ${score} DESC, ${orderFees} ${pool} DESC
     LIMIT ${limit}`;
   return rows<OrgCandidate>(await db.execute(q)).map((r) => ({ ...r, poolValue: Number(r.poolValue) }));
@@ -795,13 +799,57 @@ async function crmCreateLead(p: NonprofitProgram, leadId: number, org: OrgCandid
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
+/**
+ * Failures that say nothing about the org: an upstream timeout, a model reply
+ * that would not parse, a run cut off by the function limit. These used to
+ * claim the EIN for good, so one bad night removed an org from the program
+ * permanently (CLEARBROOK 11/04, CHICAGO COMMONS 11/05). Each lead now gets
+ * one more attempt on a later run; a second transient failure is final.
+ */
+const TRANSIENT_REASONS = new Set(["people_search_error", "apollo_enrich_error", "research_error", "draft_error"]);
+
+async function hadTransientFailure(leadId: number): Promise<boolean> {
+  const r = rows(await db.execute(sql`
+    SELECT 1 FROM np_events WHERE lead_id = ${leadId} AND kind = 'gate' AND meta->>'transient' = 'true' LIMIT 1`));
+  return r.length > 0;
+}
+
+/**
+ * Leads a run claimed but never finished (function timeout mid-research) sat
+ * in 'selected' / 'researching' forever. Anything untouched for 20 minutes —
+ * longer than any run — goes back for its one retry, or is closed out if it
+ * already had one.
+ */
+async function releaseInterrupted(p: NonprofitProgram, actor: string): Promise<number> {
+  const r = rows(await db.execute(sql`
+    WITH released AS (
+      UPDATE np_leads l
+      SET status = CASE WHEN EXISTS (
+                     SELECT 1 FROM np_events e
+                     WHERE e.lead_id = l.id AND e.kind = 'gate' AND e.meta->>'transient' = 'true')
+                   THEN 'skipped:interrupted' ELSE 'retry:interrupted' END,
+          updated_at = NOW()
+      WHERE l.program = ${p.key} AND l.status IN ('selected', 'researching')
+        AND l.updated_at < NOW() - INTERVAL '20 minutes'
+      RETURNING l.id
+    )
+    INSERT INTO np_events (lead_id, kind, detail, meta, actor)
+    SELECT id, 'gate', 'released: run was interrupted before this lead finished',
+           '{"transient": true, "reason": "interrupted"}'::jsonb, ${actor}
+    FROM released
+    RETURNING lead_id`));
+  return r.length;
+}
+
 async function insertLead(p: NonprofitProgram, org: OrgCandidate): Promise<number | null> {
   const r = rows(await db.execute(sql`
     INSERT INTO np_leads (program, ein, org_name, org_city, org_state, org_zip, ntee_code,
                           org_assets, pool_value, pool_source, invest_mgmt_fees, has_990, status)
     VALUES (${p.key}, ${org.ein}, ${org.name}, ${org.city}, ${org.state}, ${org.zip}, ${org.ntee},
             ${org.bmfAssets}, ${org.poolValue}, ${org.poolSource}, ${org.investMgmtFees}, ${!!org.objectId}, 'selected')
-    ON CONFLICT (ein) DO NOTHING
+    ON CONFLICT (ein) DO UPDATE
+      SET status = 'selected', updated_at = NOW()
+      WHERE np_leads.program = EXCLUDED.program AND np_leads.status LIKE 'retry:%'
     RETURNING id`));
   return r[0]?.id ?? null;
 }
@@ -842,6 +890,13 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
   if (!graphConfigured()) s.warnings.push("MS_GRAPH_* not set — Outlook drafts cannot be created");
   if (!crmConfigured()) s.warnings.push("VISTACRM_BRIDGE_SECRET not set — CRM lead creation queued as np_events kind crm_pending; copy the secret from the vistarandall Vercel project");
 
+  if (!opts.dryRun) {
+    try {
+      const released = await releaseInterrupted(p, opts.actor);
+      if (released) s.warnings.push(`${released} lead(s) left unfinished by an interrupted run were released`);
+    } catch (err) { s.warnings.push(`could not release interrupted leads: ${String(err).slice(0, 160)}`); }
+  }
+
   const candidates = await selectOrgs(p, has990, opts.maxCandidates);
   if (!candidates.length) {
     s.candidatesExhausted = true;
@@ -863,8 +918,10 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
       if (meta.error) console.error(`[nonprofit-engine] ${org.name}: ${reason}: ${String(meta.error).slice(0, 400)}`);
       s.skipped.push({ reason, ein: org.ein, org: org.name, person, ...(meta.error ? { error: String(meta.error).slice(0, 200) } : {}) });
       if (!opts.dryRun && leadId != null) {
-        await updateLead(leadId, { status: `skipped:${reason}` });
-        await logEvent(leadId, "gate", `skipped: ${reason}`, meta, opts.actor);
+        const retry = TRANSIENT_REASONS.has(reason) && !(await hadTransientFailure(leadId));
+        await updateLead(leadId, { status: `${retry ? "retry" : "skipped"}:${reason}` });
+        await logEvent(leadId, "gate", `${retry ? "will retry once" : "skipped"}: ${reason}`,
+          { ...meta, ...(TRANSIENT_REASONS.has(reason) ? { transient: true, reason } : {}) }, opts.actor);
       }
     };
 
@@ -967,16 +1024,24 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
         if (!n.ok) s.warnings.push(`internal note not written for ${pick.name} (draft IS placed; briefing is in np_events): ${n.error}`);
       }
     }
+    // Placed = in Outlook, or a dry run, or Graph is not configured at all (the
+    // documented queue-only mode, where np_events IS the delivery).
+    const draftPlaced = delivery !== "pending" || !graphConfigured();
     if (!opts.dryRun && leadId != null) {
       await logEvent(leadId, "deliver", `draft → ${email}: ${d.subject}`, {
         delivery, to: email, toName: pick.name, mailbox: p.mailbox, subject: d.subject, body,
         briefing: note, briefingDelivery: noteState,
         emailStatus, graphMessageId: graph?.id ?? null, graphWebLink: graph?.webLink ?? null, model: MODEL,
       }, opts.actor);
-      await updateLead(leadId, { status: "drafted", draft_subject: d.subject, graph_message_id: graph?.id ?? null });
+      // "drafted" means a draft is sitting in the partner's Outlook. If Graph is
+      // configured and the create failed, the copy is only queued in np_events:
+      // the lead is 'draft_pending' until /api/admin/np-drafts flush places it.
+      await updateLead(leadId, { status: draftPlaced ? "drafted" : "draft_pending", draft_subject: d.subject, graph_message_id: graph?.id ?? null });
     }
 
-    // crm — only after the draft exists (program rule)
+    // crm — once the draft copy is written. A queued (draft_pending) lead still
+    // goes to VistaCRM now: the flush path only re-creates the Outlook draft and
+    // relies on the CRM lead already existing.
     let crmState = "skipped";
     if (!opts.dryRun) {
       if (crmConfigured()) {
@@ -998,7 +1063,9 @@ async function runProgram(p: NonprofitProgram, has990: boolean, opts: Required<P
       }
     } else crmState = "dry_run";
 
-    s.drafted += 1;
+    // A queued draft does not count toward the night's target — the partner has
+    // nothing in their Drafts folder yet, so the run keeps going.
+    if (draftPlaced) s.drafted += 1;
     s.drafts.push({ leadId: lid, org: org.name, person: pick.name, email, emailStatus, subject: d.subject, delivery, crm: crmState });
   }
 

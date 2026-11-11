@@ -22,8 +22,6 @@ import {
   irsEoExtrasStatus,
 } from "./queries";
 
-export { PUB78_CODES, decodePub78 } from "./queries";
-
 const einProp = { oneOf: [{ type: "string" }, { type: "number" }], description: "EIN as 9 digits or 'XX-XXXXXXX'" };
 
 export const IRSEOX_TOOLS: ToolDef[] = [

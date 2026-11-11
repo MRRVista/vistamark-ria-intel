@@ -17,7 +17,7 @@ async function main() {
     if (r.statement) console.error(r.statement);
     process.exit(1);
   }
-  for (const f of r.applied) console.log(`${f.file}: ${f.statements} ran, ${f.skipped} skipped`);
+  for (const f of r.applied) console.log(f.alreadyApplied ? `${f.file}: already applied` : `${f.file}: ${f.statements} ran, ${f.skipped} skipped`);
   console.log("All migrations applied.");
 }
 

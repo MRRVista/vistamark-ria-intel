@@ -1,15 +1,21 @@
 /**
  * GET /api/selftest — read-only diagnostic battery across every dataset.
  *
- * Runs a fixed set of representative tool calls server-side (in parallel,
- * each with its own timeout) and returns pass/fail + a truncated summary of
- * each result. Purpose: verify what actually WORKS end to end, without
+ * Runs a fixed set of representative tool calls server-side (a bounded
+ * number at a time, each with its own timeout) and returns pass/fail + a
+ * truncated summary of each result. Purpose: verify what actually WORKS end to end, without
  * needing an MCP client.
  *
  * Deliberately unauthenticated: GET only, fixed queries against public-source
  * data, summaries truncated to ~450 chars, no arguments accepted except
  *   ?only=<substring[,substring]>  — run a subset (matches check/tool name)
  *   ?t=<ms>                        — per-check timeout (1000–9000, default 7000)
+ *   ?c=<n>                         — checks in flight at once (1–24, default 10)
+ *
+ * Concurrency is capped because the battery outgrew "everything at once": at
+ * 122 checks, firing them all in one tick starved the event loop and the
+ * database connection, and ~40 healthy tools were reported as 7s timeouts.
+ * The per-check clock now starts when the check actually starts.
  * Remove or gate this endpoint once validation is done if desired.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -106,8 +112,8 @@ const CHECKS: Check[] = [
   { name: "apollo-org", tool: "apollo_org_enrich", args: { domain: "vistamark.com" }, note: "Apollo key probe — the only apollo_* call that is both free and deterministic; expect an organization block (name/industry/location) or null if Apollo has no record; an APOLLO_API_KEY-not-configured error means the env var has not landed in Vercel yet. Enrich tools are deliberately never probed (each hit spends a credit)" },
   { name: "prospects-zips", tool: "prospects_zip_summary", args: {}, note: "prospect DB probe — expect at least the seeded 60521 target zip (Hinsdale, priority 1) with people/households counts (0 until the first import is loaded); a relation-does-not-exist error means migration 0006 has not been applied (POST /api/admin/migrate)" },
   { name: "prospects-60521", tool: "prospects_search", args: { zip: "60521", limit: 1 }, note: "read-only; total = people loaded for 60521 — 0 is a clean empty result until lists are funneled in, not an error" },
-  { name: "ppp-empty", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "expected EMPTY (never ingested) — pass = clean empty result, not an error" },
-  { name: "13f-empty", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "expected EMPTY (never ingested; the quarterly cron is a deliberate no-op stub) — pass = clean empty result, not an error" },
+  { name: "ppp-search", tool: "ppp_search", args: { state: "IL", limit: 2 }, note: "PPP probe — loaded 2026-10-25 by the Data loads GitHub Actions workflow (SBA $150k+ file, ~968k rows); expect IL borrower rows. Empty means the table was truncated or the load was lost" },
+  { name: "13f-holdings", tool: "holdings_by_manager", args: { managerName: "Ares" }, note: "13F probe — loaded quarterly by the Data loads GitHub Actions workflow (no Vercel cron); expect an Ares filing with positions. Empty means the load is missing" },
   ...[...RESEARCH_CHECKS, ...FEDREG_CHECKS, ...INTLMACRO_CHECKS, ...MKTSTRUCT_CHECKS, ...FUNDS_CHECKS, ...FILPEOPLE_CHECKS, ...LOCALWEALTH_CHECKS, ...SYNTHESIS_CHECKS, ...LEGALPROS_CHECKS],
   ...NEW_FAMILY_CHECKS,
 ];
@@ -120,6 +126,20 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       (e) => { clearTimeout(t); reject(e); }
     );
   });
+}
+
+/** Run `fn` over `items`, at most `limit` at a time, preserving input order. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -136,9 +156,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     (c) => !only || only.some((o) => c.name.toLowerCase().includes(o) || c.tool.toLowerCase().includes(o))
   );
 
+  const cRaw = typeof req.query.c === "string" ? Number(req.query.c) : NaN;
+  const concurrency = Math.min(Math.max(Number.isFinite(cRaw) ? Math.floor(cRaw) : 10, 1), 24);
+
   const startedAt = Date.now();
-  const checks = await Promise.all(
-    selected.map(async (c) => {
+  const checks = await mapLimit(selected, concurrency, async (c) => {
       const t0 = Date.now();
       const tool = TOOL_BY_NAME[c.tool];
       if (!tool) {
@@ -168,8 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: err instanceof Error ? err.message : String(err),
         };
       }
-    })
-  );
+  });
 
   const passed = checks.filter((r) => r.ok).length;
   res.status(200).json({
@@ -178,6 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ranAt: new Date(startedAt).toISOString(),
     totalMs: Date.now() - startedAt,
     perCheckTimeoutMs: perCheckMs,
+    concurrency,
     checksRun: checks.length,
     passed,
     failed: checks.length - passed,

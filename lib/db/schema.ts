@@ -1,3 +1,21 @@
+/**
+ * Drizzle models for the tables the query builder touches.
+ *
+ * THIS FILE IS NOT THE SCHEMA OF RECORD. The schema of record is the
+ * hand-written SQL in migrations/*.sql, applied by lib/migrate.ts and tracked
+ * in schema_migrations. Do not generate migrations from this file (the
+ * `db:generate` script was removed in v0.39 for that reason): nine tables
+ * exist only in SQL and are read and written with raw `sql` — a generated
+ * diff would propose dropping them.
+ *
+ *   np_leads, np_events                         migrations/0008  (lib/nonprofit)
+ *   dol_sch_c_providers                         migrations/0009  (lib/filings-people)
+ *   dol_sch_h_i                                 migrations/0010  (lib/dol-5500, lib/dol-sch-h)
+ *   irs_pub78, irs_eo_revocations, irs_990n,
+ *   irs_eo_extras_loads                         migrations/0011  (lib/irs-eo-extras)
+ *   private_index_obs                           migrations/0013  (api/private-index)
+ *   schema_migrations                           lib/migrate.ts   (the ledger itself)
+ */
 import {
   pgTable,
   serial,

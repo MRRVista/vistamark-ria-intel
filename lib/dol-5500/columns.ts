@@ -128,24 +128,3 @@ export const PLAN_ENTITY_TYPE: Record<number, string> = {
   3: "Multiemployer (collectively bargained)",
   4: "Direct Filing Entity (DFE)",
 };
-
-export const PENSION_PLAN_FEATURE: Record<string, string> = {
-  "1A": "Benefits provided under group insurance arrangement",
-  "2A": "Age/service requirements",
-  "2C": "401(k) cash or deferred arrangement",
-  "2D": "Plan covers self-employed individuals",
-  "2E": "Profit-sharing",
-  "2F": "ERISA Section 404(c)",
-  "2G": "Total or partial participant-directed account plan",
-  "2H": "Stock bonus / ESOP",
-  "2I": "Plan covers union members",
-  "2K": "Leveraged ESOP",
-  "2M": "Plan invested in employer securities",
-  "2R": "Multiemployer plan",
-  "3B": "Section 401(m) arrangement",
-  "3C": "Money purchase pension plan",
-  "3D": "Target benefit",
-  "3E": "Defined benefit / pension equity",
-  "3F": "Cash balance",
-  "3G": "Hybrid plan",
-};

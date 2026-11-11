@@ -150,9 +150,6 @@ export const LEAD_STATUSES = [
   "client",
   "disqualified",
 ] as const;
-export type LeadStatus = (typeof LEAD_STATUSES)[number];
-
-export const EMAIL_STATUSES = ["unknown", "unverified", "valid", "invalid", "bounced"] as const;
 
 // ---------------------------------------------------------------------------
 // Scalar helpers

@@ -18,8 +18,8 @@ import { ingestNacuboBenchmarks } from "../../lib/nacubo/ingest";
  * benchmarks before proceeding. This is the self-heal path so the v0.4.0
  * deploy doesn't require a manual /api/admin/migrate hit after every push.
  *
- * Schedule (vercel.json): every 15 minutes. Once fully backfilled, the cron
- * self-throttles by re-ingesting the most recent provisional year only.
+ * Schedule (vercel.json): daily at 06:00 UTC. Once fully backfilled, the cron
+ * only re-probes the newest provisional year (one attempt per backoff window).
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cron = requireCron(req);

@@ -51,4 +51,3 @@ export function pppRowToRecord(
 
 export { buildHeaderIndex };
 export { newStreamState, consumeCsvChunk, finishCsvStream } from "../irs-bmf/parser";
-export type { CsvStreamState } from "../irs-bmf/parser";

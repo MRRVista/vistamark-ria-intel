@@ -105,5 +105,4 @@ export function financeRowToRecord(
 }
 
 export { newStreamState, consumeCsvChunk, finishCsvStream } from "../irs-bmf/parser";
-export type { CsvStreamState } from "../irs-bmf/parser";
 export { buildHeaderIndex };

@@ -10,7 +10,7 @@ Exports `FEDREG_TOOLS`, `FEDREG_DOMAIN` (id `fedregional`), `FEDREG_CHECKS` from
 | `nyfed_term_premia` | newyorkfed.org/medialibrary/media/research/data_indicators/ACMTermPremium.xls | legacy BIFF .xls (~10MB) | 6h |
 | `nyfed_recession_probability` | .../research/capital_markets/yield/assets/data/yield.csv (fallback allmonth.xls) | CSV | 6h |
 | `atlfed_gdpnow` | atlantafed.org/-/media/.../gdpnow/GDPTrackingModelDataAndForecasts.xlsx (~11MB) | xlsx | 6h |
-| `atlfed_wage_tracker` | atlantafed.org/-/media/.../wage-growth-tracker/wage-growth-data.xlsx | xlsx | 24h |
+| `atlfed_wage_tracker` | atlantafed.org/-/media/.../research-and-data/data/wage-growth-tracker/wage-growth-data.xlsx | xlsx | 24h |
 | `philfed_spf` | philadelphiafed.org/-/media/.../historical-data/medianLevel.xlsx + medianGrowth.xlsx | xlsx | 24h |
 
 ## Files

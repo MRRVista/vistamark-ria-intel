@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS np_leads (
   email             TEXT,
   email_status      VARCHAR(24),                     -- apollo: verified | guessed
   affinity          TEXT,                            -- the matched shared-affinity hook, if any
-  status            VARCHAR(48) NOT NULL DEFAULT 'selected',  -- selected|researching|drafted|skipped:<reason>
+  status            VARCHAR(48) NOT NULL DEFAULT 'selected',  -- selected|researching|drafted|draft_pending|retry:<reason>|skipped:<reason>
   crm_contact_id    VARCHAR(48),                     -- VistaCRM crm_id once the Lead exists
   draft_subject     TEXT,
   graph_message_id  TEXT,
