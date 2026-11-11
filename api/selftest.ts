@@ -51,6 +51,26 @@ interface Check {
   note?: string;
 }
 
+/**
+ * This endpoint is unauthenticated, and the prospect database is first-party
+ * PII (README: "never on an open endpoint"). Checks against these tools still
+ * run and still pass or fail, but their summary carries counts only — never a
+ * row. Before v0.40 the 60521 probe printed a resident's name, phones and
+ * street address to anyone who loaded the URL.
+ */
+const PII_TOOL = /^(prospect|prospects)_|^prospect_360$|^apollo_/;
+
+function redactedSummary(r: any): string {
+  if (!r || typeof r !== "object") return "{}";
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (typeof v === "number" || typeof v === "boolean") out[k] = v;
+    else if (Array.isArray(v)) out[`${k}Count`] = v.length;
+  }
+  out.redacted = "row data withheld on the open endpoint";
+  return JSON.stringify(out);
+}
+
 /** v0.33 families (data-everything). Exported so the parity script can run them cold. */
 export const NEW_FAMILY_CHECKS: Check[] = [
   ...ENERGY_CHECKS,
@@ -168,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       try {
         const r = await withTimeout(Promise.resolve(tool.handler(c.args)), perCheckMs);
-        const text = JSON.stringify(r);
+        const text = PII_TOOL.test(c.tool) ? redactedSummary(r) : JSON.stringify(r);
         const innerError =
           r && typeof r === "object" && (r as any).error ? String((r as any).error) : null;
         return {

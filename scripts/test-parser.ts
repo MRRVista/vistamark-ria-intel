@@ -10,14 +10,12 @@ const sample = `<?xml version="1.0" encoding="UTF-8"?>
       <FormInfo>
         <Part1A>
           <Item1 WebAddr="https://vistamarkllc.com" EmailAddr="info@vistamarkllc.com" />
-          <Item5>
             <Item5A TotalEmp="4" />
             <Item5B Q5B1="3" />
             <Item5D Q5D1b="40" Q5D1d="30" Q5D1f="20" Q5D1k="10" />
             <Item5E Q5E1="Y" Q5E3="Y" Q5E5="N" />
-            <Item5F Q5F2a="320000000" Q5F2b="0" Q5F2c="320000000" Q5F2d="120" Q5F2e="0" Q5F2f="120" />
+            <Item5F Q5F2A="320000000" Q5F2B="0" Q5F2C="320000000" Q5F2D="120" Q5F2E="0" Q5F2F="120" />
             <Item5G Q5G2="Y" Q5G3="Y" Q5G6="Y" Q5G7="Y" />
-          </Item5>
           <Item9 Q9A="N" />
           <Item11 Q11="N" />
         </Part1A>
@@ -29,9 +27,7 @@ const sample = `<?xml version="1.0" encoding="UTF-8"?>
       <Rgstn FirmType="SEC" St="APPROVED" />
       <FormInfo>
         <Part1A>
-          <Item5>
-            <Item5F Q5F2c="260000000000" Q5F2f="5000" />
-          </Item5>
+            <Item5F Q5F2C="260000000000" Q5F2F="5000" />
           <Item9 Q9A="N" />
           <Item11 Q11="N" />
         </Part1A>

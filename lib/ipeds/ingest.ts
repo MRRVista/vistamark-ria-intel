@@ -355,6 +355,72 @@ export async function ingestFinance(
   }
 }
 
+/**
+ * Load one finance table that has already been read into memory (header +
+ * rows of strings). Same mapping, upsert and ingest_runs record as
+ * ingestFinance, minus the download: this is the entry point for the Access
+ * database loader (scripts/ipeds-access-ingest.ts). As of 2026-11 there is no
+ * per-survey F2324_F2.zip; FY2023-24 finance is only inside the 2024-25
+ * collection's Access database. The run is recorded under the same source key
+ * (ipeds/f2/2024), so pickNextFinance treats the year as done and the daily
+ * cron stops probing for the zip.
+ */
+export async function ingestFinanceTable(
+  fyear: number,
+  fileType: IpedsFinanceFile,
+  url: string,
+  header: string[],
+  tableRows: Iterable<string[]>
+): Promise<IngestResult> {
+  if (!db) throw new Error("Database not configured");
+  const start = Date.now();
+  const source = `${SOURCE_PREFIX}/${fileType.toLowerCase()}/${fyear}`;
+  const runInsert = await db.insert(ingestRuns).values({ source, status: "running" }).returning({ id: ingestRuns.id });
+  const runId = runInsert[0]!.id;
+
+  const headerIndex = buildHeaderIndex(header);
+  let rowsProcessed = 0;
+  let rowsUpserted = 0;
+  let rowsSkippedNoKey = 0;
+  let firstRowSample: string[] = [];
+  try {
+    let batch: EndowmentInsert[] = [];
+    for (const row of tableRows) {
+      rowsProcessed++;
+      if (firstRowSample.length === 0) firstRowSample = row.slice(0, 10).map((c) => c.slice(0, 32));
+      const record = financeRowToRecord(row, headerIndex, fyear, fileType);
+      if (record) batch.push(record);
+      else rowsSkippedNoKey++;
+      if (batch.length >= BATCH_SIZE) {
+        await upsertEndowments(batch);
+        rowsUpserted += batch.length;
+        batch = [];
+      }
+    }
+    if (batch.length > 0) {
+      await upsertEndowments(batch);
+      rowsUpserted += batch.length;
+    }
+    await db
+      .update(ingestRuns)
+      .set({ status: "ok", finishedAt: new Date(), firmsProcessed: rowsProcessed, firmsInserted: rowsUpserted, firmsUpdated: 0 })
+      .where(sql`${ingestRuns.id} = ${runId}`);
+    return {
+      source, url, rowsProcessed, rowsUpserted, rowsSkippedNoKey,
+      headerSample: header.slice(0, 10).map((c) => c.slice(0, 32)),
+      firstRowSample,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await db
+      .update(ingestRuns)
+      .set({ status: "error", finishedAt: new Date(), errorMessage: message, firmsProcessed: rowsProcessed, firmsInserted: rowsUpserted })
+      .where(sql`${ingestRuns.id} = ${runId}`);
+    throw err;
+  }
+}
+
 async function upsertInstitutions(rows: IpedsInstitutionInsert[]): Promise<void> {
   if (!db || rows.length === 0) return;
   await db
