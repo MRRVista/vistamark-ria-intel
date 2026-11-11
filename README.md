@@ -157,7 +157,7 @@ DATABASE_URL=... npx tsx scripts/irs990-ingest.ts --years 2025,2026   # diff-loa
 | `refresh-dol-sch-h` | daily 05:40 (freshness-guarded to weekly) | Schedule H/I plan financials |
 | `ingest-parcels` | 3rd of month 07:00 | DuPage + Cook parcel rolls → prospects |
 | `lawyer-engine` | **not scheduled yet** | Lawyer COI outreach drafts into Matt's Outlook Drafts (v0.40, migration 0014). The handler `/api/cron/lawyer-engine` is deployed and runs on a manual Bearer `CRON_SECRET` call, but it has no cron entry: its settings come from a VistaRandall card at `/api/lawyer-programs`, which returned 404 on 2026-11-10. Add the `5 1 * * *` and `5 2 * * *` crons (8 PM Chicago gate) once that endpoint is live |
-| `IPEDS Access ingest` (GitHub Actions, not Vercel) | 12th 10:20 | Endowment data for FY2024 onward. NCES stopped publishing the per-survey zips, so this reads the F2 / F1A tables out of the collection-year Access database (`scripts/ipeds-access-ingest.ts`) |
+| `IPEDS Access ingest` (GitHub Actions, not Vercel) | 12th 10:20 | Endowment data for FY2023-24 onward. No per-survey zip exists for those years as of 2026-11, so this reads the F2 / F1A tables out of the collection-year Access database (`scripts/ipeds-access-ingest.ts`). Finance lags collection by a year: FY2023-24 is in the 2024-25 database |
 | `Data loads` (GitHub Actions, not Vercel) | manual / scheduled in the workflow | PPP, 13F, Schedule H/I and IRS 990 bulk loads over pg. There is no Vercel cron for 13F (the no-op `refresh-13f` stub was removed in v0.39) |
 | `IRS 990 ingest` (GitHub Actions, not Vercel) | 8th 08:10 | Diff-loads new IRS TEOS 990 XML batches → `irs990_filings` / `irs990_persons`; writes `irs-990/<batch>` rows to `ingest_runs` |
 

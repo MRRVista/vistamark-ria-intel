@@ -359,12 +359,11 @@ export async function ingestFinance(
  * Load one finance table that has already been read into memory (header +
  * rows of strings). Same mapping, upsert and ingest_runs record as
  * ingestFinance, minus the download: this is the entry point for the Access
- * database loader (scripts/ipeds-access-ingest.ts). NCES stopped publishing
- * the per-survey F{yy}{yy}_F2.zip files after collection year 2022-23; from
- * 2023-24 on the finance tables exist only inside IPEDS_<years>_<release>.zip.
- * The run is recorded under the same source key (ipeds/f2/2024), so
- * pickNextFinance treats the year as done and the daily cron stops probing
- * the zip that will never appear.
+ * database loader (scripts/ipeds-access-ingest.ts). As of 2026-11 there is no
+ * per-survey F2324_F2.zip; FY2023-24 finance is only inside the 2024-25
+ * collection's Access database. The run is recorded under the same source key
+ * (ipeds/f2/2024), so pickNextFinance treats the year as done and the daily
+ * cron stops probing for the zip.
  */
 export async function ingestFinanceTable(
   fyear: number,

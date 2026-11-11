@@ -1,13 +1,13 @@
 # IPEDS finance loader for collection years 2023-24 onward.
 #
 # WHY THIS EXISTS
-#   NCES stopped publishing the per-survey finance zips (F2324_F2.zip and
-#   friends 404 under every naming variant). From 2023-24 on the finance
-#   tables ship only inside the collection-year Access database
-#   (IPEDS_2023-24_Final.zip, IPEDS_2024-25_Provisional.zip). The Vercel cron
-#   /api/cron/refresh-ipeds cannot read those, so endowment data stopped at
-#   FY2023. This workflow downloads the Access database, reads the F2 and F1A
-#   tables and upserts them through the same mapping the zip path uses.
+#   The Vercel cron reads per-survey finance zips (F2223_F2.zip). As of 2026-11
+#   no such zip exists for FY2023-24 (F2324_F2.zip 404s under every naming
+#   variant), but the data has been released inside the collection-year Access
+#   database. Finance lags collection by a year: FY2023-24 (tables F2324_F2 /
+#   F2324_F1A) is in IPEDS_2024-25_Provisional.zip, not in the 2023-24 file.
+#   This workflow downloads that database, reads the two tables and upserts
+#   them through the same mapping the zip path uses.
 #
 # SCHEDULE
 #   Monthly on the 12th at 10:20 UTC. A run only downloads a year whose F2 or
@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       year:
-        description: "Fiscal year end (2024 = collection 2023-24). Blank = all pending years"
+        description: "Fiscal year end (2024 = FY2023-24). Blank = all pending years"
         required: false
         default: ""
       dry:

@@ -1,21 +1,27 @@
 /**
- * IPEDS finance loader for collection years 2023-24 onward.
+ * IPEDS finance loader for fiscal year 2023-24 onward (Access database path).
  *
- * NCES no longer publishes the per-survey "complete data file" zips
- * (https://nces.ed.gov/ipeds/datacenter/data/F2324_F2.zip returns 404 under
- * every naming variant; F2223_F2.zip still resolves). The finance tables for
- * 2023-24 and later ship only inside the collection-year Access database:
+ * The Vercel cron reads per-survey "complete data file" zips
+ * (https://nces.ed.gov/ipeds/datacenter/data/F2223_F2.zip). As of 2026-11 no
+ * such zip exists for FY2023-24 (F2324_F2.zip returns 404 under every naming
+ * variant), although the data has been released: it is inside the
+ * collection-year Access database.
  *
- *   https://nces.ed.gov/ipeds/tablefiles/zipfiles/IPEDS_2023-24_Final.zip
- *   https://nces.ed.gov/ipeds/tablefiles/zipfiles/IPEDS_2024-25_Provisional.zip
+ * FINANCE LAGS THE COLLECTION BY ONE YEAR. Collection 2023-24 carries the
+ * FY2022-23 finance tables (F2223_*); FY2023-24 finance (F2324_*) is in
+ * collection 2024-25. Verified 2026-11-10 by opening IPEDS_2023-24_Final.zip:
+ * its finance tables are F2223_F1A / F2223_F2 / F2223_F3. So for fyear Y
+ * (the calendar year the fiscal year ends) this reads
  *
- * This script downloads that zip, opens the .accdb with mdb-reader, reads the
- * F{yy}{yy}_F2 (private nonprofit, FASB) and F{yy}{yy}_F1A (public, GASB)
- * tables and hands them to the same mapping + upsert the zip path uses
+ *   https://nces.ed.gov/ipeds/tablefiles/zipfiles/IPEDS_<Y>-<Y+1>_Final.zip
+ *   (or ..._Provisional.zip), tables F<Y-1><Y>_F2 and F<Y-1><Y>_F1A
+ *
+ * e.g. fyear 2024 -> IPEDS_2024-25_Provisional.zip -> F2324_F2, F2324_F1A.
+ * The rows go through the same mapping + upsert the zip path uses
  * (lib/ipeds/ingest.ts ingestFinanceTable).
  *
- *   npx tsx scripts/ipeds-access-ingest.ts                 # every year from 2024 not yet loaded
- *   npx tsx scripts/ipeds-access-ingest.ts --year 2024     # fyear = calendar year the FY ends (2024 = collection 2023-24)
+ *   npx tsx scripts/ipeds-access-ingest.ts                 # every fiscal year from 2024 not yet loaded
+ *   npx tsx scripts/ipeds-access-ingest.ts --year 2024     # FY2023-24
  *   npx tsx scripts/ipeds-access-ingest.ts --year 2024 --dry        # download + parse + count, no database
  *   npx tsx scripts/ipeds-access-ingest.ts --year 2024 --force      # reload (e.g. when Final replaces Provisional)
  *   npx tsx scripts/ipeds-access-ingest.ts --release Provisional    # skip the Final probe
@@ -23,7 +29,7 @@
  * mdb-reader is not a dependency of the deployed app (it is only needed
  * here); the workflow installs it with `npm install --no-save mdb-reader`.
  * Runs in GitHub Actions (.github/workflows/ipeds-access-ingest.yml): the
- * database is a few hundred MB unzipped, far past a Vercel function.
+ * database is about 1 GB unzipped, far past a Vercel function.
  */
 import AdmZip from "adm-zip";
 import { sql } from "drizzle-orm";
@@ -42,10 +48,13 @@ function arg(name: string): string | undefined {
 const flag = (name: string) => process.argv.includes(`--${name}`);
 const log = (m: string) => console.log(`[ipeds-access] ${m}`);
 
-/** fyear 2024 -> "2023-24" (collection year) and "2324" (table prefix). */
+/**
+ * fyear 2024 -> collection "2024-25" (the database to download) and table
+ * prefix "2324" (the fiscal year inside it). Finance lags collection by a year.
+ */
 function yearParts(fyear: number) {
-  const a = fyear - 1;
-  return { collection: `${a}-${String(fyear).slice(2)}`, code: `${String(a).slice(2)}${String(fyear).slice(2)}` };
+  const yy = (n: number) => String(n).slice(2);
+  return { collection: `${fyear}-${yy(fyear + 1)}`, code: `${yy(fyear - 1)}${yy(fyear)}`, fiscal: `FY${fyear - 1}-${yy(fyear)}` };
 }
 
 async function download(fyear: number, only?: string): Promise<{ url: string; release: string; zip: Buffer } | null> {
@@ -78,7 +87,8 @@ async function alreadyLoaded(fyear: number, fileType: IpedsFinanceFile): Promise
 }
 
 async function loadYear(fyear: number, opts: { dry: boolean; force: boolean; release?: string }): Promise<boolean> {
-  const { code, collection } = yearParts(fyear);
+  const { code, collection: coll, fiscal } = yearParts(fyear);
+  const collection = `${fiscal} (collection ${coll})`;
   let todo = FILES;
   if (!opts.dry && !opts.force) {
     const pending: IpedsFinanceFile[] = [];
@@ -150,8 +160,9 @@ async function main() {
     console.error(`--year must be ${FIRST_ACCESS_YEAR} or later (earlier years load from the per-survey zips via the Vercel cron)`);
     process.exit(1);
   }
-  // Collection year Y-(Y+1) is first released (provisional) in the autumn of Y+1.
-  const last = new Date().getUTCFullYear();
+  // FY ending in Y is in collection Y-(Y+1), first released during Y+2 at the
+  // earliest, so the newest year worth probing is last calendar year.
+  const last = new Date().getUTCFullYear() - 1;
   const years = one != null ? [one] : Array.from({ length: last - FIRST_ACCESS_YEAR + 1 }, (_, i) => FIRST_ACCESS_YEAR + i);
 
   let failed = false;
