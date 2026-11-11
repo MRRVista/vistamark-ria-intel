@@ -105,6 +105,16 @@
     },
     "api/mcp.ts": {
       "maxDuration": 300
+    },
+    "api/cron/lawyer-engine.ts": {
+      "maxDuration": 300,
+      "includeFiles": "migrations/**"
+    },
+    "api/lawyer-draft-now.ts": {
+      "maxDuration": 300
+    },
+    "api/lawyer-status.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [

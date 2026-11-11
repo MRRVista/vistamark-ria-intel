@@ -200,6 +200,8 @@
   .tag-nonprofits { background: var(--green-bg); color: var(--green); }
   .tag-ops { background: var(--purple-bg); color: var(--purple); }
   .tag-passthrough { background: var(--teal-bg); color: var(--teal); }
+  .tag-data { background: var(--green-bg); color: var(--green); }
+  .sw-data { background: var(--green); }
 
   .live-row {
     padding: 9px 18px;
@@ -313,7 +315,7 @@
     <div class="meta">
       <span><b>Engine</b>PostgreSQL · Neon</span>
       <span><b>ORM</b>Drizzle</span>
-      <span><b>Tables</b>9</span>
+      <span><b>Tables</b><span id="table-total">9</span></span>
       <span><b>Mode</b><span id="mode-dot" class="dot static">○ static</span></span>
     </div>
   </div>
@@ -339,6 +341,7 @@
       <button class="chip active" data-domain="all">All</button>
       <button class="chip" data-domain="rias">RIAs</button>
       <button class="chip" data-domain="nonprofits">Nonprofits</button>
+      <button class="chip" data-domain="data">Other data</button>
       <button class="chip" data-domain="ops">Ops</button>
       <button class="chip" data-domain="passthrough">Passthrough</button>
     </div>
@@ -353,13 +356,14 @@
       <option value="cols-asc">Columns (least → most)</option>
     </select>
   </div>
-  <div class="counter">Showing <b id="count">9</b> of 9 tables</div>
+  <div class="counter">Showing <b id="count">9</b> of <span id="count-total">9</span> tables</div>
 </div>
 
 <main>
   <div class="legend">
     <span class="legend-item"><span class="swatch sw-rias"></span>Form ADV / RIAs</span>
     <span class="legend-item"><span class="swatch sw-nonprofits"></span>IRS / Nonprofits</span>
+    <span class="legend-item"><span class="swatch sw-data"></span>Other data</span>
     <span class="legend-item"><span class="swatch sw-ops"></span>Operations</span>
     <span class="legend-item"><span class="swatch sw-passthrough"></span>Live passthrough (no table)</span>
     <span class="legend-item" style="margin-left: auto;">◆ pk &nbsp;·&nbsp; → fk &nbsp;·&nbsp; <span style="color: var(--red); font-weight: 600;">NN</span> not null &nbsp;·&nbsp; <span style="color: var(--accent);">IDX</span> indexed</span>
@@ -614,7 +618,30 @@ let state = {
   token: localStorage.getItem("vistamark_token") || ""
 };
 
-const DOMAIN_RANK = { rias: 0, nonprofits: 1, ops: 2, passthrough: 3 };
+const DOMAIN_RANK = { rias: 0, nonprofits: 1, data: 2, ops: 3, passthrough: 4 };
+
+/* Tables that exist in the database but are not written up in TABLES above are
+   added from the live catalog (/api/admin/stats -> schema) once signed in, so
+   this page can no longer fall behind the migrations. */
+function domainFor(name) {
+  if (/^(firms?|firm_|advisor|private_funds|f13f_)/.test(name)) return "rias";
+  if (/^(nonprofits|irs|np_)/.test(name)) return "nonprofits";
+  if (/(^ingest_runs$|^schema_migrations$|_loads$|_batches$|_imports$|_events$)/.test(name)) return "ops";
+  return "data";
+}
+function mergeCatalog(schema) {
+  if (!Array.isArray(schema)) return;
+  const known = new Set(TABLES.map(t => t.name));
+  for (const s of schema) {
+    if (known.has(s.name)) continue;
+    TABLES.push({
+      name: s.name, domain: domainFor(s.name),
+      desc: "Read live from the database catalog. Not yet written up on this page; see the migration that creates it for the column notes.",
+      source: "live catalog", file: "migrations",
+      columns: s.columns.map(c => ({ n: c.n, t: c.t, nn: c.nn, pk: c.pk, idx: c.idx || undefined }))
+    });
+  }
+}
 
 if (state.token) tokenEl.value = state.token;
 
@@ -656,6 +683,7 @@ async function loadLiveStats() {
     if (!res.ok) throw new Error("HTTP " + res.status + " " + (await res.text()));
     const data = await res.json();
     state.liveStats = data;
+    mergeCatalog(data.schema);
 
     if (data.db_ready === false) {
       healthBanner.className = "health-banner error";
@@ -721,6 +749,9 @@ function render() {
   }
 
   countEl.textContent = list.length;
+  const realTables = TABLES.filter(t => t.domain !== "passthrough").length;
+  document.getElementById("count-total").textContent = TABLES.length;
+  document.getElementById("table-total").textContent = realTables;
 
   if (list.length === 0) {
     tablesEl.innerHTML = `<div class="empty-state"><h2>No matches</h2><p>Try a different search or clear filters.</p></div>`;
@@ -731,7 +762,7 @@ function render() {
   tablesEl.innerHTML = list.map((t, i) => {
     const tagLabel = {
       rias: "Form ADV", nonprofits: "IRS BMF",
-      ops: "Operations", passthrough: "Passthrough"
+      data: "Data", ops: "Operations", passthrough: "Passthrough"
     }[t.domain];
 
     const live = liveByName[t.name];

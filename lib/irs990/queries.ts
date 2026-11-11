@@ -158,10 +158,13 @@ export async function irs990PeopleSearch(args: Irs990PeopleSearchArgs) {
   if (!isDbReady()) return { dbReady: false, total: 0, people: [] };
   const limit = Math.min(Math.max(num(args.limit) ?? 50, 1), 500);
   const offset = Math.max(num(args.offset) ?? 0, 0);
-  const conds: any[] = [sql`p.is_business = FALSE`];
+  const conds: any[] = [sql`p.is_business = FALSE`];   // person-side predicates
+  const fconds: any[] = [];                               // filing-side predicates
+  let personDriven = false;                               // a selective person predicate is present
   let orderBy = sql`f.tax_period_end DESC, f.total_assets_eoy DESC NULLS LAST`;
 
   if (args.name) {
+    personDriven = true;
     const { norm, surname } = normalizeName(args.name);
     if (norm.length < 3) throw new Error("name must be at least 3 characters after normalization");
     if (surname) {
@@ -175,10 +178,11 @@ export async function irs990PeopleSearch(args: Irs990PeopleSearchArgs) {
     }
     orderBy = sql`similarity(p.name_norm, ${norm}) DESC, f.tax_period_end DESC`;
   }
+  if (args.surname || args.personZip) personDriven = true;
   if (args.surname) conds.push(sql`p.surname = ${args.surname.toUpperCase().replace(/[^A-Z0-9\-&]/g, "")}`);
-  if (args.orgName) conds.push(sql`f.org_name ILIKE ${"%" + args.orgName + "%"}`);
-  if (args.orgState) conds.push(sql`f.state = ${args.orgState.toUpperCase()}`);
-  if (args.orgCity) conds.push(sql`f.city ILIKE ${args.orgCity}`);
+  if (args.orgName) fconds.push(sql`f.org_name ILIKE ${"%" + args.orgName + "%"}`);
+  if (args.orgState) fconds.push(sql`f.state = ${args.orgState.toUpperCase()}`);
+  if (args.orgCity) fconds.push(sql`f.city ILIKE ${args.orgCity}`);
   if (args.personZip) conds.push(sql`p.zip LIKE ${String(args.personZip).slice(0, 5) + "%"}`);
   if (args.title) conds.push(sql`p.title ILIKE ${"%" + args.title + "%"}`);
   switch (args.role) {
@@ -189,29 +193,48 @@ export async function irs990PeopleSearch(args: Irs990PeopleSearchArgs) {
   }
   if (num(args.minHours) != null) conds.push(sql`p.avg_hours >= ${num(args.minHours)}`);
   if (num(args.minCompOrg) != null) conds.push(sql`p.comp_org >= ${num(args.minCompOrg)}`);
-  if (conds.length === 1) throw new Error("irs990_people_search needs at least one filter (name, surname, orgName, orgState+title, personZip…)");
+  if (conds.length + fconds.length === 1) throw new Error("irs990_people_search needs at least one filter (name, surname, orgName, orgState+title, personZip…)");
 
   const filingTable = args.latestOnly === false ? sql`irs990_filings` : sql`irs990_latest_filings`;
-  const where = sql.join(conds, sql` AND `);
-  const [countRes, listRes] = await Promise.all([
-    db.execute(sql`SELECT count(*)::int AS total FROM irs990_persons p JOIN ${filingTable} f ON f.object_id = p.object_id WHERE ${where}`),
-    db.execute(sql`
+  const where = sql.join([...conds, ...fconds], sql` AND `);
+  // With a name, surname or person zip, resolve the people first and join
+  // their filings second. Left to itself the planner was free to start from
+  // the filing side (every latest IL return) and probe the people table for
+  // each one, which is what the >9s surname + state probe looked like.
+  const personSource = personDriven
+    ? sql`(SELECT * FROM irs990_persons p WHERE ${sql.join(conds, sql` AND `)} OFFSET 0) p`
+    : sql`irs990_persons p`;
+  // One statement, not a count and a list run side by side: the matching set
+  // is built once (MATERIALIZED) and both the total and the page read from
+  // it. The surname + state selftest probe took over 9 seconds as two
+  // parallel joins; this halves the work whatever plan the join gets.
+  const res = rows(await db.execute(sql`
+    WITH hits AS MATERIALIZED (
       SELECT ${PERSON_SELECT},
         f.org_name AS "orgName", f.return_type AS "returnType", f.tax_period_end::text AS "taxPeriodEnd",
         f.city AS "orgCity", f.state AS "orgState", f.zip AS "orgZip",
-        f.total_assets_eoy::float8 AS "orgTotalAssets", f.total_revenue::float8 AS "orgTotalRevenue"
-      FROM irs990_persons p
+        f.total_assets_eoy::float8 AS "orgTotalAssets", f.total_revenue::float8 AS "orgTotalRevenue",
+        row_number() OVER (ORDER BY ${orderBy}) AS _rn
+      FROM ${personSource}
       JOIN ${filingTable} f ON f.object_id = p.object_id
       WHERE ${where}
-      ORDER BY ${orderBy}
-      LIMIT ${limit} OFFSET ${offset}`),
-  ]);
+    )
+    SELECT h.*, (SELECT count(*)::int FROM hits) AS _total
+    FROM hits h
+    WHERE h._rn > ${offset} AND h._rn <= ${offset + limit}
+    ORDER BY h._rn`));
+  let total = Number(res[0]?._total ?? 0);
+  // An offset past the end returns no rows to carry the total; ask for it alone.
+  if (!res.length && offset > 0) {
+    total = Number(rows(await db.execute(sql`SELECT count(*)::int AS total FROM irs990_persons p JOIN ${filingTable} f ON f.object_id = p.object_id WHERE ${where}`))[0]?.total ?? 0);
+  }
+  const people = res.map(({ _rn, _total, ...person }: any) => person);
   return {
     dbReady: true,
-    total: rows(countRes)[0]?.total ?? 0,
+    total,
     limit,
     offset,
-    people: rows(listRes),
+    people,
     note: "Default latestOnly=true searches each org's newest return only (current seats). Set latestOnly=false for history. Common surnames return many unrelated people — add orgState/orgCity or personZip (990-PF only) to disambiguate.",
   };
 }

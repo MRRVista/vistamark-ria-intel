@@ -364,10 +364,23 @@ export async function irsEoExtrasStatus() {
   const tables = { pub78: "irs_pub78", revocation: "irs_eo_revocations", "990n": "irs_990n" } as const;
   const readiness = Object.fromEntries(await Promise.all(Object.entries(tables).map(async ([k, t]) => [k, await ready(t)])));
   const ledgerReady = await ready("irs_eo_extras_loads");
-  const counts: Record<string, number | null> = {};
-  for (const [k, t] of Object.entries(tables)) {
-    counts[k] = readiness[k] ? Number(rows(await db.execute(sql.raw(`SELECT count(*)::bigint AS n FROM ${t}`)))[0]?.n ?? 0) : null;
+  // Row counts come from the load ledger: every load is a full refresh, so the
+  // newest ok load's rows_loaded IS the table's row count. Counting three
+  // 1.2-1.5M-row tables on every call made this status tool take 4-7 seconds.
+  const ledgerCounts: Record<string, number> = {};
+  if (ledgerReady) {
+    for (const r of rows(await db.execute(sql`
+      SELECT DISTINCT ON (dataset) dataset, rows_loaded AS n
+      FROM irs_eo_extras_loads WHERE status = 'ok' ORDER BY dataset, finished_at DESC`))) {
+      if (r.n != null) ledgerCounts[String(r.dataset)] = Number(r.n);
+    }
   }
+  const counts: Record<string, number | null> = {};
+  await Promise.all(Object.entries(tables).map(async ([k, t]) => {
+    counts[k] = !readiness[k] ? null
+      : ledgerCounts[k] != null ? ledgerCounts[k]
+      : Number(rows(await db.execute(sql.raw(`SELECT count(*)::bigint AS n FROM ${t}`)))[0]?.n ?? 0);
+  }));
   const loads = ledgerReady
     ? rows(await db.execute(sql`
         SELECT DISTINCT ON (dataset) dataset, status, started_at AS "startedAt", finished_at AS "finishedAt",
@@ -379,12 +392,10 @@ export async function irsEoExtrasStatus() {
     ? rows(await db.execute(sql`SELECT dataset, max(finished_at) AS "lastOkAt" FROM irs_eo_extras_loads WHERE status='ok' GROUP BY dataset`))
     : [];
   const extra: Record<string, unknown> = {};
-  if (readiness["990n"] && counts["990n"]) {
-    extra.n990ByTaxYear = rows(await db.execute(sql`SELECT tax_year AS "taxYear", count(*)::int AS filers FROM irs_990n GROUP BY 1 ORDER BY 1 DESC LIMIT 8`));
-  }
-  if (readiness.revocation && counts.revocation) {
-    extra.revocationsByYear = rows(await db.execute(sql`SELECT extract(year FROM revocation_date)::int AS year, count(*)::int AS revoked, count(reinstatement_date)::int AS reinstated FROM irs_eo_revocations GROUP BY 1 ORDER BY 1 DESC LIMIT 8`));
-  }
+  await Promise.all([
+    (async () => { if (readiness["990n"] && counts["990n"]) extra.n990ByTaxYear = rows(await db.execute(sql`SELECT tax_year AS "taxYear", count(*)::int AS filers FROM irs_990n GROUP BY 1 ORDER BY 1 DESC LIMIT 8`)); })(),
+    (async () => { if (readiness.revocation && counts.revocation) extra.revocationsByYear = rows(await db.execute(sql`SELECT extract(year FROM revocation_date)::int AS year, count(*)::int AS revoked, count(reinstatement_date)::int AS reinstated FROM irs_eo_revocations GROUP BY 1 ORDER BY 1 DESC LIMIT 8`)); })(),
+  ]);
   return {
     source: SOURCE,
     dbReady: true,

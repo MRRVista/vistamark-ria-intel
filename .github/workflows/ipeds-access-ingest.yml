@@ -1,0 +1,80 @@
+# IPEDS finance loader for collection years 2023-24 onward.
+#
+# WHY THIS EXISTS
+#   NCES stopped publishing the per-survey finance zips (F2324_F2.zip and
+#   friends 404 under every naming variant). From 2023-24 on the finance
+#   tables ship only inside the collection-year Access database
+#   (IPEDS_2023-24_Final.zip, IPEDS_2024-25_Provisional.zip). The Vercel cron
+#   /api/cron/refresh-ipeds cannot read those, so endowment data stopped at
+#   FY2023. This workflow downloads the Access database, reads the F2 and F1A
+#   tables and upserts them through the same mapping the zip path uses.
+#
+# SCHEDULE
+#   Monthly on the 12th at 10:20 UTC. A run only downloads a year whose F2 or
+#   F1A table has not been loaded yet, so most runs do nothing.
+#
+# SECRETS
+#   IRS990_DATABASE_URL (falls back to DATABASE_URL), same as the other loaders.
+#
+# MANUAL
+#   Actions -> "IPEDS Access ingest" -> Run workflow. year blank = every year
+#   from 2024 not yet loaded. dry = download + parse + count, no database.
+#   force = reload a year (use when a Final release replaces Provisional).
+
+name: IPEDS Access ingest
+
+on:
+  schedule:
+    - cron: "20 10 12 * *"
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Fiscal year end (2024 = collection 2023-24). Blank = all pending years"
+        required: false
+        default: ""
+      dry:
+        description: "Dry run: download + parse + count only, no database writes"
+        type: boolean
+        default: false
+      force:
+        description: "Reload even if the year is already loaded"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ipeds-access-ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.IRS990_DATABASE_URL != '' && secrets.IRS990_DATABASE_URL || secrets.DATABASE_URL }}
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Install the Access reader (loader-only, not an app dependency)
+        run: npm install --no-save --no-audit --no-fund mdb-reader@3.2.0
+
+      - name: Apply migrations
+        if: ${{ github.event.inputs.dry != 'true' }}
+        run: npx tsx scripts/migrate.ts
+
+      - name: Load IPEDS finance tables
+        run: |
+          set -euo pipefail
+          ARGS=""
+          if [ -n "${{ github.event.inputs.year }}" ]; then ARGS="$ARGS --year ${{ github.event.inputs.year }}"; fi
+          if [ "${{ github.event.inputs.dry }}" = "true" ]; then ARGS="$ARGS --dry"; fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          echo "args: $ARGS"
+          npx tsx scripts/ipeds-access-ingest.ts $ARGS

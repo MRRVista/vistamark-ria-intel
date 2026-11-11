@@ -392,6 +392,12 @@ export async function loadBatch(batch: IndexBatch, opts: LoaderOptions = {}): Pr
     const reflagged = await refreshLatestForEins(pool, touchedEins);
     log(`${batch.batchId}: is_latest refreshed for ${touchedEins.size} EINs (${reflagged} rows changed)`);
 
+    // Bulk loads do not reliably get an autovacuum ANALYZE on a database that
+    // scales to zero between runs, and a planner working from pre-load
+    // statistics picks join orders that turn a surname lookup into seconds.
+    await pool.query("ANALYZE irs990_filings").catch((e) => log(`ANALYZE irs990_filings failed: ${e}`));
+    await pool.query("ANALYZE irs990_persons").catch((e) => log(`ANALYZE irs990_persons failed: ${e}`));
+
     await pool.query(
       `UPDATE irs990_batches SET status='ok', finished_at=NOW(), files_total=$2, filings_loaded=$3, filings_skipped=$4,
          persons_loaded=$5, parse_errors=$6, bytes=$7, error_sample=$8 WHERE batch_id=$1`,

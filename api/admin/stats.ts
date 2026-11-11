@@ -176,11 +176,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Table might not exist yet — that's fine
   }
 
+  // The live catalog: every base table in the public schema with its columns,
+  // so the Schema Atlas can show tables its hand-written list has not caught up
+  // with (it documented 9 of 34 as of v0.39). Row counts for tables without a
+  // probe above are the planner's estimate, labelled as such.
+  let schema: Array<{ name: string; est_rows: number | null; columns: Array<{ n: string; t: string; nn: boolean; pk: boolean; idx: boolean | "unique" }> }> = [];
+  try {
+    const [cols, idx, est] = await Promise.all([
+      sql(`SELECT c.table_name AS t, c.column_name AS n, c.data_type AS dt, c.udt_name AS udt,
+                  c.character_maximum_length AS len, (c.is_nullable = 'NO') AS nn
+           FROM information_schema.columns c
+           JOIN information_schema.tables tb
+             ON tb.table_schema = c.table_schema AND tb.table_name = c.table_name AND tb.table_type = 'BASE TABLE'
+           WHERE c.table_schema = 'public'
+           ORDER BY c.table_name, c.ordinal_position`),
+      sql(`SELECT t.relname AS t, a.attname AS n, bool_or(i.indisprimary) AS pk, bool_or(i.indisunique AND i.indnatts = 1) AS uq
+           FROM pg_index i
+           JOIN pg_class t ON t.oid = i.indrelid
+           JOIN pg_namespace ns ON ns.oid = t.relnamespace AND ns.nspname = 'public'
+           JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(i.indkey)
+           GROUP BY 1, 2`),
+      sql(`SELECT c.relname AS t, c.reltuples::bigint AS n
+           FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = 'public'
+           WHERE c.relkind = 'r'`),
+    ]);
+    const idxBy = new Map<string, { pk: boolean; uq: boolean }>();
+    for (const r of idx as any[]) idxBy.set(`${r.t}.${r.n}`, { pk: !!r.pk, uq: !!r.uq });
+    const estBy = new Map<string, number>();
+    for (const r of est as any[]) estBy.set(String(r.t), Number(r.n));
+    const byTable = new Map<string, (typeof schema)[number]>();
+    for (const c of cols as any[]) {
+      let t = byTable.get(c.t);
+      if (!t) {
+        const n = estBy.get(c.t);
+        t = { name: c.t, est_rows: n != null && n >= 0 ? n : null, columns: [] };
+        byTable.set(c.t, t);
+      }
+      const type = c.dt === "character varying" ? `varchar${c.len ? `(${c.len})` : ""}`
+        : c.dt === "ARRAY" ? `${String(c.udt).replace(/^_/, "")}[]`
+        : c.dt === "USER-DEFINED" ? String(c.udt)
+        : c.dt === "timestamp without time zone" ? "timestamp"
+        : String(c.dt);
+      const ix = idxBy.get(`${c.t}.${c.n}`);
+      t.columns.push({ n: c.n, t: type, nn: !!c.nn, pk: !!ix?.pk, idx: ix ? (ix.uq && !ix.pk ? "unique" : true) : false });
+    }
+    schema = [...byTable.values()];
+    const probed = new Set(tables.map((t) => t.name));
+    for (const t of schema) {
+      if (!probed.has(t.name)) tables.push({ name: t.name, source: "planner estimate (pg_class.reltuples)", count: t.est_rows, latest_update: null } as any);
+    }
+  } catch {
+    // The catalog overlay is optional; the probed stats above still stand.
+  }
+
   res.status(200).json({
     ok: true,
     db_ready: true,
     generated_at: new Date().toISOString(),
     tables,
+    schema,
     last_ingest_runs,
   });
 }
