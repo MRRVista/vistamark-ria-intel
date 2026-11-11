@@ -29,6 +29,7 @@
  * tells the UI which colour to start with, never as a source of truth.
  */
 
+import SNAPSHOT from "./probe-snapshot.json";
 import { RESEARCH_DOMAIN } from "../research";
 import { FEDREG_DOMAIN } from "../fed-regional";
 import { INTLMACRO_DOMAIN } from "../intl-macro";
@@ -81,21 +82,24 @@ export interface CatalogDomain {
 }
 
 /** Provenance for every `probe` value below. Update when re-syncing. */
+/**
+ * Where the probe values come from. lib/mcp/probe-snapshot.json is generated
+ * from a full /api/selftest run by scripts/sync-probes.ts and overlaid on the
+ * hand-written values below (applyProbeSnapshot), so a re-sync is one command
+ * and one file instead of edits across every family's catalog entry. A tool
+ * the selftest does not cover keeps its hand-written value.
+ */
 export const PROBE_SOURCE = {
-  endpoint: "/api/selftest",
-  ranAt: "2026-11-11T01:16:20.469Z",
-  checksRun: 10,
-  passed: 10,
-  failed: 0,
+  endpoint: SNAPSHOT.endpoint,
+  ranAt: SNAPSHOT.ranAt,
+  checksRun: SNAPSHOT.checksRun,
+  passed: SNAPSHOT.passed,
+  failed: SNAPSHOT.failed,
   note:
-    "PARTIAL re-sync. The 08.30 snapshot (39 checks) is still the base for most " +
-    "tools. On 2026-11-10 the full battery (122 checks, all fired at once) reported " +
-    "43 timeouts that were artifacts of the battery, not the tools, so only the ten " +
-    "checks re-run as small subsets were used: dol_plan_search, bdc_profile, " +
-    "ppp_search and holdings_by_manager moved to live; ppd_plan_profile stays " +
-    "degraded pending its v0.39 fix. Tools in the families added since v0.32 have " +
-    "never been snapshotted and read unprobed. Re-sync from a full run now that " +
-    "selftest caps its concurrency (v0.39).",
+    `Synced from a full selftest run (${SNAPSHOT.checksRun} checks, ${SNAPSHOT.passed} passed) covering ` +
+    `${Object.keys(SNAPSHOT.tools).length} tools. "slow" means the check exceeded the per-check budget; ` +
+    `"degraded" means it returned an error. Tools with no check stay unprobed. ` +
+    `Re-sync: npx tsx scripts/sync-probes.ts <selftest.json>.`,
 } as const;
 
 export const DOMAINS: CatalogDomain[] = [
@@ -379,6 +383,23 @@ export const DOMAINS: CatalogDomain[] = [
     tools: [{ name: "database_status", backing: "postgres", probe: "live" }],
   },
 ];
+
+/**
+ * Overlay the generated snapshot on the hand-written entries. Where the
+ * snapshot disagrees with a hand-written probe, the snapshot wins and the old
+ * note (which explained the old verdict) is replaced by the snapshot's.
+ */
+(function applyProbeSnapshot() {
+  const snap = SNAPSHOT.tools as Record<string, { probe: string; note?: string }>;
+  for (const d of DOMAINS) {
+    for (const t of d.tools) {
+      const s = snap[t.name];
+      if (!s || s.probe === t.probe) continue;
+      t.probe = s.probe as ToolProbe;
+      t.note = s.note;
+    }
+  }
+})();
 
 /** Flat view of every catalogued tool, with its domain stamped on. */
 export const CATALOG_TOOLS: Array<CatalogTool & { domain: string; domainLabel: string }> =
