@@ -23,6 +23,10 @@ export interface EffectiveLawyerProgram {
   maxBand: 1 | 2 | 3 | 4;
   directiveDnum: number | null;
   label: string;
+  /** v0.41.0: at most one draft per firm inside this many days (0 = no spacing). */
+  firmSpacingDays: number;
+  /** v0.41.0: one follow-up this many days after a sent note with no reply (0 = off). */
+  followUpDays: number;
 }
 
 export type RemoteLoad =
@@ -64,6 +68,11 @@ export async function loadEffectiveLawyerProgram(timeoutMs = 15_000): Promise<Re
   if (typeof r.thesis !== "string" || !r.thesis.trim()) return bad("thesis");
   if (!isStrArr(r.extraBanned)) return bad("extraBanned");
   if (r.laneOrder !== undefined && !(isStrArr(r.laneOrder) && r.laneOrder.every(isCategory))) return bad("laneOrder");
+  const optDays = (v: unknown, max: number, dflt: number): number | null => (v === undefined || v === null ? dflt : Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max ? (v as number) : null);
+  const firmSpacingDays = optDays(r.firmSpacingDays, 365, 30);
+  if (firmSpacingDays === null) return bad("firmSpacingDays");
+  const followUpDays = optDays(r.followUpDays, 120, 21);
+  if (followUpDays === null) return bad("followUpDays");
 
   const base = PROGRAM;
   return {
@@ -75,6 +84,7 @@ export async function loadEffectiveLawyerProgram(timeoutMs = 15_000): Promise<Re
       maxBand: r.maxBand,
       directiveDnum: Number.isInteger(r.directiveDnum) ? r.directiveDnum : null,
       label: typeof r.label === "string" && r.label ? r.label : "Lawyer COI Outreach",
+      firmSpacingDays, followUpDays,
       program: {
         ...base,
         mailbox: r.mailbox,
