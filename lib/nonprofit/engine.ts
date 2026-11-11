@@ -535,6 +535,7 @@ Paragraph 1 (personal, 1 to 2 sentences, about 25 to 40 words):
 - An affinity is the RECIPIENT's tie. Call it shared ("fellow ...", "as a fellow alum") only when the sender's side of it is stated in the facts above, and then only at the level stated (e.g. "Northwestern", never a school, program or degree within it that the facts don't name). Otherwise mention the recipient's tie without claiming one for the sender.
 - Do NOT recap the recipient's career or résumé.
 - Never quote their own fee or dollar figures back at them.
+- Never say or imply that you looked up, reviewed or researched the recipient or the organization: no tax filings, no Form 990, no Form 5500, no records of any kind, no "I saw" or "I noticed" about their finances (v0.40.1, M. Rice 2026-11-10: "extremely creepy"). Write as a peer who knows the organization by its work and reputation.
 
 Paragraph 2 (cut to the chase, 1 to 2 sentences, about 25 to 40 words):
 - What Vistamark does and what the sender brings, using at most TWO of the facts above.
@@ -1107,7 +1108,7 @@ export async function runNonprofitEngine(opts: NpEngineOptions = {}): Promise<Np
     }
     // The card's target governs scheduled runs; a manual ?target= still overrides.
     const target = Math.max(1, Math.min(opts.target ?? eff.target, 10));
-    const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 40));
+    const maxCandidates = Math.max(target, Math.min(opts.maxCandidates ?? 12, 80));
     const s = await runProgram(eff.program, has990, { target, maxCandidates, dryRun: !!opts.dryRun, actor, deadline, card: { directiveDnum: eff.directiveDnum, label: eff.label } });
     s.directiveDnum = eff.directiveDnum;
     programs.push(s);
