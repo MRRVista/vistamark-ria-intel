@@ -447,12 +447,20 @@ export function checkDraft(subject: string, body: string, p: LawyerProgram, affi
   if (CAREER_IN_P2.test(p2)) problems.push("paragraph 2 talks about the recipient's career; paragraph 2 is only about Vistamark and the sender");
   if (SALESY.test(body)) problems.push("asks for referrals or client money; this is a get-to-know-each-other note, the ask is a 20-minute call");
   if (/expert witness|testif/i.test(body) && !(lane.expertWitness && highAsset !== false)) problems.push("mentions expert witness work; only the divorce lane may, and only when the attorney handles high-asset matters");
+  // v0.41.3: the first live draft turned "willing to serve as an expert witness"
+  // into "I also serve as an expert witness". When the facts say only willing,
+  // the email may say only willing.
+  if (EW_PRESENT_CLAIM.test(body) && facts.some((f) => /willing to serve as an expert witness/i.test(f)) && !facts.some((f) => /\b(has served|serves|served) as an expert witness/i.test(f))) {
+    problems.push("says the sender serves or has served as an expert witness; the facts say only that he is WILLING to. Write \"I am willing to serve as an expert witness\" or leave it out");
+  }
   const n = words(p1) + words(p2);
   if (n < 45) problems.push(`too short (${n} words; aim for 60 to 90)`);
   if (n > 105) problems.push(`too long (${n} words; aim for 60 to 90)`);
   if (words(subject) > 7) problems.push("subject line longer than 6 words");
   return problems;
 }
+
+const EW_PRESENT_CLAIM = /\b(?:i|we|matt)\s+(?:also\s+|often\s+|regularly\s+|sometimes\s+)?(?:serve|act|work|testify|appear)s?\s+as\s+an?\s+expert witness|\bi am an expert witness|\bi(?: have|'ve)\s+(?:served|testified|acted)\b|\bmy (?:work|role) as an expert witness/i;
 
 export async function draftEmail(c: Candidate, lane: LaneConfig, ardc: ArdcOut, r: ResearchOut, p: LawyerProgram, timeoutMs: number): Promise<DraftOut> {
   const ew = lane.expertWitness && r.high_asset_work !== false;
