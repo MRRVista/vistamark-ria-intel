@@ -276,8 +276,20 @@ export async function discoverLane(lane: LaneConfig, p: LawyerProgram, maxBand: 
   return [...merged.values()].sort((a, b) => a.band - b.band || b.score - a.score);
 }
 
+const DISCOVERY_TTL_MS = 20 * 60_000;
+const discoveryCache = new Map<string, { at: number; rows: Candidate[] }>();
+async function discoverLaneCached(lane: LaneConfig, p: LawyerProgram, maxBand: number, log: (m: string) => void): Promise<Candidate[]> {
+  const key = `${lane.category}|${maxBand}`;
+  const hit = discoveryCache.get(key);
+  if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) { log(`${lane.category}: ${hit.rows.length} from this run's earlier discovery`); return hit.rows.map((c) => ({ ...c, sources: [...c.sources], practiceAreas: [...c.practiceAreas] })); }
+  const rows = await discoverLane(lane, p, maxBand, log);
+  if (rows.length) discoveryCache.set(key, { at: Date.now(), rows: rows.map((c) => ({ ...c, sources: [...c.sources], practiceAreas: [...c.practiceAreas] })) });
+  return rows;
+}
+
 async function alreadyTouched(): Promise<Set<string>> {
-  const r = rows<{ person_key: string; person_name: string; firm_norm: string | null }>(await db.execute(sql`SELECT person_key, person_name, firm_norm FROM lawyer_leads`));
+  // retry:<reason> rows are owed one more attempt, so they are not "touched".
+  const r = rows<{ person_key: string; person_name: string; firm_norm: string | null }>(await db.execute(sql`SELECT person_key, person_name, firm_norm FROM lawyer_leads WHERE status NOT LIKE 'retry:%'`));
   const s = new Set<string>();
   for (const x of r) { s.add(x.person_key); s.add(`name:${normName(x.person_name)}`); }
   return s;
@@ -562,16 +574,30 @@ async function crmCreateLead(p: LawyerProgram, leadId: number, c: Candidate, lan
 
 // -- Persistence ---------------------------------------------------------------------------
 
-async function insertLead(p: LawyerProgram, c: Candidate): Promise<number | null> {
+/** A JS string[] as a Postgres text[] value. Drizzle expands a bare array
+ *  parameter into a row "(a, b)", which Postgres rejects for a text[] column
+ *  (v0.41.1: the first live run failed on exactly that). */
+function textArray(a: string[] | null | undefined) {
+  const v = (a ?? []).map((x) => String(x)).filter(Boolean);
+  return v.length ? sql`ARRAY[${sql.join(v.map((x) => sql`${x}`), sql`, `)}]::text[]` : sql`'{}'::text[]`;
+}
+
+/** v0.41.1: failures that say nothing about the attorney (a registry or model
+ *  call that errored). The attorney gets one more chance on a later run
+ *  (status retry:<reason>) instead of being burned for good; a second failure
+ *  is final. Same rule as the nonprofit engine. */
+const TRANSIENT_REASONS = new Set(["ardc_error", "apollo_enrich_error", "research_error", "draft_error"]);
+
+async function insertLead(p: LawyerProgram, c: Candidate): Promise<{ id: number; retried: boolean } | null> {
   const key = personKey(c.name, c.firm, null);
   const r = rows(await db.execute(sql`
     INSERT INTO lawyer_leads (program, category, person_key, person_name, first_name, last_name, firm, firm_norm, city, state, zip, geo_band,
                               source_tool, source_tools, practice_areas, email, email_status, status)
     VALUES (${p.key}, ${c.category}, ${key}, ${c.name}, ${c.firstName}, ${c.lastName}, ${c.firm}, ${normFirm(c.firm)}, ${c.city}, ${c.state}, ${c.zip}, ${c.band},
-            ${c.sources[0] ?? null}, ${c.sources}, ${c.practiceAreas}, ${c.email}, ${c.email ? "directory" : null}, 'selected')
-    ON CONFLICT (person_key) DO NOTHING
-    RETURNING id`));
-  return r[0]?.id ?? null;
+            ${c.sources[0] ?? null}, ${textArray(c.sources)}, ${textArray(c.practiceAreas)}, ${c.email}, ${c.email ? "directory" : null}, 'selected')
+    ON CONFLICT (person_key) DO UPDATE SET status = 'selected:retry', updated_at = NOW() WHERE lawyer_leads.status LIKE 'retry:%'
+    RETURNING id, status`));
+  return r[0] ? { id: Number(r[0].id), retried: r[0].status === "selected:retry" } : null;
 }
 
 async function updateLead(id: number, fields: Record<string, unknown>): Promise<void> {
@@ -737,9 +763,14 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
   const busyFirms = await recentlyDraftedFirms(eff.firmSpacingDays);
   const firmBusy = (c: Candidate) => { const f = normFirm(c.firm); return !!f && busyFirms.has(f); };
   const perLane = new Map<LawyerCategory, Candidate[]>();
-  for (const lane of lanes) {
-    if (remaining() < 120_000) { s.budgetExhausted = true; break; }
-    const found = await discoverLane(p.lanes[lane], p, eff.maxBand, log);
+  // v0.41.1: lanes are discovered side by side (each lane's own directory
+  // calls stay in sequence) and kept for 20 minutes, so the chunks of one ad
+  // hoc request do not walk the directories again. One lane at a time took
+  // ~45 s each and left no time to draft.
+  const discovered = await Promise.all(lanes.map((lane) => discoverLaneCached(p.lanes[lane], p, eff.maxBand, log)));
+  for (let li = 0; li < lanes.length; li++) {
+    const lane = lanes[li];
+    const found = discovered[li];
     const untouched = found.filter((c) => !touched.has(personKey(c.name, c.firm, null)) && !touched.has(`name:${normName(c.name)}`));
     const fresh = untouched.filter((c) => !firmBusy(c));
     log(`${lane}: ${found.length} found, ${untouched.length} untouched, ${untouched.length - fresh.length} held for firm spacing`);
@@ -774,15 +805,19 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
       catch (err) { s.skipped.push({ reason: "crm_unreachable", person: c.name, firm: c.firm, lane: c.category, error: String(err).slice(0, 200) }); continue; }
     }
 
-    const leadId = opts.dryRun ? null : await insertLead(p, c);
-    if (!opts.dryRun && leadId == null) { s.skipped.push({ reason: "already_claimed", person: c.name, firm: c.firm, lane: c.category }); continue; }
+    const nameKey = personKey(c.name, c.firm, null);
+    const claimed = opts.dryRun ? null : await insertLead(p, c);
+    if (!opts.dryRun && claimed == null) { s.skipped.push({ reason: "already_claimed", person: c.name, firm: c.firm, lane: c.category }); continue; }
+    const leadId = claimed?.id ?? null;
     const lid = leadId ?? 0;
     const fail = async (reason: string, meta: Record<string, unknown> = {}) => {
       if (meta.error) console.error(`[lawyer-engine] ${c.name}: ${reason}: ${String(meta.error).slice(0, 400)}`);
       s.skipped.push({ reason, person: c.name, firm: c.firm, lane: c.category, ...(meta.error ? { error: String(meta.error).slice(0, 200) } : {}) });
       if (!opts.dryRun && leadId != null) {
-        await updateLead(leadId, { status: `skipped:${reason}` });
-        await logEvent(leadId, "gate", `skipped: ${reason}`, meta, opts.actor ?? actor);
+        const again = TRANSIENT_REASONS.has(reason) && !claimed?.retried;
+        // A retry row goes back to its name key so the next run can claim it.
+        await updateLead(leadId, again ? { status: `retry:${reason}`, person_key: nameKey, ardc_id: null } : { status: `skipped:${reason}` });
+        await logEvent(leadId, "gate", again ? `will retry once: ${reason}` : `skipped: ${reason}`, meta, opts.actor ?? actor);
       }
     };
 
