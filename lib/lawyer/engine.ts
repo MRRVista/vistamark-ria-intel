@@ -213,7 +213,7 @@ const TOOL_PRIORITY: Record<string, number> = {
 };
 
 /** Run one lane's directory tools for the bands allowed and merge the rows. */
-export async function discoverLane(lane: LaneConfig, p: LawyerProgram, maxBand: number, log: (m: string) => void): Promise<Candidate[]> {
+export async function discoverLane(lane: LaneConfig, p: LawyerProgram, maxBand: number, log: (m: string) => void, stats?: { failed: number }): Promise<Candidate[]> {
   const bands = p.geo.filter((b) => b.band <= maxBand);
   const merged = new Map<string, Candidate>();
   const add = (row: DirRow, tool: string) => {
@@ -243,7 +243,7 @@ export async function discoverLane(lane: LaneConfig, p: LawyerProgram, maxBand: 
   };
   const call = async (tool: string, fn: () => Promise<any>) => {
     try { const out = await fn(); const rs = shapeRows(out); for (const r of rs) add(r, tool); log(`${lane.category}/${tool}: ${rs.length} rows`); }
-    catch (err) { log(`${lane.category}/${tool} failed: ${String(err).slice(0, 160)}`); }
+    catch (err) { if (stats) stats.failed += 1; log(`${lane.category}/${tool} failed: ${String(err).slice(0, 160)}`); }
   };
 
   const cityList = bands.flatMap((b) => b.cities);
@@ -287,9 +287,9 @@ const cloneCands = (a: Candidate[]): Candidate[] => a.map((c) => ({ ...c, source
 async function saveDiscovery(lane: LawyerCategory, maxBand: number, found: Candidate[], log: (m: string) => void): Promise<void> {
   try {
     await db.execute(sql`
-      INSERT INTO lawyer_discovery (lane, max_band, candidates, n, fetched_at)
-      VALUES (${lane}, ${maxBand}, ${JSON.stringify(found)}::jsonb, ${found.length}, NOW())
-      ON CONFLICT (lane, max_band) DO UPDATE SET candidates = EXCLUDED.candidates, n = EXCLUDED.n, fetched_at = EXCLUDED.fetched_at`);
+      INSERT INTO lawyer_discovery (lane, max_band, candidates, n, fetched_at, complete)
+      VALUES (${lane}, ${maxBand}, ${JSON.stringify(found)}::jsonb, ${found.length}, NOW(), TRUE)
+      ON CONFLICT (lane, max_band) DO UPDATE SET candidates = EXCLUDED.candidates, n = EXCLUDED.n, fetched_at = EXCLUDED.fetched_at, complete = TRUE`);
   } catch (err) { log(`${lane}: directory walk not saved (${String(err).slice(0, 120)})`); }
 }
 
@@ -302,7 +302,7 @@ async function discoverLaneCached(lane: LaneConfig, p: LawyerProgram, maxBand: n
   try {
     const r = rows<{ candidates: any; fetched_at: string; age_days: number }>(await db.execute(sql`
       SELECT candidates, fetched_at, EXTRACT(EPOCH FROM (NOW() - fetched_at)) / 86400 AS age_days FROM lawyer_discovery
-      WHERE lane = ${lane.category} AND max_band = ${maxBand} AND n > 0`));
+      WHERE lane = ${lane.category} AND max_band = ${maxBand} AND n > 0 AND complete`));
     if (r[0] && Number(r[0].age_days) < DISCOVERY_TTL_DAYS * 4) {
       const list = typeof r[0].candidates === "string" ? JSON.parse(r[0].candidates) : r[0].candidates;
       if (Array.isArray(list) && list.length) {
@@ -312,8 +312,13 @@ async function discoverLaneCached(lane: LaneConfig, p: LawyerProgram, maxBand: n
       }
     }
   } catch (err) { log(`${lane.category}: saved directory walk unreadable (${String(err).slice(0, 120)}); walking again`); }
-  const found = await discoverLane(lane, p, maxBand, log);
-  if (found.length && canWrite) await saveDiscovery(lane.category, maxBand, found, log);
+  // v0.41.4: a walk in which any directory call failed is used for this run
+  // but not kept. The third live run saved 9 divorce attorneys for a week
+  // because one roster call timed out; the lane has 99.
+  const stats = { failed: 0 };
+  const found = await discoverLane(lane, p, maxBand, log, stats);
+  if (found.length && canWrite && stats.failed === 0) await saveDiscovery(lane.category, maxBand, found, log);
+  else if (stats.failed) log(`${lane.category}: ${stats.failed} directory call(s) failed; this walk is not kept`);
   return { rows: found, stale: false };
 }
 
@@ -681,6 +686,8 @@ export async function ensureLawyerSchema(): Promise<void> {
   await db.execute(sql`CREATE TABLE IF NOT EXISTS lawyer_discovery (
     lane VARCHAR(16) NOT NULL, max_band SMALLINT NOT NULL, candidates JSONB NOT NULL DEFAULT '[]'::jsonb,
     n INTEGER NOT NULL DEFAULT 0, fetched_at TIMESTAMP NOT NULL DEFAULT NOW(), PRIMARY KEY (lane, max_band))`);
+  // v0.41.4: rows saved before this column existed read as not complete and are walked again.
+  await db.execute(sql`ALTER TABLE lawyer_discovery ADD COLUMN IF NOT EXISTS complete BOOLEAN NOT NULL DEFAULT FALSE`);
   schemaReady = true;
 }
 
@@ -827,7 +834,7 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
     if (opts.dryRun) return;
     for (let li = 0; li < lanes.length; li++) {
       if (!discovered[li].stale || remaining() < 75_000) continue;
-      try { const fresh = await discoverLane(p.lanes[lanes[li]], p, eff.maxBand, log); if (fresh.length) await saveDiscovery(lanes[li], eff.maxBand, fresh, log); }
+      try { const st = { failed: 0 }; const fresh = await discoverLane(p.lanes[lanes[li]], p, eff.maxBand, log, st); if (fresh.length && st.failed === 0) await saveDiscovery(lanes[li], eff.maxBand, fresh, log); }
       catch (err) { log(`${lanes[li]}: new directory walk failed: ${String(err).slice(0, 120)}`); }
     }
   };
