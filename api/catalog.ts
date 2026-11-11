@@ -2,13 +2,14 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAccessOrSession } from "../lib/auth";
 import { TOOLS, TOOL_BY_NAME } from "../lib/mcp/tools";
 import { DOMAINS, PROBE_SOURCE, probeSummary, reconcile } from "../lib/mcp/catalog";
+import { VERSION } from "../lib/version";
 
 /**
  * GET /api/catalog        — grouped manifest + inputSchemas + drift report
  * GET /api/catalog?health=1 — same, plus live ingest pipelineHealth
  *
  * This is the console's bootstrap call. It exists so the UI can render the
- * full 64-tool navigation AND generate input forms from one request, instead
+ * full tool navigation AND generate input forms from one request, instead
  * of doing tools/list over JSON-RPC and then re-deriving groupings client-side.
  *
  * Auth rides requireAccessOrSession: an Entra session cookie (browser) or an
@@ -87,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const payload: Record<string, unknown> = {
     server: "vistamark-ria-intel",
+    version: VERSION,
     generatedAt: new Date().toISOString(),
     identity: auth.via === "session" ? { via: "session", email: auth.email, kind: auth.kind } : { via: "token" },
     counts: {

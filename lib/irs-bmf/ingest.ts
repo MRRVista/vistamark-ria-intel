@@ -7,9 +7,13 @@
  *
  * Memory: streaming keeps RSS below ~150 MB even on the largest region (eo4,
  *         ~500K rows). The whole file is never held in memory.
- * Time:   each region takes 60–120s wall-clock against Neon HTTP (network
- *         dominates). Vercel function maxDuration is 300s; we process one
- *         region per cron tick to leave plenty of headroom.
+ * Time:   one upsert round trip per 500 rows against Neon HTTP. Run strictly
+ *         one after another, the largest regions outgrew the 300s function
+ *         limit (weekly timeouts from 2026-07 on), so batches are now written
+ *         UPSERT_CONCURRENCY at a time — EINs are unique within a file, so
+ *         concurrent batches never touch the same row. A wall-clock budget
+ *         stops the run cleanly (status 'error', counts recorded) before
+ *         Vercel would kill it and strand the run row in 'running'.
  *
  * Note on ingest_runs columns: the existing schema uses `firms_*` count fields
  * which originated with ADV. For BMF we reuse them — `firms_processed` =
@@ -32,6 +36,9 @@ import {
 
 const SOURCE_PREFIX = "irs-bmf";
 const BATCH_SIZE = 500;
+const UPSERT_CONCURRENCY = 6;
+/** Stop reading and fail cleanly before the 300s function limit. */
+const TIME_BUDGET_MS = 270_000;
 
 export interface IngestRegionResult {
   region: BmfRegion;
@@ -42,16 +49,20 @@ export interface IngestRegionResult {
 }
 
 /**
- * Pick which region to process next. Strategy: oldest successful run wins
- * (so we round-robin through all 6 regions over time). If a region has never
- * been ingested, that one goes first.
+ * Pick which region to process next. Strategy: the region whose most recent
+ * ATTEMPT is oldest wins (so we round-robin through all 6 regions over time).
+ * If a region has never been attempted, that one goes first.
+ *
+ * It used to rank by the latest *successful* run. A region that kept timing
+ * out never recorded one, so it stayed "oldest" and was picked every week
+ * while the other five went unrefreshed.
  */
 export async function pickNextRegion(): Promise<BmfRegion> {
   if (!db) throw new Error("Database not configured");
   const latestRuns = await db.execute(sql`
-    SELECT source, MAX(finished_at) AS last_done
+    SELECT source, MAX(started_at) AS last_done
     FROM ingest_runs
-    WHERE status = 'ok' AND source LIKE ${`${SOURCE_PREFIX}/%`}
+    WHERE source LIKE ${`${SOURCE_PREFIX}/%`}
     GROUP BY source
   `);
   const seen = new Map<string, Date>();
@@ -109,12 +120,23 @@ export async function ingestRegion(region: BmfRegion): Promise<IngestRegionResul
     let headerSkipped = false;
     let batch: NonprofitInsert[] = [];
 
-    const flush = async () => {
-      if (batch.length === 0) return;
-      const result = await upsertBatch(batch);
-      rowsInserted += result.inserted;
-      rowsUpdated += result.updated;
-      batch = [];
+    // Up to UPSERT_CONCURRENCY upserts in flight; the reader waits for a free
+    // slot, so memory stays bounded at a handful of 500-row batches.
+    const inFlight = new Set<Promise<void>>();
+    let writeError: unknown = null;
+    const submit = async (chunk: NonprofitInsert[]) => {
+      if (chunk.length === 0) return;
+      while (inFlight.size >= UPSERT_CONCURRENCY) await Promise.race(inFlight);
+      if (writeError) throw writeError;
+      const p: Promise<void> = upsertBatch(chunk)
+        .then((result) => { rowsInserted += result.inserted; rowsUpdated += result.updated; })
+        .catch((e) => { writeError = writeError ?? e; })
+        .finally(() => { inFlight.delete(p); });
+      inFlight.add(p);
+    };
+    const drain = async () => {
+      await Promise.all(inFlight);
+      if (writeError) throw writeError;
     };
 
     while (true) {
@@ -130,11 +152,11 @@ export async function ingestRegion(region: BmfRegion): Promise<IngestRegionResul
         const record = bmfRowToRecord(row, region);
         if (record) batch.push(record);
       });
-      while (batch.length >= BATCH_SIZE) {
-        const chunk = batch.splice(0, BATCH_SIZE);
-        const result = await upsertBatch(chunk);
-        rowsInserted += result.inserted;
-        rowsUpdated += result.updated;
+      while (batch.length >= BATCH_SIZE) await submit(batch.splice(0, BATCH_SIZE));
+      if (Date.now() - start > TIME_BUDGET_MS) {
+        await reader.cancel().catch(() => {});
+        await drain().catch(() => {});
+        throw new Error(`time budget (${TIME_BUDGET_MS / 1000}s) reached after ${rowsProcessed} rows — region not finished; rows written so far are kept`);
       }
     }
     finishCsvStream(state, (row) => {
@@ -142,7 +164,8 @@ export async function ingestRegion(region: BmfRegion): Promise<IngestRegionResul
       const record = bmfRowToRecord(row, region);
       if (record) batch.push(record);
     });
-    await flush();
+    while (batch.length > 0) await submit(batch.splice(0, BATCH_SIZE));
+    await drain();
 
     await db
       .update(ingestRuns)

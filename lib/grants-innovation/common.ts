@@ -54,15 +54,6 @@ export function trunc(s: unknown, n = 160): string | null {
   return t.length > n ? t.slice(0, n - 1) + "…" : t || null;
 }
 
-export function toList(v: unknown): string[] {
-  if (v == null) return [];
-  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
-  return String(v)
-    .split(/[|,]/)
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
 export function sumBy<T>(rows: T[], key: (r: T) => string | null | undefined, val: (r: T) => number | null | undefined, top = 10) {
   const m = new Map<string, { n: number; total: number }>();
   for (const r of rows) {

@@ -42,10 +42,6 @@ function textOf(fragment: string): string {
   return decodeXml(out);
 }
 
-export interface XlsxSheetList {
-  names: string[];
-}
-
 export function xlsxSheetNames(buf: Buffer): string[] {
   const zip = new AdmZip(buf);
   const wb = zip.getEntry("xl/workbook.xml")?.getData().toString("utf8") ?? "";

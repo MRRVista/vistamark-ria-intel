@@ -31,6 +31,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db, isDbReady, schema } from "../db";
 import { PERSONA, personaFactsBlock } from "./persona";
 import { openingRule, normalizeOpening } from "../outreach/opening"; // v0.36.0: "Name," / "Hope all is well." house opening
+import { normalizeEmail } from "./normalize";
 import { dashRule, stripDashes, assertNoDashes } from "../outreach/dashes"; // v0.37.0: firm-wide, no em/en dashes or "--"
 
 const { prospects, prospectHouseholds, prospectEvents } = schema;
@@ -331,11 +332,40 @@ async function resolveZip(zip5?: string): Promise<string> {
   return z?.zip5 ?? "60521";
 }
 
+/** Tag carried only while a run is working a row (see releaseStaleClaims). */
+const CLAIM_TAG = "engine:claim";
+
+/** Append a tag once; repeat runs must not grow the array. */
+function addTag(tag: string) {
+  return sql`CASE WHEN ${tag} = ANY(coalesce(${prospects.tags}, '{}')) THEN ${prospects.tags} ELSE array_append(coalesce(${prospects.tags}, '{}'), ${tag}) END`;
+}
+
+/**
+ * A run killed mid-research (function timeout) never reaches the code that
+ * puts the row back, so it would sit in 'researching' forever. Rows the
+ * engine claimed more than 20 minutes ago are returned to 'new'. Only rows
+ * carrying the engine's own claim tag are touched — a person a partner moved
+ * to 'researching' by hand is left alone.
+ */
+async function releaseStaleClaims(): Promise<number> {
+  const r: any = await db.execute(sql`
+    UPDATE prospects
+    SET lead_status = 'new', tags = array_remove(tags, ${CLAIM_TAG}), updated_at = NOW()
+    WHERE lead_status = 'researching' AND ${CLAIM_TAG} = ANY(coalesce(tags, '{}'))
+      AND updated_at < NOW() - INTERVAL '20 minutes'
+    RETURNING id`);
+  return ((r?.rows ?? r ?? []) as unknown[]).length;
+}
+
 /**
  * Ranked, untouched people: lead_status 'new', not opted out, no email yet
  * (if a vendor already supplied one, the engine's research step isn't the
- * bottleneck — those go through the normal CRM path). Highest home value
- * first; ties by lead_score then id.
+ * bottleneck — those go through the normal CRM path), and never examined by
+ * the engine before. Highest home value first; ties by lead_score then id.
+ *
+ * "Never examined" is the engine:* tag every gate outcome writes. Without it
+ * a person the gate turned away went back to 'new' and was re-selected — and
+ * re-researched — on every run, because they still ranked first on home value.
  */
 async function selectCandidates(zip5: string, limit: number) {
   return db
@@ -360,6 +390,7 @@ async function selectCandidates(zip5: string, limit: number) {
       eq(prospects.doNotContact, false),
       eq(prospects.doNotEmail, false),
       sql`${prospects.email} IS NULL`,
+      sql`NOT EXISTS (SELECT 1 FROM unnest(coalesce(${prospects.tags}, '{}')) AS t(tag) WHERE t.tag LIKE 'engine:%')`,
     ))
     .orderBy(sql`${prospectHouseholds.homeValue} DESC NULLS LAST`, desc(prospects.leadScore), asc(prospects.id))
     .limit(limit);
@@ -385,6 +416,11 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
   };
   if (delivery === "queue") warnings.push("MS_GRAPH_* / OUTREACH_MAILBOX not set — drafts queued in prospect_events for the m365 side to pull from GET /api/prospect-outreach");
 
+  if (!opts.dryRun) {
+    const released = await releaseStaleClaims();
+    if (released) warnings.push(`${released} prospect(s) left in 'researching' by an interrupted run were returned to 'new'`);
+  }
+
   const candidates = await selectCandidates(zip5, maxCandidates);
   if (candidates.length === 0) {
     warnings.push(`no untouched prospects in ${zip5} — load an assessor/vendor list via POST /api/prospects first`);
@@ -401,7 +437,8 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
     if (remaining() < 75_000) { summary.budgetExhausted = true; break; }
     summary.examined += 1;
 
-    if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "researching", updatedAt: new Date() }).where(eq(prospects.id, c.id));
+    if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "researching", tags: addTag(CLAIM_TAG), updatedAt: new Date() }).where(eq(prospects.id, c.id));
+    const unclaim = sql`array_remove(coalesce(${prospects.tags}, '{}'), ${CLAIM_TAG})`;
 
     let research: ResearchResult;
     try {
@@ -409,7 +446,7 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await logEvent(c.id, "note", `engine research failed: ${msg}`, { stage: "research", error: msg }, actor);
-      if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "new", updatedAt: new Date() }).where(eq(prospects.id, c.id));
+      if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "new", tags: unclaim, updatedAt: new Date() }).where(eq(prospects.id, c.id));
       summary.skipped.push({ reason: "research_error", prospectId: c.id, name: c.fullName });
       continue;
     }
@@ -436,7 +473,7 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
       if (!opts.dryRun) {
         await db.update(prospects).set({
           leadStatus: reason === "entity_not_person" ? "disqualified" : "new",
-          tags: sql`array_append(coalesce(${prospects.tags}, '{}'), ${"engine:" + reason})`,
+          tags: sql`array_append(array_remove(coalesce(${prospects.tags}, '{}'), ${CLAIM_TAG}), ${"engine:" + reason})`,
           updatedAt: new Date(),
         }).where(eq(prospects.id, c.id));
       }
@@ -451,13 +488,15 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await logEvent(c.id, "note", `engine draft failed: ${msg}`, { stage: "draft", error: msg }, actor);
-      if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "new", updatedAt: new Date() }).where(eq(prospects.id, c.id));
+      if (!opts.dryRun) await db.update(prospects).set({ leadStatus: "new", tags: unclaim, updatedAt: new Date() }).where(eq(prospects.id, c.id));
       summary.skipped.push({ reason: "draft_error", prospectId: c.id, name: c.fullName });
       continue;
     }
 
     const body = finalBody(draft);
     const email = research.email!;
+    // Same normalization the importer uses, so the dedupe key matches a later list load.
+    const cleanEmail = normalizeEmail(email);
     let deliveryState = "pending";
     let graph: { id: string; webLink: string | null } | null = null;
 
@@ -491,11 +530,11 @@ export async function runProspectEngine(opts: EngineOptions = {}): Promise<Engin
 
     if (!opts.dryRun) {
       await db.update(prospects).set({
-        email,
-        emailNormalized: email,
+        email: cleanEmail.email ?? email,
+        emailNormalized: cleanEmail.normalized ?? email.trim().toLowerCase(),
         emailStatus: "unverified",
         leadStatus: "qualified",
-        tags: sql`array_append(coalesce(${prospects.tags}, '{}'), ${"engine:drafted"})`,
+        tags: sql`array_append(array_remove(coalesce(${prospects.tags}, '{}'), ${CLAIM_TAG}), ${"engine:drafted"})`,
         updatedAt: new Date(),
       }).where(eq(prospects.id, c.id));
     }

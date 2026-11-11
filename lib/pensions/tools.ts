@@ -21,14 +21,16 @@
  */
 import { ppdQVariables, ppdList, isErrorEnvelope, type PpdRow } from "./client";
 
-// Primary variable set (PPD variable names). ppd_id is deliberately NOT
-// requested — the API returns plan identifiers alongside requested variables,
-// and requesting non-variable columns can reject the whole query. If the API
-// rejects the set or returns nothing usable, we fall back to CORE_VARS and
-// mark the response degraded.
+// Primary variable set (PPD variable names). ppd_id IS requested (verified
+// live 2026-11-10: the API accepts it as a variable and does not return it
+// otherwise, which is why every plan used to come back with ppdId null and
+// profiles could not be scoped server-side). If the API rejects the set or
+// returns nothing usable, we fall back to CORE_VARS and mark the response
+// degraded.
 const FULL_VARS = [
   "fy",
   "PlanName",
+  "ppd_id",
   "StateAbbrev",
   "AdministeringGovt",
   "MktAssets_net",
@@ -39,7 +41,37 @@ const FULL_VARS = [
   "actives_tot",
   "beneficiaries_tot",
 ];
-const CORE_VARS = ["fy", "PlanName", "MktAssets_net", "ActFundedRatio_GASB"];
+const CORE_VARS = ["fy", "PlanName", "ppd_id", "MktAssets_net", "ActFundedRatio_GASB"];
+
+const METRIC_FIELDS = [
+  "MktAssets_net", "ActAssets_GASB", "ActLiabilities_GASB", "ActFundedRatio_GASB",
+  "InvestmentReturnAssumption_GASB", "actives_tot", "beneficiaries_tot",
+];
+
+/**
+ * The API answers a multi-dataset variable list with one row per plan-year
+ * PER DATASET: the row from the dataset that holds the values, followed by
+ * rows for the same plan-year with every metric null (verified live
+ * 2026-11-10 on ppd_id 9: four valued rows, then 88 all-null repeats of
+ * FY2022–2025). Taking "the last row for the latest year" therefore returned
+ * a null shell — the all-null ppd_plan_profile metrics. Collapse to one row
+ * per plan-year, keeping the row that actually carries the most values.
+ */
+function dedupePlanYears(rows: PpdRow[]): PpdRow[] {
+  const filled = (r: PpdRow) => METRIC_FIELDS.reduce((n, k) => n + (num(field(r, k)) != null ? 1 : 0), 0);
+  const best = new Map<string, { row: PpdRow; score: number }>();
+  const passthrough: PpdRow[] = [];
+  for (const row of rows) {
+    const id = field(row, "ppd_id") ?? field(row, "PlanName");
+    const fy = field(row, "fy");
+    if (id == null || id === "" || fy == null || fy === "") { passthrough.push(row); continue; }
+    const key = `${id}|${fy}`;
+    const score = filled(row);
+    const prev = best.get(key);
+    if (!prev || score > prev.score) best.set(key, { row, score });
+  }
+  return [...[...best.values()].map((b) => b.row), ...passthrough];
+}
 
 /** Case-insensitive field getter (the API's key casing is not guaranteed). */
 function field(row: PpdRow, ...names: string[]): any {
@@ -117,7 +149,7 @@ async function fetchRecent(): Promise<{ rows: PpdRow[]; degraded: boolean; varsU
 /** Keep only each plan's most recent fiscal year. */
 function latestPerPlan(rows: PpdRow[]): PpdRow[] {
   const byPlan = new Map<string, PpdRow>();
-  for (const row of rows) {
+  for (const row of dedupePlanYears(rows)) {
     const idRaw = field(row, "ppd_id") ?? field(row, "PlanName");
     if (idRaw == null || idRaw === "") continue;
     const id = String(idRaw);
@@ -254,6 +286,8 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
   let degraded = false;
   try {
     const res = await ppdQVariables(FULL_VARS, { fyStart: 2001, ppdId: ppdId ?? undefined });
+    // A rejected variable set comes back as a status envelope, not an HTTP error.
+    if (!hasPlanIdentity(res.rows)) throw new Error("no plan rows in primary variable set");
     history = res.rows;
   } catch {
     const res = await ppdQVariables(CORE_VARS, { fyStart: 2001, ppdId: ppdId ?? undefined });
@@ -269,7 +303,7 @@ export async function ppdPlanProfile(args: PpdPlanProfileArgs) {
     history = history.filter((r) => String(field(r, "PlanName") ?? "") === resolvedName);
   }
 
-  const series = history
+  const series = dedupePlanYears(history)
     .map(mapRow)
     .filter((r) => r.fy != null)
     .sort((a, b) => (a.fy! < b.fy! ? -1 : 1));

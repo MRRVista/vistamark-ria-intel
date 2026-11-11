@@ -150,11 +150,6 @@ export function normIsoDate(v: unknown, isEnd = false): string | null {
   return null;
 }
 
-export function isoToUs(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${m}/${d}/${y}`;
-}
-
 // ---------------------------------------------------------------------------
 // Name matching
 // ---------------------------------------------------------------------------
@@ -258,9 +253,4 @@ export function nameScore(q: Prepared, c: Prepared): number {
   const tokenScore = coverage * lengthFactor;
   const whole = jaroWinkler(q.joined, c.joined);
   return Math.round(Math.max(tokenScore, whole * 0.97) * 100);
-}
-
-/** Cheap substring test on normalized text (used as a secondary, non-scored filter). */
-export function normContains(hay: string, needle: string): boolean {
-  return nameTokens(hay, false).join(" ").includes(nameTokens(needle, false).join(" "));
 }

@@ -194,22 +194,3 @@ export function personaFactsBlock(p: NonprofitProgram): string {
   const lines = p.persona.facts.map((f, i) => `${i + 1}. ${f.replace(ALWAYS_TAG, "")}${ALWAYS_TAG.test(f) ? "  (REQUIRED: use this one in paragraph 2 of every email)" : ""}`);
   return lines.join("\n") + (always.length ? "\nThe REQUIRED fact counts toward the two-fact limit." : "");
 }
-
-/** Next two weekday call slots, skipping the next two business days so the
- *  recipient sees real near-term availability ("Tue 10/21 or Thu 10/23"). */
-export function availabilityDates(now = new Date()): [string, string] {
-  const tz = "America/Chicago";
-  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "numeric", day: "numeric" });
-  const out: string[] = [];
-  const d = new Date(now);
-  let skipped = 0;
-  while (out.length < 2) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const dow = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(d);
-    if (dow === "Sat" || dow === "Sun") continue;
-    if (skipped < 2) { skipped += 1; continue; }         // leave two business days of runway
-    out.push(fmt.format(d).replace(",", ""));
-    d.setUTCDate(d.getUTCDate() + 1);                     // space the two slots a day apart minimum
-  }
-  return [out[0], out[1]];
-}

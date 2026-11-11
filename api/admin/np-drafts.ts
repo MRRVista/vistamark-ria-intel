@@ -234,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         UPDATE np_events
         SET meta = meta || ${JSON.stringify({ delivery: "outlook_draft", graphMessageId: g.id, graphWebLink: g.webLink, flushedAt: new Date().toISOString() })}::jsonb
         WHERE id = ${r.id}`);
-      await db.execute(sql`UPDATE np_leads SET graph_message_id = ${g.id}, updated_at = NOW() WHERE id = ${r.leadId}`);
+      await db.execute(sql`UPDATE np_leads SET graph_message_id = ${g.id}, status = CASE WHEN status = 'draft_pending' THEN 'drafted' ELSE status END, updated_at = NOW() WHERE id = ${r.leadId}`);
       delivered.push({ eventId: r.id, leadId: r.leadId, org: r.orgName, person: r.personName, mailbox });
     } catch (err) {
       failed.push({ eventId: r.id, org: r.orgName, error: String(err).slice(0, 250) });

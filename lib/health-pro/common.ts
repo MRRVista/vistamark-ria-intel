@@ -9,7 +9,7 @@
  */
 import { jsonFetch } from "../data/http";
 
-export { cached, HOUR, round, clampInt, toNum } from "../research/common";
+export { cached, HOUR, round, clampInt } from "../research/common";
 
 export const DAY = 24 * 60 * 60 * 1000;
 

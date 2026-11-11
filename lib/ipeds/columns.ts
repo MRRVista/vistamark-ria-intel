@@ -68,12 +68,6 @@ export const CONTROL_LABEL: Record<number, string> = {
   3: "Private for-profit",
 };
 
-export const ICLEVEL_LABEL: Record<number, string> = {
-  1: "4-year or above",
-  2: "At least 2 but less than 4-year",
-  3: "Less than 2-year",
-};
-
 /**
  * Normalize a header field name by stripping BOM/zero-width chars, quotes,
  * surrounding whitespace, and upper-casing. IPEDS files have historically

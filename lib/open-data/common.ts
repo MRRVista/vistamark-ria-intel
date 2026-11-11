@@ -5,7 +5,7 @@
  */
 import { politeFetch, redactUrl } from "../data/http";
 import { cached } from "../research/common";
-export { soqlStr, soqlLike, num, str, day, clampLimit, strList } from "../local-wealth/socrata";
+export { soqlStr, soqlLike, num, str, clampLimit, strList } from "../local-wealth/socrata";
 export { cached };
 
 export const MIN = 60 * 1000;

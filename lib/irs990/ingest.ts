@@ -123,7 +123,9 @@ export async function listIndexBatches(year: number): Promise<IndexBatch[]> {
     // Index has no quoted commas in practice; TAXPAYER_NAME is the only free
     // text and the IRS strips commas. Guard anyway by taking the LAST column.
     const cols = line.split(",");
-    const batchId = cols[cols.length - 1]?.trim();
+    // The zip on apps.irs.gov is upper-case (2024_TEOS_XML_06A.zip) but the
+    // index has carried the suffix in lower case (…_06a), which 404'd.
+    const batchId = cols[cols.length - 1]?.trim().toUpperCase();
     const type = cols[iType]?.trim() ?? "";
     if (!batchId || !/^\d{4}_TEOS_XML_/.test(batchId)) continue;
     let b = map.get(batchId);

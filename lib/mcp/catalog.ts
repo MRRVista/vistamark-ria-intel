@@ -1,5 +1,6 @@
 /**
- * VistaIntel tool catalog — navigation taxonomy for the 234 MCP tools (v0.35).
+ * VistaIntel tool catalog — navigation taxonomy for every MCP tool in
+ * lib/mcp/tools.ts (reconcile() below fails loudly if the two drift).
  *
  * WHY THIS EXISTS
  * ---------------
@@ -22,7 +23,7 @@
  * ---------------------------
  * These values are hand-synced from a /api/selftest run (see PROBE_SOURCE).
  * They exist so the console can paint status instantly on first paint instead
- * of blocking ~7s on a 36-check selftest. They WILL drift. Anything making a
+ * of blocking on the full selftest battery. They WILL drift. Anything making a
  * real decision should read /api/selftest, and /api/catalog?health=1 overlays
  * live ingest-pipeline state on top of this. Treat `probe` as a hint that
  * tells the UI which colour to start with, never as a source of truth.
@@ -55,7 +56,7 @@ import { LEGALPROS_DOMAIN } from "../legal-pros";
 export type ToolProbe =
   | "live" //      probed and returned real data
   | "slow" //      probed and exceeded the selftest per-check budget
-  | "empty" //     probed clean, but the backing table has never been ingested
+  | "empty" //     probed clean, but the backing table has no rows loaded
   | "degraded" //  probed and resolved, but returned structurally null metrics
   | "unprobed"; //  not covered by selftest — status genuinely unknown
 
@@ -82,17 +83,19 @@ export interface CatalogDomain {
 /** Provenance for every `probe` value below. Update when re-syncing. */
 export const PROBE_SOURCE = {
   endpoint: "/api/selftest",
-  ranAt: "2026-08-30T22:19:59.823Z",
-  checksRun: 39,
-  passed: 39,
+  ranAt: "2026-11-11T01:16:20.469Z",
+  checksRun: 10,
+  passed: 10,
   failed: 0,
   note:
-    "Clean run. The three FRED composites that timed out in the 08.19 sync " +
-    "now finish in ~2.6s against the 7000ms budget, so they move slow -> live. " +
-    "EODHD probes are live for the first time (token landed). Passing is NOT " +
-    "the same as healthy: dol_plan_search still answers rows:[] on total:224947, " +
-    "and ppd_plan_profile/bdc_profile still return all-null metrics, so those " +
-    "stay degraded despite ok=true.",
+    "PARTIAL re-sync. The 08.30 snapshot (39 checks) is still the base for most " +
+    "tools. On 2026-11-10 the full battery (122 checks, all fired at once) reported " +
+    "43 timeouts that were artifacts of the battery, not the tools, so only the ten " +
+    "checks re-run as small subsets were used: dol_plan_search, bdc_profile, " +
+    "ppp_search and holdings_by_manager moved to live; ppd_plan_profile stays " +
+    "degraded pending its v0.39 fix. Tools in the families added since v0.32 have " +
+    "never been snapshotted and read unprobed. Re-sync from a full run now that " +
+    "selftest caps its concurrency (v0.39).",
 } as const;
 
 export const DOMAINS: CatalogDomain[] = [
@@ -134,13 +137,11 @@ export const DOMAINS: CatalogDomain[] = [
       {
         name: "dol_plan_search",
         backing: "postgres",
-        probe: "degraded",
+        probe: "live",
         note:
-          "Table is POPULATED (224,947 rows) but every probe returned an empty " +
-          "rows array — including the unfiltered one, which reported total=224947 " +
-          "with rows=[]. State+assets and 401(k) feature-code filters both " +
-          "returned total=0. Row projection and filter predicates are broken, " +
-          "not the ingest.",
+          "Re-probed 2026-11-10: unfiltered, state+assets and 401(k) feature-code " +
+          "probes all return plan rows (the empty-rows defect in the 08.30 snapshot " +
+          "is fixed). 2024 plan assets come from the Schedule H/I join.",
       },
       { name: "dol_plan_lookup", backing: "postgres", probe: "unprobed" },
     ],
@@ -175,10 +176,10 @@ export const DOMAINS: CatalogDomain[] = [
         backing: "live-api",
         probe: "degraded",
         note:
-          "Resolves the plan and returns 3 observations, but the `latest` block " +
-          "came back all-null (marketAssetsUsd, fundedRatioPct, etc.) for a plan " +
-          "the size of California PERF. Latest-period selection is picking a row " +
-          "with no reported values.",
+          "All-null `latest` block traced 2026-11-10: the API repeats each plan-year " +
+          "once per dataset, valued row first and all-null rows after, and the tool " +
+          "took the last one. v0.39 collapses plan-years to the valued row and " +
+          "requests ppd_id. Stays degraded until the next snapshot confirms it live.",
       },
       { name: "ppd_list_variables", backing: "live-api", probe: "live" },
     ],
@@ -191,8 +192,8 @@ export const DOMAINS: CatalogDomain[] = [
       {
         name: "ppp_search",
         backing: "postgres",
-        probe: "empty",
-        note: "ppp_loans table has never been ingested — returns a clean total=0.",
+        probe: "live",
+        note: "ppp_loans loaded 2026-10-25 by the Data loads workflow (SBA $150k+ file, 968,524 rows).",
       },
       { name: "ppp_lookup", backing: "postgres", probe: "unprobed" },
     ],
@@ -214,10 +215,11 @@ export const DOMAINS: CatalogDomain[] = [
       {
         name: "holdings_by_manager",
         backing: "postgres",
-        probe: "empty",
+        probe: "live",
         note:
-          "f13f_filings / f13f_holdings never ingested — the quarterly cron is a " +
-          "deliberate no-op stub. Returns a clean empty result, not an error.",
+          "f13f_filings / f13f_holdings are loaded quarterly by the Data loads GitHub " +
+          "Actions workflow (11,852 filings / 3.83M holdings as of 2026-10-25). There is " +
+          "no Vercel cron for 13F; the old no-op stub was removed in v0.39.",
       },
       { name: "holders_of_security", backing: "postgres", probe: "unprobed" },
     ],
@@ -273,11 +275,8 @@ export const DOMAINS: CatalogDomain[] = [
       {
         name: "bdc_profile",
         backing: "hybrid",
-        probe: "degraded",
-        note:
-          "Resolves the filer and returns recent filings, but every financial " +
-          "metric came back null (totalAssetsUsd, netAssetsUsd, navPerShare, ...) " +
-          "for ARCC. The XBRL concept mapping is not matching BDC tags.",
+        probe: "live",
+        note: "Re-probed 2026-11-10: ARCC returns total assets, net assets and the rest of the XBRL metrics.",
       },
       { name: "bdc_screen", backing: "hybrid", probe: "unprobed" },
     ],
@@ -386,12 +385,6 @@ export const CATALOG_TOOLS: Array<CatalogTool & { domain: string; domainLabel: s
   DOMAINS.flatMap((d) =>
     d.tools.map((t) => ({ ...t, domain: d.id, domainLabel: d.label }))
   );
-
-export const DOMAIN_BY_TOOL: Record<string, string> = Object.fromEntries(
-  CATALOG_TOOLS.map((t) => [t.name, t.domain])
-);
-
-export const CATALOG_TOOL_COUNT = CATALOG_TOOLS.length;
 
 /**
  * Roll the per-tool probe values into counts for the console header.

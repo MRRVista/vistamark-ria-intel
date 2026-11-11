@@ -57,6 +57,17 @@ export async function requireAccessOrSession(
   return { ok: false, reason: "Sign in with your Vistamark account or provide ACCESS_TOKEN" };
 }
 
+/**
+ * True when the request is one of Vercel's own scheduled invocations rather
+ * than a manual (CRON_SECRET) trigger. Vercel's scheduler does not reliably
+ * send x-vercel-cron; it identifies itself by user-agent "vercel-cron/1.0".
+ * Used by the nightly engines to decide whether the local-hour gate and the
+ * *_ENGINE_ENABLED switches apply. Not an auth check — call requireCron first.
+ */
+export function isVercelCronRequest(req: VercelRequest): boolean {
+  return !!req.headers["x-vercel-cron"] || /vercel-cron/i.test(String(req.headers["user-agent"] || ""));
+}
+
 export function requireCron(req: VercelRequest): { ok: true } | { ok: false; reason: string } {
   // Vercel injects this header automatically on scheduled cron invocations
   const cronHeader = req.headers["x-vercel-cron"];

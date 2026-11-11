@@ -11,7 +11,7 @@
  * Prices are USD (vs_currency), market caps/volumes in USD. Cached 60 s (prices,
  * markets, global) / 15 min (history) / 24 h (symbol resolution).
  */
-import { jsonFetch, politeFetch, redactUrl } from "../data/http";
+import { politeFetch, redactUrl } from "../data/http";
 import { cached, clampInt, HOUR, round } from "../research/common";
 
 const BASE = "https://api.coingecko.com/api/v3";
@@ -228,13 +228,4 @@ export async function coingeckoGlobal(_args: any) {
         }
       : null,
   };
-}
-
-export async function coingeckoPing(): Promise<boolean> {
-  try {
-    const r = await jsonFetch<any>(`${BASE}/ping`, { headers: headers(), retries: 0, timeoutMs: 8000 });
-    return Boolean(r?.gecko_says);
-  } catch {
-    return false;
-  }
 }

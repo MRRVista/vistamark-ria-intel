@@ -116,14 +116,6 @@ export async function chicagoBusinessLicenses(args: any) {
   };
 }
 
-export async function chicagoLicenseOwners(accountNumber: number) {
-  return sodaQuery<any>(CHI, OWNERS, {
-    select: "account_number,doing_business_as_name,owner_name,owner_first_name,owner_last_name,owner_title",
-    where: `account_number=${accountNumber}`,
-    limit: 50,
-  });
-}
-
 export async function chicagoBuildingPermits(args: any) {
   const limit = clampLimit(args?.limit, 25, 100);
   const where: string[] = [];
