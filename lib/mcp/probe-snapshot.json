@@ -1,0 +1,373 @@
+{
+ "endpoint": "/api/selftest",
+ "ranAt": "2026-11-11T01:45:37.660Z",
+ "checksRun": 122,
+ "passed": 119,
+ "failed": 3,
+ "concurrency": 10,
+ "tools": {
+  "aaml_il_fellow_search": {
+   "probe": "live"
+  },
+  "acebc_fellow_search": {
+   "probe": "live"
+  },
+  "actec_fellow_search": {
+   "probe": "live"
+  },
+  "adv_brochures": {
+   "probe": "live"
+  },
+  "apollo_org_enrich": {
+   "probe": "live"
+  },
+  "ardc_lawyer_lookup": {
+   "probe": "live"
+  },
+  "atlfed_wage_tracker": {
+   "probe": "live"
+  },
+  "bdc_list": {
+   "probe": "live"
+  },
+  "bdc_profile": {
+   "probe": "live"
+  },
+  "bis_series": {
+   "probe": "live"
+  },
+  "bls_qcew_county": {
+   "probe": "live"
+  },
+  "bls_series": {
+   "probe": "live"
+  },
+  "brokercheck_individual_search": {
+   "probe": "live"
+  },
+  "cboe_vol_history": {
+   "probe": "live"
+  },
+  "census_acs_profile": {
+   "probe": "live"
+  },
+  "census_geocode": {
+   "probe": "live"
+  },
+  "cepc_member_search": {
+   "probe": "live"
+  },
+  "cfpb_complaints": {
+   "probe": "live"
+  },
+  "cftc_cot": {
+   "probe": "live"
+  },
+  "cftc_cot_markets": {
+   "probe": "live"
+  },
+  "cftc_red_list": {
+   "probe": "live"
+  },
+  "chicago_building_permits": {
+   "probe": "live"
+  },
+  "cms_hospital_general_info": {
+   "probe": "live"
+  },
+  "cms_medicare_provider_utilization": {
+   "probe": "live"
+  },
+  "coingecko_global": {
+   "probe": "live"
+  },
+  "coingecko_prices": {
+   "probe": "live"
+  },
+  "collaborative_divorce_il_search": {
+   "probe": "live"
+  },
+  "college_scorecard": {
+   "probe": "live"
+  },
+  "cook_parcel_sales": {
+   "probe": "live"
+  },
+  "damodaran_industry": {
+   "probe": "live"
+  },
+  "database_status": {
+   "probe": "live"
+  },
+  "datagov_search": {
+   "probe": "live"
+  },
+  "dol_plan_financials": {
+   "probe": "live"
+  },
+  "dol_plan_search": {
+   "probe": "live"
+  },
+  "dol_plans_by_asset_mix": {
+   "probe": "live"
+  },
+  "dol_sch_c_legal_counsel": {
+   "probe": "live"
+  },
+  "dol_sch_c_providers_by_plan": {
+   "probe": "live"
+  },
+  "dol_sch_h_status": {
+   "probe": "live"
+  },
+  "dupage_parcel_sales": {
+   "probe": "live"
+  },
+  "edgar_company_lookup": {
+   "probe": "live"
+  },
+  "edgar_concept_frame": {
+   "probe": "live"
+  },
+  "edgar_financial_concept": {
+   "probe": "live"
+  },
+  "edgar_fulltext_search": {
+   "probe": "live"
+  },
+  "eia_browse": {
+   "probe": "live"
+  },
+  "endowment_percentile_rank": {
+   "probe": "live"
+  },
+  "endowment_search": {
+   "probe": "live"
+  },
+  "eodhd_eod_prices": {
+   "probe": "live"
+  },
+  "eodhd_quote": {
+   "probe": "live"
+  },
+  "eodhd_search": {
+   "probe": "live"
+  },
+  "fdic_bank_search": {
+   "probe": "live"
+  },
+  "fed_press_releases": {
+   "probe": "live"
+  },
+  "fhfa_hpi": {
+   "probe": "live"
+  },
+  "fincen_msb_search": {
+   "probe": "live"
+  },
+  "finra_short_interest": {
+   "probe": "live"
+  },
+  "finra_short_volume": {
+   "probe": "live"
+  },
+  "fomc_calendar": {
+   "probe": "live"
+  },
+  "form_ma_search": {
+   "probe": "live"
+  },
+  "formd_search": {
+   "probe": "live"
+  },
+  "fred_batch_latest": {
+   "probe": "live"
+  },
+  "fred_yield_curve": {
+   "probe": "live"
+  },
+  "gleif_entity_profile": {
+   "probe": "live"
+  },
+  "gleif_entity_search": {
+   "probe": "live"
+  },
+  "grants_gov_search": {
+   "probe": "live"
+  },
+  "hmda_aggregations": {
+   "probe": "live"
+  },
+  "holdings_by_manager": {
+   "probe": "live"
+  },
+  "hud_fair_market_rents": {
+   "probe": "live"
+  },
+  "iapd_firm_detail": {
+   "probe": "live"
+  },
+  "idfpr_licensee_search": {
+   "probe": "live"
+  },
+  "imf_weo": {
+   "probe": "live"
+  },
+  "insider_transactions": {
+   "probe": "live"
+  },
+  "irs_990n_officers_search": {
+   "probe": "live"
+  },
+  "irs_eo_extras_status": {
+   "probe": "slow",
+   "note": "Exceeded the selftest per-check budget (7000ms) in check \"irseox: status\"."
+  },
+  "irs_eo_search": {
+   "probe": "live"
+  },
+  "irs_pub78_lookup": {
+   "probe": "live"
+  },
+  "irs990_filing_search": {
+   "probe": "live"
+  },
+  "irs990_people_search": {
+   "probe": "slow",
+   "note": "Exceeded the selftest per-check budget (7060ms) in check \"irs990-people\"."
+  },
+  "kfrench_factors": {
+   "probe": "live"
+  },
+  "leading_lawyers_search": {
+   "probe": "live"
+  },
+  "legal_pros_playbook": {
+   "probe": "live"
+  },
+  "liquidity_event_radar": {
+   "probe": "live"
+  },
+  "macro_market_signals": {
+   "probe": "live"
+  },
+  "market_regime_brief": {
+   "probe": "live"
+  },
+  "morning_market_brief": {
+   "probe": "live"
+  },
+  "nacubo_benchmark_lookup": {
+   "probe": "live"
+  },
+  "ncua_credit_union_search": {
+   "probe": "live"
+  },
+  "news_rss_search": {
+   "probe": "live"
+  },
+  "nih_reporter_search": {
+   "probe": "live"
+  },
+  "nport_holdings": {
+   "probe": "live"
+  },
+  "nppes_search": {
+   "probe": "live"
+  },
+  "nsf_awards_search": {
+   "probe": "live"
+  },
+  "nyfed_recession_probability": {
+   "probe": "live"
+  },
+  "nyfed_reference_rates": {
+   "probe": "live"
+  },
+  "ofac_sdn_search": {
+   "probe": "live"
+  },
+  "ofr_financial_stress_index": {
+   "probe": "live"
+  },
+  "org_360": {
+   "probe": "live"
+  },
+  "ppd_list_variables": {
+   "probe": "live"
+  },
+  "ppd_plan_profile": {
+   "probe": "live"
+  },
+  "ppd_plan_search": {
+   "probe": "live"
+  },
+  "ppp_search": {
+   "probe": "live"
+  },
+  "propublica_org_search": {
+   "probe": "live"
+  },
+  "prospect_360": {
+   "probe": "slow",
+   "note": "Exceeded the selftest per-check budget (9082ms) in check \"synth-prospect-360\"."
+  },
+  "prospects_search": {
+   "probe": "live"
+  },
+  "prospects_zip_summary": {
+   "probe": "live"
+  },
+  "realtor_inventory": {
+   "probe": "live"
+  },
+  "search_rias": {
+   "probe": "live"
+  },
+  "sec_fails_to_deliver": {
+   "probe": "live"
+  },
+  "sec_litigation_releases": {
+   "probe": "live"
+  },
+  "socrata_catalog_search": {
+   "probe": "live"
+  },
+  "synthesis_playbooks": {
+   "probe": "live"
+  },
+  "top_rias_by": {
+   "probe": "live"
+  },
+  "treasury_avg_rates": {
+   "probe": "live"
+  },
+  "treasury_daily_cash": {
+   "probe": "live"
+  },
+  "treasury_daily_flows": {
+   "probe": "live"
+  },
+  "treasury_upcoming_auctions": {
+   "probe": "live"
+  },
+  "usaspending_awards_search": {
+   "probe": "live"
+  },
+  "usaspending_top_recipients": {
+   "probe": "live"
+  },
+  "wikidata_entity_search": {
+   "probe": "live"
+  },
+  "wikipedia_summary": {
+   "probe": "live"
+  },
+  "worldbank_indicator": {
+   "probe": "live"
+  },
+  "zillow_zhvi": {
+   "probe": "live"
+  }
+ }
+}
