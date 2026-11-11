@@ -276,15 +276,45 @@ export async function discoverLane(lane: LaneConfig, p: LawyerProgram, maxBand: 
   return [...merged.values()].sort((a, b) => a.band - b.band || b.score - a.score);
 }
 
-const DISCOVERY_TTL_MS = 20 * 60_000;
-const discoveryCache = new Map<string, { at: number; rows: Candidate[] }>();
-async function discoverLaneCached(lane: LaneConfig, p: LawyerProgram, maxBand: number, log: (m: string) => void): Promise<Candidate[]> {
-  const key = `${lane.category}|${maxBand}`;
-  const hit = discoveryCache.get(key);
-  if (hit && Date.now() - hit.at < DISCOVERY_TTL_MS) { log(`${lane.category}: ${hit.rows.length} from this run's earlier discovery`); return hit.rows.map((c) => ({ ...c, sources: [...c.sources], practiceAreas: [...c.practiceAreas] })); }
-  const rows = await discoverLane(lane, p, maxBand, log);
-  if (rows.length) discoveryCache.set(key, { at: Date.now(), rows: rows.map((c) => ({ ...c, sources: [...c.sources], practiceAreas: [...c.practiceAreas] })) });
-  return rows;
+// v0.41.2: the directory walk is kept in lawyer_discovery for a week. It took
+// about two minutes of every run (some forty Leading Lawyers pages, one at a
+// time), which left time for one draft. The rosters change slowly; a lane is
+// walked again only when its row is older than DISCOVERY_TTL_DAYS, or when a
+// walk came back empty.
+const DISCOVERY_TTL_DAYS = Math.max(1, Number(process.env.LAWYER_DISCOVERY_TTL_DAYS) || 7);
+const cloneCands = (a: Candidate[]): Candidate[] => a.map((c) => ({ ...c, sources: [...(c.sources ?? [])], practiceAreas: [...(c.practiceAreas ?? [])] }));
+
+async function saveDiscovery(lane: LawyerCategory, maxBand: number, found: Candidate[], log: (m: string) => void): Promise<void> {
+  try {
+    await db.execute(sql`
+      INSERT INTO lawyer_discovery (lane, max_band, candidates, n, fetched_at)
+      VALUES (${lane}, ${maxBand}, ${JSON.stringify(found)}::jsonb, ${found.length}, NOW())
+      ON CONFLICT (lane, max_band) DO UPDATE SET candidates = EXCLUDED.candidates, n = EXCLUDED.n, fetched_at = EXCLUDED.fetched_at`);
+  } catch (err) { log(`${lane}: directory walk not saved (${String(err).slice(0, 120)})`); }
+}
+
+/** A lane's candidates: the saved walk when there is one, else a fresh walk.
+ *  `stale` = the saved walk is past its week and was used anyway, so drafting
+ *  is not held up; the run walks that lane again afterwards if time is left.
+ *  A saved walk four times past its week is not trusted: the lane is walked
+ *  first. */
+async function discoverLaneCached(lane: LaneConfig, p: LawyerProgram, maxBand: number, log: (m: string) => void, canWrite: boolean): Promise<{ rows: Candidate[]; stale: boolean }> {
+  try {
+    const r = rows<{ candidates: any; fetched_at: string; age_days: number }>(await db.execute(sql`
+      SELECT candidates, fetched_at, EXTRACT(EPOCH FROM (NOW() - fetched_at)) / 86400 AS age_days FROM lawyer_discovery
+      WHERE lane = ${lane.category} AND max_band = ${maxBand} AND n > 0`));
+    if (r[0] && Number(r[0].age_days) < DISCOVERY_TTL_DAYS * 4) {
+      const list = typeof r[0].candidates === "string" ? JSON.parse(r[0].candidates) : r[0].candidates;
+      if (Array.isArray(list) && list.length) {
+        const stale = Number(r[0].age_days) >= DISCOVERY_TTL_DAYS;
+        log(`${lane.category}: ${list.length} from the directory walk of ${new Date(r[0].fetched_at).toISOString().slice(0, 10)}${stale ? " (due for a new walk)" : ""}`);
+        return { rows: cloneCands(list as Candidate[]), stale };
+      }
+    }
+  } catch (err) { log(`${lane.category}: saved directory walk unreadable (${String(err).slice(0, 120)}); walking again`); }
+  const found = await discoverLane(lane, p, maxBand, log);
+  if (found.length && canWrite) await saveDiscovery(lane.category, maxBand, found, log);
+  return { rows: found, stale: false };
 }
 
 async function alreadyTouched(): Promise<Set<string>> {
@@ -640,6 +670,9 @@ export async function ensureLawyerSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS conversation_id TEXT, ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP, ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP,
     ADD COLUMN IF NOT EXISTS followup_state VARCHAR(24), ADD COLUMN IF NOT EXISTS followup_at TIMESTAMP,
     ADD COLUMN IF NOT EXISTS followup_message_id TEXT, ADD COLUMN IF NOT EXISTS followup_checked_at TIMESTAMP`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS lawyer_discovery (
+    lane VARCHAR(16) NOT NULL, max_band SMALLINT NOT NULL, candidates JSONB NOT NULL DEFAULT '[]'::jsonb,
+    n INTEGER NOT NULL DEFAULT 0, fetched_at TIMESTAMP NOT NULL DEFAULT NOW(), PRIMARY KEY (lane, max_band))`);
   schemaReady = true;
 }
 
@@ -763,14 +796,11 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
   const busyFirms = await recentlyDraftedFirms(eff.firmSpacingDays);
   const firmBusy = (c: Candidate) => { const f = normFirm(c.firm); return !!f && busyFirms.has(f); };
   const perLane = new Map<LawyerCategory, Candidate[]>();
-  // v0.41.1: lanes are discovered side by side (each lane's own directory
-  // calls stay in sequence) and kept for 20 minutes, so the chunks of one ad
-  // hoc request do not walk the directories again. One lane at a time took
-  // ~45 s each and left no time to draft.
-  const discovered = await Promise.all(lanes.map((lane) => discoverLaneCached(p.lanes[lane], p, eff.maxBand, log)));
+  // Lanes side by side; each reads its saved directory walk when it is fresh.
+  const discovered = await Promise.all(lanes.map((lane) => discoverLaneCached(p.lanes[lane], p, eff.maxBand, log, !opts.dryRun)));
   for (let li = 0; li < lanes.length; li++) {
     const lane = lanes[li];
-    const found = discovered[li];
+    const found = discovered[li].rows;
     const untouched = found.filter((c) => !touched.has(personKey(c.name, c.firm, null)) && !touched.has(`name:${normName(c.name)}`));
     const fresh = untouched.filter((c) => !firmBusy(c));
     log(`${lane}: ${found.length} found, ${untouched.length} untouched, ${untouched.length - fresh.length} held for firm spacing`);
@@ -782,7 +812,19 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
     for (const lane of lanes) { const q = perLane.get(lane); if (q && q.length > i) { candidates.push(q[i]); any = true; } }
     if (!any) break;
   }
+  // Lanes whose saved walk was past its week: walk them again, one at a time,
+  // while there is time left in this run (after the drafting, or at once when
+  // there was nobody left to draft).
+  const refreshStale = async () => {
+    if (opts.dryRun) return;
+    for (let li = 0; li < lanes.length; li++) {
+      if (!discovered[li].stale || remaining() < 75_000) continue;
+      try { const fresh = await discoverLane(p.lanes[lanes[li]], p, eff.maxBand, log); if (fresh.length) await saveDiscovery(lanes[li], eff.maxBand, fresh, log); }
+      catch (err) { log(`${lanes[li]}: new directory walk failed: ${String(err).slice(0, 120)}`); }
+    }
+  };
   if (!candidates.length) {
+    await refreshStale();
     s.candidatesExhausted = true;
     s.warnings.push(`no untouched attorneys in ${lanes.join("/")} up to geo band ${eff.maxBand}; raise maxBand on card ${card}`);
     return s;
@@ -928,6 +970,7 @@ export async function runLawyerEngine(opts: LawyerEngineOptions = {}): Promise<L
     s.drafts.push({ leadId: lid, person: c.name, firm: c.firm, lane: c.category, band: c.band, email, emailStatus, subject: d.subject, delivery, crm: crmState });
   }
   if (s.drafted < target && !s.budgetExhausted && s.examined >= Math.min(candidates.length, maxCandidates)) s.candidatesExhausted = true;
+  await refreshStale();
   s.elapsedMs = Date.now() - started;
   return s;
 }
